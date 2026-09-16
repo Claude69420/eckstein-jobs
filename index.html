@@ -16,6 +16,7 @@
 #top{position:sticky;top:0;z-index:1000;background:var(--ink);color:#fff;padding:env(safe-area-inset-top) 0 0}
 #top .bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px}
 #top h1{margin:0;font-size:17px}#top .upd{font-size:11px;opacity:.8}
+.tb{background:#334155;color:#fff;border:0;border-radius:5px;padding:5px 9px;font-size:12px;font-weight:700;text-decoration:none;line-height:1}
 #tabs{display:flex;background:#1e293b}#tabs button{flex:1;padding:11px 0;border:0;background:none;color:#cbd5e1;font-size:14px;font-weight:600}
 #tabs button.on{color:#fff;border-bottom:3px solid #38bdf8}
 .view{display:none}.view.on{display:block}
@@ -54,7 +55,7 @@
 .picker div{padding:8px 10px;border-bottom:1px solid #eee;font-size:13px}.picker div:active{background:#eef2ff}
 .saved{margin-top:12px}.saved .card{cursor:pointer}
 </style></head><body>
-<div id="top"><div class="bar"><h1>Eckstein Jobs</h1><div class="upd" id="upd">loading…</div></div>
+<div id="top"><div class="bar"><h1>Eckstein Jobs</h1><div style="display:flex;gap:6px;align-items:center"><div class="upd" id="upd">loading…</div><button class="tb" id="rf" title="Reload the latest synced data">↻</button><a class="tb" href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener" title="Pull fresh from Jobber now: tap 'Run workflow' on the page that opens (~1 min)">Sync</a></div></div>
 <div id="tabs"><button class="on" data-v="jobs">Jobs</button><button data-v="routes">Routes</button><button data-v="plan">Plan a Route</button></div></div>
 
 <div id="v-jobs" class="view on"><div class="split"><div id="jmap" class="mapbox"></div><div class="side">
@@ -178,6 +179,7 @@ all.forEach((r,i)=>{const c=document.createElement('div');c.className='card';c.i
 c.onclick=()=>{stops=r.seq.map(s=>({...s}));renderStops();showResult(r.seq,r.rt,r.name);window.scrollTo({top:0})};
 const del=document.createElement('button');del.className='ib';del.textContent='delete';del.style.marginTop='6px';del.onclick=e=>{e.stopPropagation();all.splice(i,1);localStorage.setItem('ej_routes',JSON.stringify(all));renderSaved()};c.appendChild(del);el.appendChild(c)})}
 
+document.getElementById('rf').onclick=()=>{document.getElementById('upd').textContent='refreshing…';location.reload()};
 renderStops();renderSaved();loadAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>
