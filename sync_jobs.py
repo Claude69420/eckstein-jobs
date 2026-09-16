@@ -58,8 +58,10 @@ def _form_post(url: str, fields: dict, timeout=20) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 def get_access_token() -> str:
-    cid, csec, rtok = (os.environ.get("JOBBER_CLIENT_ID"), os.environ.get("JOBBER_CLIENT_SECRET"),
-                       os.environ.get("JOBBER_REFRESH_TOKEN"))
+    # .strip() guards against whitespace/newlines that sneak in when secrets are pasted
+    cid, csec, rtok = ((os.environ.get("JOBBER_CLIENT_ID") or "").strip(),
+                       (os.environ.get("JOBBER_CLIENT_SECRET") or "").strip(),
+                       (os.environ.get("JOBBER_REFRESH_TOKEN") or "").strip())
     if cid and csec and rtok:
         print("auth: cloud mode (refresh_token grant)")
         tok = _form_post(TOKEN_URL, {"grant_type": "refresh_token", "refresh_token": rtok,
@@ -164,7 +166,7 @@ def main() -> int:
     cache = load_json(CACHE_FILE, {})
     overrides = {int(k): v for k, v in load_json(OVERRIDES_FILE, {}).items()}
     pending = load_json(PENDING_FILE, [])
-    tkey = os.environ.get("TOMTOM_KEY") or ""
+    tkey = (os.environ.get("TOMTOM_KEY") or "").strip()
 
     jobs, api_calls = [], 0
     for j in raw:
