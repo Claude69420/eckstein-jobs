@@ -14,7 +14,7 @@ Results outside a Manitoba bounding box are treated as FAILED (guards the old wr
 Outputs: data/jobs.json, data/geocode_cache.json, data/meta.json
 """
 from __future__ import annotations
-import json, os, re, sys, time, urllib.parse, urllib.request
+import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -63,9 +63,16 @@ def get_access_token() -> str:
                        (os.environ.get("JOBBER_CLIENT_SECRET") or "").strip(),
                        (os.environ.get("JOBBER_REFRESH_TOKEN") or "").strip())
     if cid and csec and rtok:
-        print("auth: cloud mode (refresh_token grant)")
-        tok = _form_post(TOKEN_URL, {"grant_type": "refresh_token", "refresh_token": rtok,
-                                     "client_id": cid, "client_secret": csec})
+        # lengths only (never values) — catches a blank/swapped paste. client_id is a 36-char UUID.
+        print(f"auth: cloud mode (refresh_token grant) [client_id len {len(cid)}, secret len {len(csec)}, refresh len {len(rtok)}]")
+        try:
+            tok = _form_post(TOKEN_URL, {"grant_type": "refresh_token", "refresh_token": rtok,
+                                         "client_id": cid, "client_secret": csec})
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:300]
+            print(f"auth: Jobber token endpoint HTTP {e.code} -> {body}")
+            print("auth: invalid_client => JOBBER_CLIENT_ID/JOBBER_CLIENT_SECRET wrong; invalid_grant => JOBBER_REFRESH_TOKEN wrong/expired")
+            raise
         new_r = tok.get("refresh_token")
         if new_r and new_r != rtok:
             out = os.environ.get("ROTATED_TOKEN_FILE")
