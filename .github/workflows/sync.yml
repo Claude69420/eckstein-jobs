@@ -1,0 +1,64 @@
+name: Sync jobs from Jobber
+
+on:
+  schedule:
+    # Winnipeg 7:00 AM and 12:00 noon during CDT (UTC-5). In winter (CST, UTC-6) these
+    # fire at 6:00 AM and 11:00 AM local. GitHub cron is UTC-only.
+    - cron: "0 12 * * *"
+    - cron: "0 17 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-jobs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pull jobs + geocode
+        env:
+          JOBBER_CLIENT_ID: ${{ secrets.JOBBER_CLIENT_ID }}
+          JOBBER_CLIENT_SECRET: ${{ secrets.JOBBER_CLIENT_SECRET }}
+          JOBBER_REFRESH_TOKEN: ${{ secrets.JOBBER_REFRESH_TOKEN }}
+          TOMTOM_KEY: ${{ secrets.TOMTOM_KEY }}
+          ROTATED_TOKEN_FILE: ${{ runner.temp }}/rotated_refresh_token
+        run: python sync_jobs.py
+
+      # If Jobber rotated the refresh token, store the new one (needs GH_PAT with repo scope).
+      - name: Persist rotated refresh token (if any)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          f="${{ runner.temp }}/rotated_refresh_token"
+          if [ -s "$f" ]; then
+            if [ -n "$GH_TOKEN" ]; then
+              gh secret set JOBBER_REFRESH_TOKEN --repo "${{ github.repository }}" < "$f"
+              echo "Updated JOBBER_REFRESH_TOKEN secret."
+            else
+              echo "::warning::Jobber rotated the refresh token but no GH_PAT secret is set; add GH_PAT (repo scope) or re-paste JOBBER_REFRESH_TOKEN."
+            fi
+            rm -f "$f"
+          fi
+
+      - name: Commit updated data
+        run: |
+          git config user.name "eckstein-sync-bot"
+          git config user.email "sync-bot@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Sync jobs $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
