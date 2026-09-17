@@ -46,6 +46,8 @@ def main(push=True) -> int:
     (DST / "index.json").write_text(json.dumps(entries, indent=1), encoding="utf-8")
     print(f"index: {len(entries)} routes ({changed} new/changed)")
     if push:
+        # The sync bot commits data/ twice daily, so always rebase onto origin first or the push is rejected.
+        subprocess.run(["git", "pull", "--rebase", "--autostash", "-q"], cwd=REPO, check=True)
         subprocess.run(["git", "add", "routes/"], cwd=REPO, check=True)
         r = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO)
         if r.returncode == 0: print("nothing to commit"); return 0
