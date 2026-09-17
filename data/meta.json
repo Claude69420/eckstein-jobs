@@ -1,14 +1,14 @@
 {
- "updated_utc": "2026-09-16T02:43:29+00:00",
- "total": 43,
- "mapped": 43,
+ "updated_utc": "2026-09-17T16:45:51+00:00",
+ "total": 45,
+ "mapped": 45,
  "failed": [],
  "by_client": {
-  "Crown": 16,
+  "Crown": 18,
   "Other": 7,
   "ACV": 7,
   "Harris": 13
  },
- "cache_entries": 299,
- "geocode_api_calls": 8
+ "cache_entries": 301,
+ "geocode_api_calls": 2
 }
