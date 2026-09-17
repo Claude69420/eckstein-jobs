@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-09-17T16:45:51+00:00",
+ "updated_utc": "2026-09-17T17:05:01+00:00",
  "total": 45,
  "mapped": 45,
  "failed": [],
@@ -10,5 +10,5 @@
   "Harris": 13
  },
  "cache_entries": 301,
- "geocode_api_calls": 2
+ "geocode_api_calls": 0
 }
