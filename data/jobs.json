@@ -16,6 +16,22 @@
   "ok": true
  },
  {
+  "jobNumber": 688,
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Portage Ave",
+  "streetRaw": "Portage Ave (Lipton St to Lenore St)",
+  "city": "Winnipeg",
+  "title": "Portage Ave - Lipton to Lenore",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "lat": 49.8799513,
+  "lon": -97.2821122,
+  "ok": true
+ },
+ {
   "jobNumber": 687,
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
