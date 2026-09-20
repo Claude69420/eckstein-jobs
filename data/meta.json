@@ -1,12 +1,12 @@
 {
- "updated_utc": "2026-09-19T17:05:02+00:00",
- "total": 46,
- "mapped": 46,
+ "updated_utc": "2026-09-20T12:04:38+00:00",
+ "total": 45,
+ "mapped": 45,
  "failed": [],
  "by_client": {
   "Crown": 18,
   "Harris": 14,
-  "Other": 7,
+  "Other": 6,
   "ACV": 7
  },
  "cache_entries": 302,

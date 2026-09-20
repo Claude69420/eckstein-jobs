@@ -192,22 +192,6 @@
   "ok": true
  },
  {
-  "jobNumber": 677,
-  "client": "Andrew Falconer",
-  "clientKey": "Other",
-  "street": "10 Cliffwood Drive",
-  "streetRaw": "10 Cliffwood Drive",
-  "city": "Winnipeg",
-  "title": "Paving Stone Sidewalk & Driveway Repair",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "lat": 49.845232,
-  "lon": -97.060664,
-  "ok": true
- },
- {
   "jobNumber": 676,
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
