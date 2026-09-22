@@ -16,6 +16,22 @@
   "ok": true
  },
  {
+  "jobNumber": 689,
+  "client": "Gary Harris Builders",
+  "clientKey": "Other",
+  "street": "115 Lamont Boulevard",
+  "streetRaw": "115 Lamont Boulevard",
+  "city": "Winnipeg",
+  "title": "Complete Patio Repair",
+  "permit": "",
+  "status": "upcoming",
+  "unscheduled": false,
+  "pending": false,
+  "lat": 49.871879,
+  "lon": -97.217771,
+  "ok": true
+ },
+ {
   "jobNumber": 688,
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
