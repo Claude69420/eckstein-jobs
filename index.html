@@ -75,8 +75,8 @@
 </div></div>
 
 <script>
-const COL={Crown:'#2563eb',Harris:'#dc2626',ACV:'#16a34a',MyTec:'#7c3aed',Other:'#f59e0b'};
-const LABEL={Crown:'Crown Pipeline',Harris:'Harris Holdings',ACV:'ACV Sewer & Water',MyTec:'MyTec',Other:'Other / Residential'};
+const COL={Crown:'#2563eb',Harris:'#dc2626',ACV:'#16a34a',MyTec:'#7c3aed',NoLimits:'#0d9488',Other:'#f59e0b'};
+const LABEL={Crown:'Crown Pipeline',Harris:'Harris Holdings',ACV:'ACV Sewer & Water',MyTec:'MyTec',NoLimits:'No Limits Underground',Other:'Other / Residential'};
 const SHOP={name:'Shop (1279 Loudoun Rd)',lat:49.8401,lon:-97.2546,shop:true};
 const bust=()=> '?t='+Date.now();
 function baseTiles(map){const b=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:16,attribution:'Tiles &copy; Esri'}).addTo(map);
@@ -97,7 +97,7 @@ renderJobs();}catch(e){document.getElementById('upd').textContent='failed to loa
 try{const r=await fetch('routes/index.json'+bust()).then(r=>r.json());renderRoutes(r)}catch(e){document.getElementById('rlist').textContent='no routes published yet'}}
 function renderJobs(){if(!jmap){jmap=L.map('jmap');baseTiles(jmap)}
 jmarkers.forEach(m=>jmap.removeLayer(m));jmarkers=[];
-const keys=['Crown','Harris','ACV','MyTec','Other'];keys.forEach(k=>{if(!(k in vis))vis[k]=true});
+const keys=['Crown','Harris','ACV','MyTec','NoLimits','Other'];keys.forEach(k=>{if(!(k in vis))vis[k]=true});
 const chips=document.getElementById('chips');chips.innerHTML='';
 keys.forEach(k=>{const n=JOBS.filter(x=>x.clientKey===k).length;if(!n)return;const c=document.createElement('div');c.className='chip'+(vis[k]?'':' off');c.style.background=COL[k];c.innerHTML=LABEL[k]+'<span class="ct">'+n+'</span>';c.onclick=()=>{vis[k]=!vis[k];renderJobs()};chips.appendChild(c)});
 const q=(document.getElementById('q').value||'').toLowerCase();

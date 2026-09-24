@@ -38,6 +38,7 @@ CLIENT_KEYS = {
     "Harris Holdings Ltd.": "Harris",
     "ACV Sewer & Water": "ACV",
     "MyTec Industry Ltd": "MyTec",
+    "No Limits Underground Ltd.": "NoLimits",
 }
 
 # ----------------------------------------------------------------------------- auth

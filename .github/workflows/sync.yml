@@ -19,9 +19,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history so we can rebase onto current main before pushing
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -56,9 +58,17 @@ jobs:
           git config user.name "eckstein-sync-bot"
           git config user.email "sync-bot@users.noreply.github.com"
           git add data/
-          if git diff --cached --quiet; then
-            echo "No changes."
-          else
-            git commit -m "Sync jobs $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push
-          fi
+          if git diff --cached --quiet; then echo "No changes."; exit 0; fi
+          git commit -m "Sync jobs $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # A 'Re-run' (pinned to an old commit) or an overlapping run can be behind main.
+          # Rebase onto current main first -- our freshly generated data wins any conflict --
+          # then push, retrying a few times in case another run lands in between.
+          for i in 1 2 3 4; do
+            git fetch origin main
+            if ! git rebase -X theirs origin/main; then
+              git rebase --abort; echo "::error::Rebase onto main failed"; exit 1
+            fi
+            if git push origin HEAD:main; then echo "Pushed."; exit 0; fi
+            echo "Push rejected (attempt $i); retrying..."; sleep $((i*5))
+          done
+          echo "::error::Could not push after retries"; exit 1
