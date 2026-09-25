@@ -400,22 +400,6 @@
   "ok": true
  },
  {
-  "jobNumber": 664,
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "130 Midland St",
-  "streetRaw": "130 Midland St",
-  "city": "Winnipeg",
-  "title": "130 Midland St - 357582",
-  "permit": "357582",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "lat": 49.910029,
-  "lon": -97.190319,
-  "ok": true
- },
- {
   "jobNumber": 661,
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
