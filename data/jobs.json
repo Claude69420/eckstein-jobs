@@ -16,6 +16,38 @@
   "ok": true
  },
  {
+  "jobNumber": 699,
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Bailley Ave and Glen Meadow St",
+  "streetRaw": "Bailley Ave and Glen Meadow St",
+  "city": "Winnipeg",
+  "title": "Bailley Ave and Glen Meadow St - 358357",
+  "permit": "358357",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "lat": 49.827334,
+  "lon": -97.117732,
+  "ok": true
+ },
+ {
+  "jobNumber": 698,
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Pembina Hwy",
+  "streetRaw": "Pembina Hwy (Adamar Rd to Plaza Dr)",
+  "city": "Winnipeg",
+  "title": "Pembina Hwy Adamar to Plaza - 357526",
+  "permit": "357526",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "lat": 49.8591131,
+  "lon": -97.1505409,
+  "ok": true
+ },
+ {
   "jobNumber": 696,
   "client": "Workers Compensation Board of Manitoba",
   "clientKey": "Other",
