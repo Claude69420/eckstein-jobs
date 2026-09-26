@@ -1,21 +1,5 @@
 [
  {
-  "jobNumber": 9001,
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Jessie Ave & Warsaw Ave",
-  "streetRaw": "Jessie Ave & Warsaw Ave",
-  "city": "Winnipeg",
-  "title": "PENDING - Jessie & Warsaw (permit TBD, not in Jobber yet)",
-  "permit": "",
-  "status": "pending",
-  "unscheduled": false,
-  "pending": true,
-  "lat": 49.869444,
-  "lon": -97.154353,
-  "ok": true
- },
- {
   "jobNumber": 699,
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
