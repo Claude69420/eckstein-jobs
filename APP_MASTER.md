@@ -1247,6 +1247,9 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 
 ---
 
+
+**Added 2026-09-25:** `publish_routes.py` fails with `CalledProcessError: ['git', 'commit', …] returned non-zero exit status 128` → the clone has no git identity → run `git -C C:/Users/Riley/eckstein-jobs config user.name "Riley"` and `git -C C:/Users/Riley/eckstein-jobs config user.email "<Riley's usual commit email>"`, then re-run the publish (files already written are picked up).
+
 ## 9. Design decisions (ADR-style)
 
 - **ADR-01 Hosting: GitHub Pages on a dedicated account (`Claude69420`), public repo** (2026-09-15).
@@ -1563,6 +1566,14 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
 
 ---
 
+### 2026-09-25 — Fix: `publish_routes.py` could not commit (no git identity in the clone)
+- **What:** Set a repo-local git identity (`git config user.name` / `user.email` in `C:/Users/Riley/eckstein-jobs/.git/config`; not versioned). Then published the two waiting routes (`Route_Setup_ShopToEmily.html`, `Route_Princess_Cuts.html`); the site now lists 65 routes.
+- **Why:** `publish_routes.py` runs a plain `git commit`. This clone had no identity configured (Claude's own commits pass `-c user.name=… -c user.email=…`), so the first publish with real changes died with `git commit … returned non-zero exit status 128`. Earlier test runs had nothing to commit, which hid the bug.
+- **Files:** none versioned (local `.git/config` only); `routes/` via the publish commit.
+- **Commit:** `bce1803` (publish; its message says "0 updated" because the failed run had already written the files).
+- **Verified:** publish pushed `476a442..bce1803`; `routes/index.json` has 65 entries.
+- **Rollback:** none needed. If the clone is ever re-created, re-run the two `git config` commands (see §8 row "publish_routes.py commit exit 128").
+
 ### 2026-09-25 — Created APP_MASTER.md + CLAUDE.md pointers (doc only)
 - **What:**
   - Created this master handoff document: architecture, runbook, troubleshooting, ADRs, limitations, roadmap and changelog.
@@ -1570,7 +1581,7 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
   - Added out-of-repo pointers, because sessions usually run from the Claude Code folder, not the repo: a folder `CLAUDE.md`, the auto-memory entry `project_eckstein_jobs_app.md` (indexed in `MEMORY.md`), and a "Master doc" bullet in `ROUTING_PLAYBOOK.md`.
 - **Why:** Riley asked, before any work on R-1 (stages and Liquid Glass reskin) begins, for a detailed doc that future or compacted sessions read first, and for every app change to be logged here.
 - **Files:** `APP_MASTER.md` (new), `CLAUDE.md` (new). No code changes. Out of repo (not versioned here): `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/CLAUDE.md`, `C:/Users/Riley/.claude/projects/C--Users-Riley-OneDrive-Documents-University-Year-5-Claude-Code/memory/project_eckstein_jobs_app.md` + its `MEMORY.md` index line, `ROUTING_PLAYBOOK.md` ("Master doc" bullet).
-- **Commit:** (this commit: `docs: add APP_MASTER.md handoff + CLAUDE.md pointer`; backfill hash). Baseline HEAD at the time of writing: `dd9cf03`.
+- **Commit:** `476a442`. Baseline HEAD at the time of writing: `dd9cf03`.
 - **Verified:** documentation only; no secret values included.
 - **Rollback:** `git rm APP_MASTER.md CLAUDE.md`.
 
