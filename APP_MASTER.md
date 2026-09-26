@@ -1377,14 +1377,14 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 **Status: Design in progress (2026-09-25).** Answers received and storage decided (below). No app code has changed yet. Update this block as work proceeds (decisions made, files touched, what's half-done, what's next).
 
 **Work log** (newest first; update after every step)
-- Last updated: 2026-09-25 (answers recorded; storage decided; research running; no app code yet)
+- Last updated: 2026-09-25 late (brief + reconciled build spec saved; ready to launch the build; no app code yet)
 - Branch: none yet (planned `r1-stages`, Rule 13) · pushed to origin: no · merged to main: no
 - Answers from Riley: **recorded 2026-09-25**, see "Answers from Riley" below
 - Decisions: stage keys and store shape in §5 "Stage data"; storage = separate state repo + scoped key + setup link ("Decided design" below); PC is first-class for Liquid Glass (full SVG refraction on Chromium, frosted fallback on Safari)
 - Done: master doc + pointers (2026-09-25); Liquid Glass research workflow launched (repos, technique, WebKit support, Apple HIG -> design brief)
-- Half-done: design brief (research workflow `liquid-glass-research`); when it returns, save it as `docs/liquid-glass-brief.md` in this repo
+- Half-done: nothing. Design brief saved as `docs/liquid-glass-brief.md` (critic-corrected; material from sohumsuthar/liquid-glass MIT, desktop refraction via vendored hyalite v0.5.0 MIT, Chromium only). **`docs/r1-build-spec.md` reconciles the brief with Riley's answers and OVERRIDES it** (GitHubStageStore on the state repo; no key in URLs because an iOS Home Screen app does not share storage with Safari, so crew get a "Share edit access" message and paste the key inside the installed app; defaults for the brief's open calls; PC first-class; one squash merge).
 - Uncommitted files: none after the docs commit
-- Next step: (1) save the design brief; (2) ~~create the empty state repo~~ DONE 2026-09-25 (`Claude69420/eckstein-jobs-state`, local clone `C:/Users/Riley/eckstein-jobs-state`); (3) build R-1 on branch `r1-stages`; (4) verify at 375x812 and desktop width, light + dark; (5) give Riley the key-creation steps (he creates the key himself)
+- **Next step (resume here):** launch the R-1 build workflow exactly as `docs/r1-build-spec.md` §2 describes (branch `r1-stages`; parallel build agents for `js/tsp.js`, `js/stages.js`, UI; one browser-verification agent; review lenses; fix loop), then commit, update APP_MASTER, squash-merge, verify live, and give Riley the §3 steps. Earlier steps: (1) ~~save the design brief~~ DONE; (2) ~~create the empty state repo~~ DONE 2026-09-25 (`Claude69420/eckstein-jobs-state`, local clone `C:/Users/Riley/eckstein-jobs-state`); (3) build R-1 on branch `r1-stages`; (4) verify at 375x812 and desktop width, light + dark; (5) give Riley the key-creation steps (he creates the key himself)
 - Blocked on: nothing for the build. Riley must create the fine-grained key before stage **writes** work on his devices
 
 **Riley's request, 2026-09-25 (verbatim):**
@@ -1405,7 +1405,7 @@ He also asked that:
 **Decided design (2026-09-25):**
 - **State repo:** `Claude69420/eckstein-jobs-state` (public, no Pages), file `stages.json` on `main`, shape per §5 "Stage data". Separate from the app repo so the edit key cannot modify the app, stage writes do not trigger Pages builds, and the sync bot never touches it.
 - **Edit key:** a fine-grained personal access token that **Riley** creates on the `Claude69420` account: Repository access = only `eckstein-jobs-state`; Permissions = Contents: Read and write; expiry 1 year or less (log the expiry date, never the value). Stored per device in localStorage (key `ej_gh_token`, inside try/catch). Claude never sees or types the value.
-- **Setup link:** the app's "Share edit access" builds `https://claude69420.github.io/eckstein-jobs/#k=<key>`. On load the app stores `#k=` in localStorage and strips it from the URL with `history.replaceState`. The URL fragment is never sent to any server. An in-app "Enter edit key" field is the fallback, because an iOS home-screen web app may keep separate storage from Safari (confirm against the research brief).
+- **Sharing edit access (amended 2026-09-25 after research):** no setup link and no key in any URL. An iOS Home Screen app does not share storage with Safari (WebKit bug 181849), so a link opened from Messages could never hand the key to the installed app. Instead Settings → Stages has a masked "Paste edit key" field and a **"Share edit access"** button that sends (share sheet / clipboard) the app link, the key and install steps; the recipient pastes the key inside the installed app. See `docs/r1-build-spec.md` §1.2.
 - **Reads:** devices with a key use the GitHub API (`GET https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`, `Accept: application/vnd.github.raw+json`), which is fresh, and poll every ~60 s while the app is visible. Devices without a key read `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (read-only; CDN up to ~5 min stale; no API rate limit).
 - **Writes:** optimistic UI, then `PUT` with `sha`. On 409/422, re-GET, re-apply this device's pending change on top (last write per job wins) and retry up to 3 times; on failure roll back and show an error. Batch changes made within ~3 s into one commit, message like `stage: #684 SW Corner Ellice & Kennedy -> base`.
 - **History/undo:** the state repo's commit log is the audit trail; any stage can be restored from it.
@@ -1565,6 +1565,14 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
 ```
 
 ---
+
+### 2026-09-25 — R-1 design brief + reconciled build spec (docs only)
+- **What:** Saved the Liquid Glass research output as `docs/liquid-glass-brief.md` and wrote `docs/r1-build-spec.md`, which overrides the brief with Riley's answers (GitHub state-repo storage, no key in URLs, defaults for open calls, PC first-class, single squash merge). Amended §11 "Decided design" (setup link replaced by "Share edit access").
+- **Why:** R-1 needs one build-ready spec that a fresh or post-compaction session can execute without re-deriving decisions.
+- **Files:** `docs/liquid-glass-brief.md` (new), `docs/r1-build-spec.md` (new), `APP_MASTER.md`.
+- **Commit:** (this commit; backfill hash).
+- **Verified:** docs only.
+- **Rollback:** `git revert <hash>`.
 
 ### 2026-09-25 — Created the stage state repo `Claude69420/eckstein-jobs-state` (R-1 step 2)
 - **What:** New public repo with `stages.json` = `{"version":1,"stages":{}}` and a README. Local clone at `C:/Users/Riley/eckstein-jobs-state` (repo-local git identity set). No Pages.
