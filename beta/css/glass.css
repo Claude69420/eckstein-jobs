@@ -1,0 +1,171 @@
+/*! glass.css — Liquid Glass material for Eckstein Jobs (R-1).
+ *
+ * Adapted from sohumsuthar/liquid-glass, css/liquid-glass-core.css @ commit fb0e2dd
+ * https://github.com/sohumsuthar/liquid-glass
+ *
+ * MIT License
+ *
+ * Copyright (c) 2026 Sohum Suthar
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Modifications: 4-layer DOM collapsed to one element + ::before (rim) / ::after (glow); tint and grain moved
+ * into background (grain opacity baked in, no blend modes); literal backdrop-filter values; light-mode brightness
+ * 1.0; SVG refraction removed (desktop refraction via vendor/hyalite.js); conic highlight and hover glow removed;
+ * reduced-transparency blur capped at 16px; Tinted/Solid/Increase-Contrast variants added.
+ *
+ * FILE RULES
+ * 1. Every selector = one class, optionally prefixed by :where(...). SOURCE ORDER IS PRECEDENCE. Don't add specificity.
+ * 2. -webkit-backdrop-filter and backdrop-filter always carry IDENTICAL LITERAL values. Never var() inside them.
+ *    Only exception: block 10, which exists only on desktop Chromium (html.lg-refract is set by JS there), and even
+ *    there the -webkit- line stays literal; the unprefixed line (which wins in Chromium) consumes hyalite's variable.
+ * 3. Never put isolation, contain, content-visibility, filter, transform, opacity<1, mask, clip-path, mix-blend-mode,
+ *    backdrop-filter or will-change on a .glass element's ANCESTORS, and never opacity<1 on .glass itself
+ *    (backdrop-root rule). Transform/translate/scale on the .glass element itself is fine.
+ * 4. components.css owns geometry; this file owns material (background, backdrop-filter, box-shadow).
+ */
+
+/* 1 — Regular glass, light, large surfaces: accessory, sheets/panel, map card */
+.glass{
+  position:relative;
+  border-radius:var(--r-lg);
+  color:var(--label);
+  background:var(--grain) 0 0 / 140px 140px, var(--glass-tint);
+  -webkit-backdrop-filter:blur(16px) saturate(180%);
+          backdrop-filter:blur(16px) saturate(180%);
+  box-shadow:var(--glass-shine), var(--glass-edge), var(--glass-lift);
+}
+/* Specular ring: vertical-axis light, bright top/bottom hairline, dark flanks (sohumsuthar) */
+.glass::before{
+  content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; pointer-events:none;
+  background:
+    linear-gradient(to right,
+      rgba(0,0,0,var(--rim-dark)) 0, rgba(0,0,0,0) var(--rim-side),
+      rgba(0,0,0,0) calc(100% - var(--rim-side)), rgba(0,0,0,var(--rim-dark)) 100%),
+    linear-gradient(to bottom,
+      rgba(255,255,255,var(--rim-lit)) 0, rgba(255,255,255,var(--rim-lit)) var(--rim-hold),
+      rgba(255,255,255,0) var(--rim-fade), rgba(255,255,255,0) calc(100% - var(--rim-fade)),
+      rgba(255,255,255,var(--rim-lit)) calc(100% - var(--rim-hold)), rgba(255,255,255,var(--rim-lit)) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+          mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite:exclude;
+}
+/* Self-illumination from the touch point */
+.glass::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:radial-gradient(180px circle at var(--px,50%) var(--py,50%), var(--glass-glow), transparent 70%);
+  opacity:0; transition:opacity 240ms var(--ease-out);
+}
+.is-lit::after{ opacity:1; transition-duration:var(--d-press); }
+
+/* 2 — Regular glass, dark, large */
+:where([data-theme="dark"]) .glass{
+  -webkit-backdrop-filter:blur(16px) saturate(172%) brightness(.67) contrast(1.02);
+          backdrop-filter:blur(16px) saturate(172%) brightness(.67) contrast(1.02);
+}
+
+/* 3 — Small glass, light: control capsule, tab bar, toast */
+.glass--sm{
+  background:var(--grain) 0 0 / 140px 140px, var(--glass-tint-sm);
+  -webkit-backdrop-filter:blur(10px) saturate(180%) brightness(1.05);
+          backdrop-filter:blur(10px) saturate(180%) brightness(1.05);
+  box-shadow:var(--glass-shine), var(--glass-edge), var(--glass-lift-sm);
+}
+
+/* 4 — Small glass, dark */
+:where([data-theme="dark"]) .glass--sm{
+  -webkit-backdrop-filter:blur(10px) saturate(172%) brightness(.67) contrast(1.02);
+          backdrop-filter:blur(10px) saturate(172%) brightness(.67) contrast(1.02);
+}
+
+/* 5 — Tinted mode (frostier; tint comes from tokens) */
+:where([data-glass="tinted"]) .glass,
+:where([data-glass="tinted"]) .glass--sm{
+  -webkit-backdrop-filter:blur(16px) saturate(120%);
+          backdrop-filter:blur(16px) saturate(120%);
+}
+
+/* 5b — OS "Reduce transparency" (Chromium; Safari has no media query yet) while the user has not picked a glass mode.
+        The boot script already selects Tinted in that case; this block is the CSS-only fallback. */
+@media (prefers-reduced-transparency: reduce){
+  :where(html:not([data-glass-user])) .glass,
+  :where(html:not([data-glass-user])) .glass--sm{
+    background:var(--glass-rt);
+    -webkit-backdrop-filter:blur(16px) saturate(120%);
+            backdrop-filter:blur(16px) saturate(120%);
+  }
+}
+
+/* 6 — Solid mode + fully expanded sheet (iOS 26: a full-height sheet becomes opaque) */
+:where([data-glass="solid"]) .glass,
+:where([data-glass="solid"]) .glass--sm,
+.is-opaque{
+  background:var(--glass-opaque);
+  -webkit-backdrop-filter:none;
+          backdrop-filter:none;
+}
+
+/* 7 — No backdrop-filter support at all */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass, .glass--sm{ background:var(--glass-opaque); }
+}
+
+/* 8 — Increase Contrast: predominantly black/white with a contrasting border */
+@media (prefers-contrast: more){
+  .glass, .glass--sm, .is-opaque{
+    background:var(--glass-hc);
+    -webkit-backdrop-filter:none;
+            backdrop-filter:none;
+    box-shadow:0 0 0 1.5px var(--label), var(--glass-lift-sm);
+  }
+  .glass::before{ display:none; }
+}
+
+/* 9 — Squircle corners where supported (Chromium 139+ only; Safari has no corner-shape).
+       Capsules stay true semicircles. */
+@supports (corner-shape: squircle){
+  .glass:not(.glass--sm){ corner-shape:squircle; }
+  .glass:not(.glass--sm)::before, .glass:not(.glass--sm)::after{ corner-shape:inherit; }
+}
+
+/* 10 — Desktop Chromium refraction (html.lg-refract is set by js/ui.js only when hyalite is live).
+        Refracting elements go back to round corners: hyalite's map assumes circular radii.
+        The -webkit- line stays literal (rule 2); Chromium uses the unprefixed line, which consumes --hyalite. */
+.lg-refract .lens-panel{
+  corner-shape:round;
+  -webkit-backdrop-filter:blur(16px) saturate(180%);
+          backdrop-filter:var(--hyalite, blur(16px)) saturate(180%);
+  box-shadow:var(--hyalite-edge, 0 0 transparent), var(--glass-shine), var(--glass-edge), var(--glass-lift);
+}
+.lg-refract .lens-ctl{
+  -webkit-backdrop-filter:blur(10px) saturate(180%);
+          backdrop-filter:var(--hyalite, blur(10px)) saturate(180%);
+  box-shadow:var(--hyalite-edge, 0 0 transparent), var(--glass-shine), var(--glass-edge), var(--glass-lift-sm);
+}
+.lg-refract .lens-panel::before, .lg-refract .lens-panel::after{ corner-shape:round; }
+/* Dark theme keeps upstream's dimming inside the lens (html carries both .lg-refract and data-theme) */
+.lg-refract:where([data-theme="dark"]) .lens-panel{
+  -webkit-backdrop-filter:blur(16px) saturate(172%) brightness(.67) contrast(1.02);
+          backdrop-filter:var(--hyalite, blur(16px)) saturate(172%) brightness(.67) contrast(1.02);
+}
+.lg-refract:where([data-theme="dark"]) .lens-ctl{
+  -webkit-backdrop-filter:blur(10px) saturate(172%) brightness(.67) contrast(1.02);
+          backdrop-filter:var(--hyalite, blur(10px)) saturate(172%) brightness(.67) contrast(1.02);
+}

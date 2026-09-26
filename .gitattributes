@@ -1,2 +1,3 @@
 # Vendored third-party files are shipped byte-for-byte (sha256 pinned in APP_MASTER): never convert line endings.
 vendor/* -text
+beta/vendor/* -text

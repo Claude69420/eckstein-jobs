@@ -1,0 +1,13 @@
+# Pinned, hash-locked install for .github/workflows/sync.yml (prices encryption only).
+# Installed with: pip install --require-hashes --only-binary=:all: --no-deps -r .github/requirements-sync.txt
+# Hashes are the PyPI sha256 of the Linux x86_64 wheels a GitHub ubuntu runner (CPython 3.12) can use.
+# To bump: take the new versions' sha256 from https://pypi.org/project/<name>/#files (manylinux x86_64
+# wheels only; never an sdist), update this file, and log it in APP_MASTER.md.
+cryptography==46.0.6 \
+    --hash=sha256:d4e4aadb7fc1f88687f47ca20bb7227981b03afaae69287029da08096853b738 \
+    --hash=sha256:22259338084d6ae497a19bae5d4c66b7ca1387d3264d1c2c0e72d9e9b6a77b97 \
+    --hash=sha256:9a693028b9cbe51b5a1136232ee8f2bc242e4e19d456ded3fa7c86e43c713b4a
+cffi==2.0.0 \
+    --hash=sha256:3e17ed538242334bf70832644a32a7aae3d83b57567f9fd60a26257e992b79ba
+pycparser==3.0 \
+    --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992

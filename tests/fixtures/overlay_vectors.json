@@ -1,0 +1,954 @@
+{
+ "about": "Beta overlay merge vectors (docs/r2-plan.md section 9; shared contract rule 2). state = the job's raw entry in stages-beta.json (the beta's own file), overlay = the job's raw entry in v1's stages.json (read-only); null = no entry. Merged entry = the state entry, except its stage comes from the overlay when the overlay has a valid stage AND (the state entry has no sat OR overlay.at > sat, strictly). Items (assess, lane, cut, asphalt, pavers, cleanup, removed) come only from the state entry. stage = the merged entry's effective stage; stageFrom = where it came from (overlay | state | none); effective = effective(merged, hints null), same as contract_vectors.json; keepWhenClosed = keepWhenClosed(effective). Times: an ISO 8601 date-time with Z or a +-HH:MM offset, compared as instants to the millisecond (JS Date.parse); a sat that is missing, null, not a string or not such a time counts as NO sat; an overlay at that is missing or unreadable is never newer. 'times' lists parse results in epoch ms (null = not a time). sync_jobs.py (merge_entry, parse_time) and js/stages.js must both produce exactly these results. Only the RAW string counts: no trimming (a leading space or a trailing newline makes it no time). Impossible calendar times (2026-02-30, 2026-09-31, hour 24, minute / second / offset minute 60, year 0000) are no time either (JS Date.parse accepts some of them; js/stages.js cleanIso rejects them like Python). Neither app writes such values (both use toISOString); they only come from hand edits.",
+ "version": 1,
+ "vectors": [
+  {
+   "name": "no entries",
+   "state": null,
+   "overlay": null,
+   "stage": "ready",
+   "stageFrom": "none",
+   "effective": {
+    "stage": "ready",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": false
+  },
+  {
+   "name": "v1 entry only -> v1 stage",
+   "state": null,
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-20T10:00:00Z",
+    "by": "PC"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 entry only, no at -> v1 stage",
+   "state": null,
+   "overlay": {
+    "stage": "prep"
+   },
+   "stage": "prep",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta entry only -> beta stage",
+   "state": {
+    "stage": "setup",
+    "sat": "2026-09-20T10:00:00Z",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "overlay": null,
+   "stage": "setup",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "setup",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta entry without sat, v1 older at -> v1 stage (no sat = v1 wins)",
+   "state": {
+    "stage": "poured",
+    "cleanup": "done",
+    "at": "2026-09-22T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "done",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta sat newer than v1 at -> beta stage",
+   "state": {
+    "stage": "poured",
+    "sat": "2026-09-22T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "poured",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "poured",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at newer than beta sat -> v1 stage, beta items kept",
+   "state": {
+    "stage": "poured",
+    "asphalt": "req",
+    "cleanup": "done",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "req",
+    "pavers": "na",
+    "cleanup": "done",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "equal times -> beta stage (v1 must be strictly newer)",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-21T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "same instant, different spelling -> beta stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-21T10:00:00.000Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T05:00:00-05:00"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "milliseconds count: v1 500 ms newer -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-21T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T10:00:00.500Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "offset time: v1 05:30-05:00 (10:30Z) newer than sat 10:00Z -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-21T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T05:30:00-05:00"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta moved back to Ready (no stage, newer sat) -> ready",
+   "state": {
+    "assess": "virtual",
+    "sat": "2026-09-22T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "ready",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "ready",
+    "assess": "virtual",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": false
+  },
+  {
+   "name": "v1 moved back to Ready = entry deleted -> beta stage stays (known limitation)",
+   "state": {
+    "stage": "base",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": null,
+   "stage": "base",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 explicit ready newer -> ready",
+   "state": {
+    "stage": "base",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "ready",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "ready",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "ready",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": false
+  },
+  {
+   "name": "v1 unknown stage is ignored -> beta stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "setup2",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 unknown stage, no beta entry -> ready",
+   "state": null,
+   "overlay": {
+    "stage": "setup2",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "ready",
+   "stageFrom": "none",
+   "effective": {
+    "stage": "ready",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": false
+  },
+  {
+   "name": "v1 stage with spaces/case is normalized",
+   "state": null,
+   "overlay": {
+    "stage": " POURED ",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "poured",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "poured",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at missing, beta has sat -> beta stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at unreadable, beta has sat -> beta stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "yesterday"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta sat unreadable = no sat -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": "yesterday"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta sat not a string (number) = no sat -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": 1790000000000
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta sat null = no sat -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": null
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 items are ignored (items only from the beta file)",
+   "state": null,
+   "overlay": {
+    "stage": "poured",
+    "asphalt": "req",
+    "cleanup": "done",
+    "removed": true,
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "poured",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "poured",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta removed stays when v1 stage wins",
+   "state": {
+    "removed": true,
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "excavation",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "stage": "excavation",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "excavation",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": true
+   },
+   "keepWhenClosed": false
+  },
+  {
+   "name": "v1 plain-string entry, beta without sat -> v1 stage",
+   "state": {
+    "cut": "req"
+   },
+   "overlay": "prep",
+   "stage": "prep",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "req",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 plain-string entry has no at, beta has sat -> beta stage",
+   "state": {
+    "stage": "base",
+    "sat": "2026-09-20T10:00:00Z"
+   },
+   "overlay": "prep",
+   "stage": "base",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta item-only entry without sat, v1 stage -> v1 stage + beta items",
+   "state": {
+    "lane": {
+     "s": "booked",
+     "from": "2026-10-06",
+     "to": "2026-10-08"
+    },
+    "pavers": "req"
+   },
+   "overlay": {
+    "stage": "setup",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "stage": "setup",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "setup",
+    "assess": "no",
+    "lane": {
+     "s": "booked",
+     "from": "2026-10-06",
+     "to": "2026-10-08"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "req",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at with a leading space is no time -> beta sat wins",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-21T10:00:00Z",
+    "at": "2026-09-21T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "poured",
+    "at": " 2026-09-22T10:00:00Z",
+    "by": "PC"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at with a trailing newline is no time -> beta sat wins (v1 Ready not shown)",
+   "state": {
+    "stage": "setup",
+    "sat": "2026-09-01T00:00:00Z",
+    "at": "2026-09-01T00:00:00Z"
+   },
+   "overlay": {
+    "stage": "ready",
+    "at": "2026-09-30T00:00:00Z\n"
+   },
+   "stage": "setup",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "setup",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "padded v1 at, beta entry without sat -> v1 stage (no sat = v1 wins)",
+   "state": {
+    "cut": "req",
+    "at": "2026-09-01T00:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": " 2026-09-30T00:00:00Z "
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "req",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at on an impossible date (2026-02-30) is no time -> beta sat wins",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-02-01T00:00:00Z",
+    "at": "2026-02-01T00:00:00Z"
+   },
+   "overlay": {
+    "stage": "poured",
+    "at": "2026-02-30T00:00:00Z"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "beta sat at hour 24 is no sat -> v1 stage",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-20T24:00:00Z",
+    "at": "2026-09-20T10:00:00Z"
+   },
+   "overlay": {
+    "stage": "base",
+    "at": "2026-09-01T00:00:00Z"
+   },
+   "stage": "base",
+   "stageFrom": "overlay",
+   "effective": {
+    "stage": "base",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  },
+  {
+   "name": "v1 at with offset minute 60 is no time -> beta sat wins",
+   "state": {
+    "stage": "prep",
+    "sat": "2026-09-20T00:00:00Z",
+    "at": "2026-09-20T00:00:00Z"
+   },
+   "overlay": {
+    "stage": "poured",
+    "at": "2026-09-21T10:00:00+05:60"
+   },
+   "stage": "prep",
+   "stageFrom": "state",
+   "effective": {
+    "stage": "prep",
+    "assess": "no",
+    "lane": {
+     "s": "na"
+    },
+    "cut": "na",
+    "asphalt": "na",
+    "pavers": "na",
+    "cleanup": "todo",
+    "removed": false
+   },
+   "keepWhenClosed": true
+  }
+ ],
+ "times": [
+  {
+   "s": "2026-09-20T10:00:00Z",
+   "ms": 1789898400000
+  },
+  {
+   "s": "2026-09-20T10:00:00.5Z",
+   "ms": 1789898400500
+  },
+  {
+   "s": "2026-09-20T10:00:00.123Z",
+   "ms": 1789898400123
+  },
+  {
+   "s": "2026-09-20T05:00:00-05:00",
+   "ms": 1789898400000
+  },
+  {
+   "s": "2026-09-20T15:30:00+05:30",
+   "ms": 1789898400000
+  },
+  {
+   "s": "2026-09-20T10:00Z",
+   "ms": 1789898400000
+  },
+  {
+   "s": "yesterday",
+   "ms": null
+  },
+  {
+   "s": "",
+   "ms": null
+  },
+  {
+   "s": null,
+   "ms": null
+  },
+  {
+   "s": 1789898400000,
+   "ms": null
+  },
+  {
+   "s": " 2026-09-20T10:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:00:00Z\n",
+   "ms": null
+  },
+  {
+   "s": "2026-02-30T00:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-31T00:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T24:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:60:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:00:60Z",
+   "ms": null
+  },
+  {
+   "s": "0000-01-01T00:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:00:00+05:60",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:00:00+24:00",
+   "ms": null
+  },
+  {
+   "s": "2024-02-29T00:00:00Z",
+   "ms": 1709164800000
+  },
+  {
+   "s": "2026-02-29T00:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2000-02-29T12:00:00Z",
+   "ms": 951825600000
+  },
+  {
+   "s": "1900-02-29T00:00:00Z",
+   "ms": null
+  },
+  {
+   "s": "2026-09-20T10:00:00+23:59",
+   "ms": 1789812060000
+  },
+  {
+   "s": "0001-01-01T00:00:00+01:00",
+   "ms": -62135600400000
+  }
+ ]
+}

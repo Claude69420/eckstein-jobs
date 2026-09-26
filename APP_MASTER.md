@@ -4,6 +4,7 @@
 > This repo is **public**, so this file contains **no secret values**. Secrets are named, and their storage locations are described, but their values never appear here.
 > Last full rewrite: **2026-09-25** (baseline HEAD `dd9cf03`, 53 jobs).
 > Last major update: **R-1 (2026-09-26)**: job stages, Liquid Glass reskin, multi-file frontend (`index.html`, `css/`, `js/`, `vendor/`).
+> Latest: **R-2 beta released 2026-09-26** at `/beta/`, next to the untouched R-1 v1 at the root (§0, §4.3b, §11 "R-2").
 
 **Contents**
 0. [Read first](#0-read-first)
@@ -32,13 +33,17 @@
 
 **Job stages** (Ready to start → Excavation → Base → Prep → Passed inspection → Poured) are stored in a separate public repo, `Claude69420/eckstein-jobs-state` (§5 "Stage data", ADR-20). Devices with an edit key can move stages; others see them read-only.
 
+**Two apps are served side by side (since 2026-09-26):**
+- **v1 (R-1)** at the root <https://claude69420.github.io/eckstein-jobs/>: the app the crew uses. Root files are frozen byte-for-byte during the trial (Rule 13); stages in `stages.json` (v1 format).
+- **R-2 beta** at <https://claude69420.github.io/eckstein-jobs/beta/> (Home Screen app "EJ Beta"): 7 stages (adds Setup), job items (Assessed, Lane closure, Street cut, Asphalt, Pavers, Cuts & cleanup) with gates, item lists, a route editor and encrypted Jobber totals. Generated into `beta/` from the `r2` branch (§4.3b). It writes only `stages-beta.json` and reads v1's `stages.json` as a **one-way, read-only overlay** (v1 moves show in the beta; beta moves never reach v1; ADR-24). Both read the same `data/` files.
+
 It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-jobs/>. A GitHub Actions cron (`sync.yml`) refreshes the data headlessly at **7:00 AM and 12:00 PM Winnipeg time (CDT)**. The cron calls the Jobber GraphQL API with a dedicated read-only Jobber app, and does not use Claude or the Max plan.
 
 ### Standing rules (Claude must follow these every time)
 
 | # | Rule |
 |---|---|
-| 1 | **Never read, print, or relay secret values.** This covers the Jobber client ID, secret and refresh tokens; the TomTom key; the Windows keyring contents (`eckstein_jobber`); `%USERPROFILE%\.config\eckstein_jobber\credentials.json`; `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt`; GitHub secrets; and the **stage edit key** (a fine-grained PAT stored per device in `localStorage['ej_gh_token']` and in Riley's password manager). **Riley pastes secrets himself.** Name a secret and say where it lives; never show its value. In the Browser pane, never read `localStorage.ej_gh_token`, never call `EJ.store.getKeyForShare()`, and never type a key into Settings → Stages. |
+| 1 | **Never read, print, or relay secret values.** This covers the Jobber client ID, secret and refresh tokens; the TomTom key; the Windows keyring contents (`eckstein_jobber`); `%USERPROFILE%\.config\eckstein_jobber\credentials.json`; `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt`; GitHub secrets (including **`PRICE_KEY`**, the prices encryption key); the **stage edit key** (a fine-grained PAT stored per device in `localStorage['ej_gh_token']` (v1) and `localStorage['ejb_gh_token']` (beta), and in Riley's password manager); and the **pricing key** (the same value as `PRICE_KEY`, stored per device in `localStorage['ejb_price_key']` (beta; `ej_price_key` once promoted) and in Riley's password manager). **Riley pastes secrets himself.** Name a secret and say where it lives; never show its value. In the Browser pane, never read `localStorage.ej_gh_token`, `ejb_gh_token`, `ejb_price_key` or `ej_price_key`, never call `EJ.store.getKeyForShare()`, never decrypt or print `data/prices.json`, and never type a key into Settings → Stages or Settings → Pricing. |
 | 2 | **The repo is PUBLIC.** Never commit secret values, phone numbers, emails, or other personal contact details. **Never copy a desktop builder's `TOMTOM_KEY = "..."` line into this repo.** Private-individual client names already appear in `data/jobs.json` (the "Other" bucket), which is a known, accepted tradeoff (see §10). Don't add more personal data. The stage edit key never goes into either repo. The state repo is public too: `stages.json` (including each device label `by`) and its commit messages (`stage: #684 <street> -> base`) are visible to anyone, so device names must not contain personal info. |
 | 3 | **Log every app change in the [CHANGELOG](#12-changelog) of this file, in the same commit as the change.** Also keep §11 (ROADMAP / IN-FLIGHT) current while a feature is mid-build, so a resumed session knows exactly where work stopped. Bot data syncs are not logged individually. |
 | 4 | **After building any route map, run the publish step:** `python C:/Users/Riley/eckstein-jobs/publish_routes.py`. The file must be named `Route_*.html` in `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes`, or it never reaches the app. |
@@ -49,8 +54,8 @@ It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-j
 | 9 | **Keep the two Jobber apps separate.** The desktop MCP app is "Eckstein AI" (read/write, keyring, port 8080). The cloud sync app is "Eckstein Jobs Sync" (read-only, GitHub secrets, port 8081). Never put desktop credentials in GitHub, and never run `get_refresh_token.py` with desktop credentials. |
 | 10 | **Pull before you push.** The bot commits `data/` twice a day. **Commit first, then pull, then push:** `git -C C:/Users/Riley/eckstein-jobs add js/app.js APP_MASTER.md` (list the paths you actually changed) → `git -C C:/Users/Riley/eckstein-jobs commit -m "app: what changed"` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs push` (this exact path form works in both PowerShell and Git Bash). A plain `pull --rebase` **refuses to run with uncommitted edits** ("cannot pull with rebase: You have unstaged changes"), because this clone has no `rebase.autoStash` and `pull.rebase=false`; `git pull --rebase --autostash` (what `publish_routes.py` uses) is the alternative. If Claude's `git push` is **blocked by the auto-mode safety classifier** (it once flagged a push of job data to this public repo as "data exfiltration"), **stop and ask Riley to run the push himself** with `git -C C:/Users/Riley/eckstein-jobs push`. |
 | 11 | **Geocodes: read back and verify.** Check TomTom's `freeformAddress` and postal code. TomTom mis-snaps rural towns and duplicate street names to other provinces. Server-side sync has a Manitoba bounding-box guard; the desktop builders don't. |
-| 12 | **Adding a client key touches 5 places in 2 files:** `CLIENT_KEYS` in `sync_jobs.py` (around L36–42), plus the "ONE place" constants block in `js/app.js` (L9–20): L13 `var CLIENT_KEYS` (insert before `'Other'`), L14 `var COL`, L15 `var LABEL`, L16 `var SHORT` (list-row badge). `css/tokens.css` has no client tokens (its header L5 says so). A `clientKey` missing from the app's `CLIENT_KEYS` no longer vanishes: `clientGroup()` (app.js L57) files it under "Other / Residential" (amber). §7.8. |
-| 13 | **Multi-step feature work never sits on local `main`.** Any push of `main` deploys to Riley's phone in about 1 minute, and `publish_routes.py` runs `git pull --rebase --autostash` + `git push` on the *current* branch.<br>(a) Do R-1 and other multi-session work on a branch: `git -C C:/Users/Riley/eckstein-jobs switch -c r1-stages`. Commit there, with the CHANGELOG entry in the same commit. Optionally run `git -C C:/Users/Riley/eckstein-jobs push -u origin r1-stages` as an off-site backup (Pages serves only `main`).<br>(b) **Before running `publish_routes.py` or making any hotfix**, commit or stash the branch work and run `git -C C:/Users/Riley/eckstein-jobs switch main`. On a branch with no upstream, the script dies at `git pull` ("There is no tracking information for the current branch"), with the route files written but not committed. On a branch pushed with `-u`, it silently commits and pushes the routes to that branch, and they never go live, because Pages serves only `main`.<br>(c) To ship R-1: ONE squash commit (build spec §1.7): `git -C C:/Users/Riley/eckstein-jobs switch main` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs merge --squash r1-stages` → commit with the CHANGELOG entry → push → verify live. Rollback = `git revert` of that single commit (§7.15). For later multi-session work either a squash or `merge --ff-only` is fine; record which one was used in §11.<br>(d) Record the branch name, and whether it is pushed or merged, in the §11 Work log. |
+| 12 | **Adding a client key touches 5 places in 2 files:** `CLIENT_KEYS` in `sync_jobs.py` (L87–93 since R-2; was around L36–42), plus the "ONE place" constants block in `js/app.js` (L9–20): L13 `var CLIENT_KEYS` (insert before `'Other'`), L14 `var COL`, L15 `var LABEL`, L16 `var SHORT` (list-row badge). `css/tokens.css` has no client tokens (its header L5 says so). A `clientKey` missing from the app's `CLIENT_KEYS` no longer vanishes: `clientGroup()` (app.js L57) files it under "Other / Residential" (amber). §7.8. **During the beta trial the lines differ per copy** (re-check with grep): `main` v1 `js/app.js` L13–16 as above; the `r2` branch's `js/app.js` L15–18 (block L11–21, `clientGroup` L77), which `beta/js/app.js` copies; `sync_jobs.py` `CLIENT_KEYS` is at L87–93 since R-2. So a new client means: `sync_jobs.py` (on `main` and `r2`), v1 `js/app.js` on `main`, `r2` `js/app.js`, then rebuild and ship `beta/` (§7.16). |
+| 13 | **Multi-step feature work never sits on local `main`.** Any push of `main` deploys to Riley's phone in about 1 minute, and `publish_routes.py` runs `git pull --rebase --autostash` + `git push` on the *current* branch.<br>(a) Do R-1 and other multi-session work on a branch: `git -C C:/Users/Riley/eckstein-jobs switch -c r1-stages`. Commit there, with the CHANGELOG entry in the same commit. Optionally run `git -C C:/Users/Riley/eckstein-jobs push -u origin r1-stages` as an off-site backup (Pages serves only `main`).<br>(b) **Before running `publish_routes.py` or making any hotfix**, commit or stash the branch work and run `git -C C:/Users/Riley/eckstein-jobs switch main`. On a branch with no upstream, the script dies at `git pull` ("There is no tracking information for the current branch"), with the route files written but not committed. On a branch pushed with `-u`, it silently commits and pushes the routes to that branch, and they never go live, because Pages serves only `main`.<br>(c) To ship R-1: ONE squash commit (build spec §1.7): `git -C C:/Users/Riley/eckstein-jobs switch main` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs merge --squash r1-stages` → commit with the CHANGELOG entry → push → verify live. Rollback = `git revert` of that single commit (§7.15). For later multi-session work either a squash or `merge --ff-only` is fine; record which one was used in §11.<br>(d) Record the branch name, and whether it is pushed or merged, in the §11 Work log.<br>(e) **R-2 / beta channel (since 2026-09-26):** `r2` is the R-2 development branch and stays one (it is never merged into `main` wholesale). Its root files (`index.html`, `css/`, `js/` incl. `js/prices.js`, `sw.js`, `manifest.json`, `icons/`) are the R-2 app; `main`'s root files stay R-1 v1 byte-for-byte until promotion (§7.17). `main` receives only the **beta ship paths**: `beta/` (generated), `sync_jobs.py`, `.github/workflows/sync.yml`, `.github/requirements-sync.txt`, `tests/test_sync.py`, `tests/fixtures/`, `docs/r2-plan.md`, `.gitattributes`, `APP_MASTER.md`. `tests/stages.test.js`, `tests/prices.test.js`, `tests/tsp.test.js` (r2 versions), `tests/test_build_beta.py` and `tools/` stay on `r2`. **Never take `data/` from `r2`**, and **never run `tools/build_beta.py` on `main`** (it would build `beta/` from v1's root files). Recipe: §7.16. |
 
 **Where the other context lives:**
 - `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/ROUTING_PLAYBOOK.md` is private and holds routing rules and the TomTom key. **Read it before any routing work.** Some parts are stale (see §10).
@@ -65,27 +70,26 @@ It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-j
 - The out-of-repo stale pointers found during the 2026-09-25 doc review (folder `CLAUDE.md` routing table, `ROUTING_PLAYBOOK.md` "Leaflet + OSM" heading and local-run wording) were **fixed on 2026-09-25**.
 - **Out-of-repo pointers updated for R-1 on 2026-09-26** (not versioned here): memory `project_eckstein_jobs_app.md` now says R-1 shipped as one squash commit and R-2 is next (`docs/r2-plan.md`); `ROUTING_PLAYBOOK.md` "Eckstein Jobs phone app" section (L88–90) now lists the views Jobs (Client or Stage filter, stage slider, stage route) / Routes / Plan / Settings and the state repo.
 
-### Current state and in-flight work (as of 2026-09-26, after the 12:04 UTC sync)
+### Current state and in-flight work (as of 2026-09-26, R-2 beta release)
 
 The app is **live and healthy**:
-- **53 jobs, 53 mapped, 0 failed**: 52 active in Jobber plus 1 pending manual job, 9001.
-- Geocode cache: 312 entries.
-- 65 published routes (the 2 waiting desktop routes were published 2026-09-25 in `bce1803`).
-- When this was written, local `main` was level with `origin/main` at `d1e9dfb` (bot sync 2026-09-26 12:04 UTC). **Every number in this box is a snapshot** and goes stale twice a day. After `git pull --rebase`, re-read `data/meta.json` before quoting counts to Riley.
+- **51 jobs, 51 mapped, 0 failed** (bot sync 2026-09-26 19:12 UTC, `f31e7d7`); pending job 9001 was removed (`c2a1d43`). Highest Jobber jobNumber 699 (= the beta's `ASSESS_CUTOFF`).
+- Geocode cache: 312 entries. 65 published routes.
+- **Every number in this box is a snapshot** and goes stale twice a day. After `git pull --rebase`, re-read `data/meta.json` before quoting counts to Riley.
 - Every scheduled sync since the 2026-09-17 token fix has been green. The one failure since then was a "Re-run jobs" push rejection on 09-24, now fixed by `8b2e72f`.
+- **Stage edit key: created by Riley and in use on the PC** (v1 `stages.json` had 31 entries, all `by` "PC", written 18:30–19:22 UTC on 2026-09-26). `stages-beta.json` does not exist yet (404 until the beta's first move).
 - **Open security item:** `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt` still exists (32 bytes, written 2026-09-15 22:05 CDT, never deleted) and likely holds the live sync-app refresh token in plaintext. Ask Riley to run (PowerShell): `Remove-Item "$env:USERPROFILE\.config\eckstein_jobs_sync\refresh_token.txt"`. Claude never reads it. Remove this bullet (and the matching §10 item) once Riley confirms.
 
-**R-1 (job stages, Client|Stage filter, one-click stage route, stage slider, Liquid Glass reskin): SHIPPED 2026-09-26 as `005a671`** (ONE squash commit of branch `r1-stages`; local WIP commits `be33936` build + `7b5449d` review fixes + a docs WIP) onto `main`. Live-verified 2026-09-26. Riley decided on 2026-09-26 (R-2 Q7) to ship now. Built, tested (Node 15/15 + 38/38), browser-accepted and reviewed; see the §12 entry and the §11 Work log. Squash hash: `005a671`.
+**R-1 (v1, live at the root): SHIPPED 2026-09-26 as `005a671`** (ONE squash commit of `r1-stages`), live-verified. Still open from R-1: Riley's iPhone OK of the new look, share edit access with crew, delete `refresh_token.txt`, and (if not done yet) delete and re-add the v1 Home Screen icon and paste the edit key inside the v1 iPhone app (every v1 move so far is by "PC") (§11 R-1).
 
-**Open Riley steps** (`docs/r1-build-spec.md` §3; Claude guides, never handles the key):
-1. Create the fine-grained stage edit key (§6 recipe F).
-2. **Delete and re-add the Home Screen icon** (status bar, theme colour and icon changed). Note any saved planner routes first: they live only in that app's storage.
-3. Paste the key on the iPhone (inside the installed app) and on the PC: Settings → Stages → paste → Save.
-4. Share edit access with crew: Settings → Stages → Share edit access.
-5. Delete `refresh_token.txt` (security item above).
-6. Confirm the new look on his iPhone PWA (the one R-1 acceptance item Claude cannot test).
+**R-2 BETA RELEASED 2026-09-26 at <https://claude69420.github.io/eckstein-jobs/beta/> (this commit)**, next to v1, which is untouched (Riley: trial in parallel; ADR-24). Development continues on branch `r2` (Rule 13e; update recipe §7.16; promotion §7.17 only when Riley approves). Tests on `r2`: stages 78, prices 25, tsp 15, test_sync 84, test_build_beta 5. The sync changes (hints, `id`, `closed_jobs.json`, encrypted prices) ship with this commit and run for the first time at the next cron: **watch it (§7.18)**. Risk: the read-only cloud Jobber app may not be allowed to read totals/line items (the job list still syncs; look for `::warning::jobber: job list query refused`).
 
-**Next feature: R-2** (Setup stage, before/after-work items, route editing, pricing): **planned**, answers recorded 2026-09-26, plan in `docs/r2-plan.md`. Build starts after R-1 ships (§11 "R-2").
+**Open Riley steps for the beta** (Claude guides, never handles a key):
+1. **iPhone:** open <https://claude69420.github.io/eckstein-jobs/beta/> in Safari → Share → Add to Home Screen ("EJ Beta"). Open **that** app → ⚙ → Stages → paste the **same** stage edit key → Save; set a device name without personal info (e.g. "iPhone beta"; Rule 2).
+2. **PC:** open the beta URL in Chrome/Edge → ⚙ → Stages → paste the same key → Save (e.g. "PC beta").
+3. **Pricing key:** create it with the PowerShell one-liner in §6 recipe G → save it as the repo secret `PRICE_KEY` → paste it in the beta's ⚙ → Pricing on each device; keep a copy in the password manager.
+4. Prices appear after the next sync (7 AM / noon) that runs with `PRICE_KEY` set, or ask Claude to run one (§7.2).
+5. Use the beta next to v1. Beta moves stay in the beta (they never reach v1); the crew stays on v1. Send feedback; promotion waits for Riley's OK.
 
 ### Resuming after compaction or in a new session (do this before anything else)
 1. Read §0 and the §11 **Work log**.
@@ -101,6 +105,7 @@ The app is **live and healthy**:
 3. Compare what git shows with the Work log's *Uncommitted* and *Half-done* lines. If they disagree, trust git, describe the difference to Riley, and never discard changes without his OK.
 4. Compare the newest CHANGELOG entry with `git -C C:/Users/Riley/eckstein-jobs log -5 --oneline`. A missing entry means the previous session stopped before logging, so add it.
 5. Run `preview_list`. If the preview is down, `preview_start` with name `eckstein-jobs`.
+   - **R-2 / beta work:** confirm the branch (`r2` for R-2 changes, `main` for v1 hotfixes, data and route publishing) and run `python C:/Users/Riley/eckstein-jobs/tools/build_beta.py --check` on `r2` (Rule 13e, §7.16).
 6. Check the *Answers from Riley* of the §11 block you are working on. An unanswered question that changes storage, accounts, keys or repo visibility stays blocking: ask Riley.
 7. Continue from *Next step*. Update the Work log after every meaningful step, not only at the end.
 
@@ -135,7 +140,8 @@ The app is **live and healthy**:
 
 | Item | Value |
 |---|---|
-| Live URL | <https://claude69420.github.io/eckstein-jobs/> |
+| Live URL | <https://claude69420.github.io/eckstein-jobs/> (v1, R-1) |
+| Beta URL | <https://claude69420.github.io/eckstein-jobs/beta/> (R-2 beta, Home Screen app "EJ Beta"; generated from branch `r2`, §4.3b) |
 | Repo | <https://github.com/Claude69420/eckstein-jobs> (**PUBLIC**, branch `main`, created 2026-09-16 02:55 UTC) |
 | Local clone | `C:/Users/Riley/eckstein-jobs` (outside OneDrive) |
 | GitHub account | `Claude69420`. It was created by Riley for this app. The gh CLI is logged in as this account through a device login. |
@@ -145,22 +151,23 @@ The app is **live and healthy**:
 | Pages settings | <https://github.com/Claude69420/eckstein-jobs/settings/pages> (legacy build, source `main` at `/`, HTTPS enforced, no custom domain) |
 | Jobber app: cloud sync | **"Eckstein Jobs Sync"**: Clients read and Jobs read only, refresh-token rotation **OFF**. Callback registered as `https://claude69420.github.io/eckstein-jobs/callback`; `get_refresh_token.py` actually uses `http://localhost:8081/callback`. |
 | Jobber app: desktop MCP | **"Eckstein AI"**: read/write. Token in Windows Credential Manager (keyring service `eckstein_jobber`, user `token`), callback `http://localhost:8080/callback`. |
-| GitHub secrets (names) | `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_REFRESH_TOKEN`, `TOMTOM_KEY`. `GH_PAT` is referenced by the workflow but **not set**. |
+| GitHub secrets (names) | `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_REFRESH_TOKEN`, `TOMTOM_KEY`; **`PRICE_KEY`** (R-2 prices encryption; Riley creates it, §6 recipe G; until it exists prices are skipped). `GH_PAT` is referenced by the workflow but **not set**. |
 | Schedule | Cron `0 12 * * *` and `0 17 * * *` UTC. That is 7:00 AM and 12:00 PM CDT, or **6:00 AM and 11:00 AM CST** from 2026-11-01 to 2027-03-14. Runs start about 5 minutes late and data is live about 6 minutes after the cron time. |
 | Jobber API | GraphQL `https://api.getjobber.com/api/graphql`, header `X-JOBBER-GRAPHQL-VERSION: 2026-03-10`. OAuth token endpoint `https://api.getjobber.com/api/oauth/token`. |
 | Geocoders | Server: TomTom Search (cache misses only). Browser planner: Esri ArcGIS World Geocoder (no key). |
 | Map tiles | Esri Canvas, keyless: light `World_Light_Gray_Base` + `World_Light_Gray_Reference`, dark `World_Dark_Gray_Base` + `World_Dark_Gray_Reference`; `maxNativeZoom 16`, `maxZoom 19`, **no CSS filter**. Reference (label) tiles sit in a custom pane `labels` (z 450: above route lines at 400, below markers at 600). |
 | Leaflet | 1.9.4 from unpkg with SRI (`crossorigin=""`): CSS `sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=`, JS `sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=`. Cached cache-first by `sw.js`. |
-| State repo | `Claude69420/eckstein-jobs-state` (**PUBLIC**, no Pages, branch `main`, file `stages.json`). Local clone `C:/Users/Riley/eckstein-jobs-state`: **pull before any hand edit** (§7.14). |
-| Stage API | With a key: `https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`. Without: `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (CDN `Cache-Control: max-age=300`). |
-| Stage edit key | Fine-grained PAT on `Claude69420`, "Only select repositories → eckstein-jobs-state", Contents: Read and write, expiry ≤ 1 year. Stored per device in `localStorage['ej_gh_token']` and in Riley's password manager. The value never appears in docs (§6). |
-| Tests | `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 tests) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39). Node v24, no npm, no dependencies. The same lines work in PowerShell. |
+| State repo | `Claude69420/eckstein-jobs-state` (**PUBLIC**, no Pages, branch `main`). Files: `stages.json` (v1's file, format version 1, written only by v1) and `stages-beta.json` (the beta's file, format version 2, written only by the beta; 404 until the beta's first move). Local clone `C:/Users/Riley/eckstein-jobs-state`: **pull before any hand edit** (§7.14). |
+| Stage API | With a key: `https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/<file>`. Without: `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/<file>` (CDN `Cache-Control: max-age=300`). `<file>` = `stages.json` or `stages-beta.json`. |
+| Stage edit key | Fine-grained PAT on `Claude69420`, "Only select repositories → eckstein-jobs-state", Contents: Read and write, expiry ≤ 1 year. **One key for both apps.** Stored per device in `localStorage['ej_gh_token']` (v1) / `['ejb_gh_token']` (beta) and in Riley's password manager. The value never appears in docs (§6). |
+| Pricing key | The value of the GitHub secret `PRICE_KEY` (base64 of 32 random bytes). Pasted per device in the beta's Settings → Pricing (`localStorage['ejb_price_key']`) and kept in Riley's password manager; decrypts `data/prices.json` in the browser only. **Secret** (Rule 1, §6 recipe G). |
+| Tests | **On `main`** (v1 frontend + the shipped sync): `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15), `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39, v1 store), `python C:/Users/Riley/eckstein-jobs/tests/test_sync.py` (84). **On `r2`** (the R-2 source of `beta/`): `tests/stages.test.js` (78), `tests/prices.test.js` (25), `tests/tsp.test.js` (15) with `node`; `tests/test_sync.py` (84) and `tests/test_build_beta.py` (5) with `python`; then `python C:/Users/Riley/eckstein-jobs/tools/build_beta.py --check`. Use the full `C:/Users/Riley/eckstein-jobs/` prefix; the same lines work in PowerShell. Node v24, no npm. |
 | Desktop route output | `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes` |
 | Desktop builders and playbook | `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/` (`_route_*.py`, `_map_*.py`, `ROUTING_PLAYBOOK.md`) |
-| Local preview | The `.claude/launch.json` config `eckstein-jobs` in the Claude Code folder runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`, served at <http://localhost:8765/>. On localhost / 127.0.0.1 / [::1] **with no key**, stages run in **local mode** (`localStorage['ej_stages']`, this machine only, never shared). |
+| Local preview | The `.claude/launch.json` config `eckstein-jobs` in the Claude Code folder runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`, served at <http://localhost:8765/> (beta: <http://localhost:8765/beta/>). It serves whatever branch is checked out (on `r2` the root is the R-2 app with the default config). On localhost / 127.0.0.1 / [::1] **with no key**, stages run in **local mode** (`localStorage['ej_stages']`, beta `ejb_stages`; this machine only, never shared). |
 | Python for local sync | `C:/Users/Riley/OneDrive/Documents/Agents/.venv/Scripts/python.exe` (has `keyring` and `requests`) |
 
-**Key files in the repo** (sizes are the committed LF sizes, as served; a Windows checkout with `core.autocrlf=true` can show CRLF copies a little larger):
+**Key files in the repo** (sizes are the committed LF sizes, as served; a Windows checkout with `core.autocrlf=true` can show CRLF copies a little larger). The root frontend rows describe **v1 on `main`** (frozen during the beta trial); the same paths on branch `r2` hold the R-2 app (sizes in §4.3b):
 
 | File | Role |
 |---|---|
@@ -169,23 +176,28 @@ The app is **live and healthy**:
 | `css/glass.css` | Glass material; MIT notice for sohumsuthar/liquid-glass in its header (L1–31), file rules L33–42. 171 lines, 8.7 KB |
 | `css/components.css` | Geometry and content styles, desktop ≥900 px block, reduced motion. 444 lines, 34.4 KB |
 | `js/tsp.js` | Global `TSP`: optimizer, leg estimates, Google Maps parts; also a Node module. 375 lines, 15.1 KB |
-| `js/stages.js` | Global `Stages`: `STAGES` + the stage store; also a Node module. 776 lines, 39.1 KB |
+| `js/stages.js` | Global `Stages`: `STAGES` + the stage store; also a Node module. 780 lines, 39.6 KB (since `a538397`) |
 | `js/ui.js` | Global `UI`: shell, sheets, toast, `StageSlider`, refraction gate. 485 lines, 27.5 KB |
 | `js/app.js` | App logic (one IIFE); the single home of `CLIENT_KEYS`/`COL`/`LABEL`/`SHORT`/`SHOP`. 1,168 lines, 75.8 KB |
 | `vendor/hyalite.js`, `vendor/hyalite.LICENSE` | Third-party desktop refraction, byte-for-byte, **never edit** (51,559 B; LICENSE 1,070 B). §9 "Third-party code" |
 | `sw.js` | Service worker, cache `ej-v2`. 128 lines, 5.6 KB |
 | `manifest.json` | PWA install metadata (638 B) |
 | `icons/icon-180.png` · `icon-192.png` · `icon-512.png` · `icon-maskable-512.png` | apple-touch-icon · favicon + manifest `any` · manifest `any` · manifest `maskable` (17.4 / 19.4 / 100.6 / 95.8 KB; all opaque RGB) |
-| `tests/tsp.test.js`, `tests/stages.test.js` | Node tests, no npm (stages test mocks `fetch`). 471 and 947 lines |
+| `tests/tsp.test.js`, `tests/stages.test.js` | Node tests, no npm (stages test mocks `fetch`). 471 and 960 lines on `main` (v1). On `r2`, `tests/tsp.test.js` is identical and `tests/stages.test.js` is the larger v2 suite (2,386 lines) |
+| `beta/` | **GENERATED** R-2 beta app (17 files: `index.html` with inline `EJ_CONFIG`, `css/`, `js/` incl. `prices.js`, `vendor/`, `sw.js` cache `ejb-v1`, `manifest.json`, orange `icons/`). Made on `r2` by `tools/build_beta.py`; never edit by hand; never regenerate on `main` (§4.3b, §7.16) |
+| `tests/test_sync.py`, `tests/fixtures/` | Python unit tests for `sync_jobs.py` (84, no network) and shared fixtures: `contract_vectors.json` + `overlay_vectors.json` (JS and Python must agree), sync fixtures, a test-key prices fixture (`prices.enc.json` / `prices.plain.json`, made by `make_prices_fixture.py`; test values only) |
+| `.github/requirements-sync.txt` | Hash-locked pins for the workflow's optional `cryptography` install (cryptography 46.0.6, cffi 2.0.0, pycparser 3.0; manylinux wheels only) |
+| `js/prices.js`, `tests/prices.test.js`, `tests/test_build_beta.py`, `tools/build_beta.py`, `tools/make_icons.py`, `tools/beta_icons.json` | **Only on `r2`** (not shipped to `main`): pricing decrypt/store, its tests, the beta builder and its tests, the icon generator (`--variant beta`) and the beta icon hashes |
 | `docs/liquid-glass-brief.md` | R-1 design brief (137 KB) |
 | `docs/r1-build-spec.md` | R-1 build spec; **overrides the brief** (6.8 KB) |
-| `docs/r2-plan.md` | R-2 plan and build spec (6.8 KB), §11 "R-2" |
-| `.gitattributes` | `vendor/* -text` (never convert line endings, so the hyalite hash stays stable) |
-| `sync_jobs.py` | Jobber to `data/*.json` sync (stdlib only, 222 lines) |
+| `docs/r2-plan.md` | R-2 plan and build spec (13.6 KB; §2a shared contract, §9 beta channel, §10 Assessed default), §11 "R-2" |
+| `.gitattributes` | `vendor/* -text` and `beta/vendor/* -text` (never convert line endings, so the hyalite hash stays stable) |
+| `sync_jobs.py` | Jobber to `data/*.json` sync (stdlib, plus optional `cryptography` for prices only; 1,032 lines, §4.1) |
 | `.github/workflows/sync.yml` | Cron and manual workflow ("Sync jobs from Jobber") |
 | `get_refresh_token.py` | One-time OAuth consent helper for the sync app (run by Riley) |
 | `publish_routes.py` | Copies desktop `Route_*.html` into `routes/`, makes them responsive, rebuilds `routes/index.json`, then commits and pushes |
 | `data/jobs.json`, `data/meta.json` | Generated by the bot every run |
+| `data/closed_jobs.json`, `data/closed_archive.json`, `data/prices.json` | Generated by the bot from the first R-2 sync on (read only by the beta): carried-forward closed jobs, the 60-day safety archive, the encrypted prices (§5) |
 | `data/geocode_cache.json` | Repo geocode cache, committed by the bot |
 | `data/street_overrides.json`, `data/pending_manual.json` | Hand-maintained inputs to the sync |
 | `routes/Route_*.html`, `routes/index.json` | Published route maps and their index |
@@ -211,10 +223,12 @@ flowchart LR
     IN["street_overrides.json and pending_manual.json"]
     GC["data/geocode_cache.json"]
     OUT["data/jobs.json and data/meta.json"]
+    CL["data/closed_jobs.json, closed_archive.json, prices.json - encrypted - R-2"]
     RT["routes/Route_*.html and routes/index.json"]
-    FE["index.html, css/*, js/*, vendor/hyalite.js, sw.js, manifest.json, icons"]
+    FE["v1 at root: index.html, css/*, js/*, vendor/hyalite.js, sw.js, manifest.json, icons"]
+    BETA["beta/ - R-2 beta app, generated from branch r2"]
   end
-  STATE["Repo Claude69420/eckstein-jobs-state - PUBLIC - stages.json"]
+  STATE["Repo Claude69420/eckstein-jobs-state - PUBLIC - stages.json v1 and stages-beta.json v2"]
   GHAPI["api.github.com contents API"]
   RAW["raw.githubusercontent.com CDN max-age 300"]
   UNPKG["unpkg Leaflet 1.9.4 SRI"]
@@ -234,13 +248,17 @@ flowchart LR
   GC <--> SJ
   SJ -- "3 geocode miss" --> TT
   SJ -- "4 commit data, rebase, push" --> OUT
+  SJ -- "carry-forward and prices, PRICE_KEY" --> CL
+  SJ -. "reads both stage files, raw, for carry-forward" .-> RAW
   OUT --> PAGES
+  CL --> PAGES
   RT --> PAGES
   FE --> PAGES
+  BETA --> PAGES
   PAGES -- "fetch with ?t= cache bust" --> PHONE
   PHONE --> ESRI
   PHONE --> UNPKG
-  PHONE -- "edit key: GET every 60 s, PUT batched 3 s" --> GHAPI
+  PHONE -- "edit key: GET every 60 s, PUT batched 3 s; v1 writes stages.json, beta writes only stages-beta.json" --> GHAPI
   GHAPI --> STATE
   PHONE -- "no key: read-only GET ?t=, every 300 s" --> RAW
   RAW --> STATE
@@ -252,13 +270,14 @@ flowchart LR
 ```
 
 **Data flow narrative:**
-1. **Sync.** At 12:00 and 17:00 UTC (actual start about 12:04 and 17:05), or on a manual **Run workflow**, GitHub Actions runs `python sync_jobs.py` with the four secrets. The script:
+1. **Sync.** At 12:00 and 17:00 UTC (actual start about 12:04 and 17:05), or on a manual **Run workflow**, GitHub Actions runs `python sync_jobs.py` with the four Jobber/TomTom secrets plus `PRICE_KEY` (R-2). The script:
    - swaps the stored refresh token for an access token;
    - pages through all **active** Jobber jobs;
    - cleans addresses, applies `street_overrides.json`, extracts permits and maps clients to colour keys;
    - geocodes cache-first (TomTom only on a miss, Manitoba box guard);
    - appends `pending_manual.json` entries;
-   - writes `data/geocode_cache.json`, `data/jobs.json` and `data/meta.json`.
+   - writes `data/geocode_cache.json`, `data/jobs.json` and `data/meta.json`;
+   - since R-2 also: reads both stage files and writes `data/closed_jobs.json` + `data/closed_archive.json`, and `data/prices.json` when `PRICE_KEY` is set (§4.1 "R-2 changes").
 2. **Commit.** The workflow commits `data/` as `eckstein-sync-bot` ("Sync jobs YYYY-MM-DD HH:MM UTC"), rebases onto `origin/main` with `-X theirs` (fresh data wins), and pushes with up to 4 tries.
 3. **Deploy.** The push to `main` triggers GitHub's "pages build and deployment", which takes about 31–106 s (typically 35–47 s). Files are served with `Cache-Control: max-age=600`.
 4. **App.** `js/app.js` `loadData()` (L618–656) fetches `data/jobs.json`, `data/meta.json` (optional) and `routes/index.json` with `?t=<now>` and `cache:'no-store'`, checking `r.ok`. In parallel it calls `store.load()` for the stages, then merges them (`mergeStages`, L598) and renders the Jobs map and list and the Routes cards. ↻ (`#rf`) re-runs `loadData()` in place (no page reload). The Plan view geocodes typed addresses with Esri in the browser and runs the optimizer in `js/tsp.js`.
@@ -268,7 +287,10 @@ flowchart LR
    - rebuilds `routes/index.json`;
    - runs `git pull --rebase --autostash`, commits and pushes.
 6. **Local fallback.** With no Jobber cloud env vars set, `sync_jobs.py` borrows the desktop MCP's keyring token ("Eckstein AI"). It writes only `data/`, and a human or Claude commits and pushes by hand.
-7. **Stages.** The frontend is authoritative. Devices with an edit key read and write `stages.json` in the state repo through the GitHub contents API (poll 60 s; writes batched 3 s into one commit); devices without a key read the raw CDN copy (poll 300 s). The sync bot never reads or writes the stage store, and stage writes never trigger this site's Pages builds (§5 "Stage data", ADR-20).
+7. **Stages.** The frontend is authoritative. Devices with an edit key read and write `stages.json` in the state repo through the GitHub contents API (poll 60 s; writes batched 3 s into one commit); devices without a key read the raw CDN copy (poll 300 s). The sync bot **never writes** the stage store (since R-2 it **reads** both stage files, raw, for carry-forward), and stage writes never trigger this site's Pages builds (§5 "Stage data", ADR-20).
+8. **Beta channel (R-2, since 2026-09-26; ADR-24).** `beta/index.html` sets `window.EJ_CONFIG` (`base "../"`, `ns "ejb_"`, `stateFile "stages-beta.json"`, `overlayFile "stages.json"`). The beta reads the **same** `data/jobs.json`, `data/meta.json` and `routes/` as v1, plus `data/closed_jobs.json` and `data/prices.json` (v1 never reads those). It writes only `stages-beta.json` and reads v1's `stages.json` read-only on the same poll: per job, v1's stage is shown when v1's `at` is newer than the beta entry's `sat`; items come only from the beta file. **One-way:** v1 never reads the beta file.
+9. **Closed jobs (R-2, ADR-25).** The sync keeps a job that left Jobber's active list in `data/closed_jobs.json` (`closed: true`) when the merged stage entry (both files) says work has started and field work is not done; a job it stops keeping goes to `data/closed_archive.json` for 60 days. `jobs.json` keeps exactly v1's job set.
+10. **Prices (R-2, ADR-26).** The sync fetches Jobber `total` / `uninvoicedTotal` and writes them AES-256-GCM encrypted with the secret `PRICE_KEY` to `data/prices.json` (skipped while `PRICE_KEY` is not set). Only the beta, on a device where Riley pasted the pricing key, decrypts it (WebCrypto, in the browser).
 
 ---
 
@@ -276,12 +298,12 @@ flowchart LR
 
 ### 4.1 Sync pipeline: `sync_jobs.py`
 
-It uses only the standard library (`urllib`, no `requests`), so the workflow has no pip step. All paths are relative to the script (`ROOT = Path(__file__).resolve().parent`), so the working directory doesn't matter.
+It uses only the standard library (`urllib`, no `requests`) for everything except the optional prices encryption, which imports `cryptography` lazily (installed by a hash-locked, `continue-on-error` workflow step; without it prices are skipped, never the sync). Paths default to the repo's `data/` (`ROOT = Path(__file__).resolve().parent`), so the working directory doesn't matter; `--out DIR` / `--data DIR` redirect them for local test runs (see "R-2 changes" at the end of this section, which **supersedes** the R-1 details below where they differ: page size, retries, the extra inputs and output files, the log lines incl. `done:`).
 
 **Execution flow:**
-1. `DATA.mkdir(exist_ok=True)`.
+1. `out_dir.mkdir(parents=True, exist_ok=True)` (since R-2; R-1: `DATA.mkdir(exist_ok=True)`).
 2. `get_access_token()` (auth modes below).
-3. `raw = fetch_active_jobs(token)` (the function itself prints nothing); then `main()` prints `jobber: N active jobs` (L172).
+3. `raw = fetch_active_jobs(token)` (R-1: the function printed nothing; since R-2 it logs the first page's query cost and any page warnings); then `main()` prints `jobber: N active jobs` (L863 since R-2).
 4. It loads four inputs:
    - `geocode_cache.json` (default `{}`)
    - `street_overrides.json` (keys converted to `int`)
@@ -299,7 +321,7 @@ It uses only the standard library (`urllib`, no `requests`), so the workflow has
 **Auth: cloud mode.** It is used when `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET` and `JOBBER_REFRESH_TOKEN` are **all** non-empty after `.strip()`.
 - It prints `auth: cloud mode (refresh_token grant) [client_id len 36, secret len 64, refresh len N]`. Only lengths are printed. **The baseline is 36 / 64 / 32**; the refresh length was 59 before the 09-17 fix.
 - It sends a form-encoded `POST https://api.getjobber.com/api/oauth/token` with `grant_type=refresh_token`, `refresh_token`, `client_id` and `client_secret`. Timeout 20 s.
-- On an `HTTPError` it prints `auth: Jobber token endpoint HTTP <code> -> <first 300 chars of body>`, then a hint (`sync_jobs.py` L75, verbatim: `auth: invalid_client => JOBBER_CLIENT_ID/JOBBER_CLIENT_SECRET wrong; invalid_grant => JOBBER_REFRESH_TOKEN wrong/expired`), and re-raises.
+- On an `HTTPError` it prints `auth: Jobber token endpoint HTTP <code> -> <first 300 chars of body>`, then a hint (`sync_jobs.py` L159 since R-2, was L75; verbatim: `auth: invalid_client => JOBBER_CLIENT_ID/JOBBER_CLIENT_SECRET wrong; invalid_grant => JOBBER_REFRESH_TOKEN wrong/expired`), and re-raises.
 - **Rotation:** if the response's `refresh_token` differs from the input, it writes the new one to the file named by env `ROTATED_TOKEN_FILE` and prints `auth: Jobber ROTATED the refresh token -> written to ROTATED_TOKEN_FILE...`. If that env var is unset, it prints `auth: WARNING Jobber rotated ... ROTATED_TOKEN_FILE not set`.
 - It returns `tok["access_token"]`.
 
@@ -315,9 +337,9 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
   3. If the refresh fails, it **silently falls back to an interactive browser consent flow on `http://localhost:8080/callback`**, which blocks until consent is given.
 - It needs `keyring` and `requests`, both present in the Agents venv.
 
-**Jobber GraphQL fetch:**
+**Jobber GraphQL fetch** (R-1 baseline; **R-2 changed the query, page size, retries and error handling**: see "R-2 changes" at the end of §4.1, which wins where they differ):
 - URL `https://api.getjobber.com/api/graphql`.
-- Headers: `Authorization: Bearer <token>`, `X-JOBBER-GRAPHQL-VERSION: 2026-03-10` (`sync_jobs.py` line 30; the same value is in the desktop `server.py` lines 59–60, so **bump both together**), and `Content-Type: application/json`.
+- Headers: `Authorization: Bearer <token>`, `X-JOBBER-GRAPHQL-VERSION: 2026-03-10` (`sync_jobs.py` L76 since R-2, was line 30; the same value is in the desktop `server.py` lines 59–60, so **bump both together**), and `Content-Type: application/json`.
 - Query `ListJobs($filter: JobFilterAttributes, $first: Int, $after: String)` on `jobs(filter, first, after)`:
   - `nodes { id jobNumber title jobStatus client { id name companyName } property { address { street1 city } } createdAt updatedAt }`
   - `pageInfo { hasNextPage endCursor }`
@@ -331,14 +353,14 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
   - Errors alongside data are silently accepted.
   - `data` null with no `errors` key passes the guard (`if "errors" in res and not res.get("data")`, L117) and then raises `TypeError: 'NoneType' object is not subscriptable` at `res["data"]["jobs"]` (L119). A missing `data` key (or a missing `jobs` inside it) raises `KeyError`.
   - A GraphQL-level **401** (token exchange fine, access token rejected) is retried 5 times over about 15 s inside `fetch_active_jobs` with **no logging**, then surfaces as a bare `urllib.error.HTTPError: HTTP Error 401: Unauthorized` traceback. The body is never printed (only token-endpoint errors print a body, L72–76). See §7.13.
-- `id`, `client.id`, `createdAt` and `updatedAt` are fetched but **not written out**, so `jobNumber` is the only stable key in the output.
+- `client.id`, `createdAt` and `updatedAt` are fetched but **not written out**. Since R-2 the Jobber job `id` is written (`jobs.json` `id`, used to refresh closed jobs), but `jobNumber` stays the key every file uses.
 - Statuses seen on 2026-09-25: `action_required` 33, `unscheduled` 11, `upcoming` 4, `late` 4, plus the synthetic `pending` 1.
 
 **Transform rules:**
 - `client = companyName or name or "Unknown"`.
 - `jobNumber = int(jobNumber)`.
 - `city = address.city or "Winnipeg"`.
-- `clientKey = CLIENT_KEYS.get(client, "Other")`. `CLIENT_KEYS` is at `sync_jobs.py` around lines 36–42:
+- `clientKey = CLIENT_KEYS.get(client, "Other")`. `CLIENT_KEYS` is at `sync_jobs.py` L87–93 (since R-2; was around lines 36–42):
   ```python
   "Crown Pipeline Ltd.": "Crown", "Harris Holdings Ltd.": "Harris", "ACV Sewer & Water": "ACV",
   "MyTec Industry Ltd": "MyTec", "No Limits Underground Ltd.": "NoLimits"
@@ -372,6 +394,19 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
   - They are never auto-removed.
 - **Every run rebuilds `jobs.json` from scratch.** Any user-set per-job state must live in a separate file keyed by `jobNumber`. Overrides and pending jobs are merged in by the sync; **stages are merged by the frontend and never written by the bot** (§5 "Stage data").
 
+**R-2 changes (shipped to `main` with the beta, 2026-09-26; `docs/r2-plan.md` §2a, §5, §6, §9).** The module docstring (L1–56) is the authoritative summary. v1 is unaffected: `jobs.json` keeps exactly the R-1 membership (active + pending) and only gains optional fields v1 ignores.
+- **Query** (`list_query`, L178): adds `total uninvoicedTotal` and `lineItems(first: $li) { nodes { name description } pageInfo { hasNextPage } }` (`$li` = `LINE_ITEMS_PAGE` 50; a job with more logs `jobber: N job(s) have more than 50 line items; hints use the first 50`). **Fallbacks** (`LIST_VARIANTS`): if Jobber refuses the query (GraphQL errors and no data, e.g. the read-only app may not read totals), it retries without totals, then without line items too, logging `::warning::jobber: job list query refused (...); retrying without ...`. The job list always syncs; prices and/or hints are degraded for that run.
+- **Paging and cost:** pages of `JOBS_PAGE` 25 (halved automatically when a page costs more than the bucket maximum), `MAX_PAGES` 200 (5,000 jobs; beyond that the run **fails** instead of silently truncating); the first page logs `jobber: query cost N per page of 25 (bucket A / M)`; after each page it waits for the bucket to refill if needed. `gql()` (L231) retries network errors / 5xx (up to `NET_ATTEMPTS` 5 attempts, waiting 1, 2, 4, 8 s) and THROTTLED / HTTP 429 (up to `THROTTLE_ATTEMPTS` 10 tries, each wait ≤ 60 s); other HTTP errors (401) are **not retried** and are logged as `jobber: jobs page 1 HTTP 401 (not retried)`. A job without a job number fails the run (it would otherwise look closed). A page with data **and** errors is accepted with `jobber: WARNING page N returned data with errors`, and its jobs keep last run's hints.
+- **Hints** (`compute_hints`, L363): `hints: {asphalt, pavers}` booleans from the title + line-item names/descriptions (`ASPHALT_RE` asphalt / blacktop; `PAVERS_RE` paving stone(s), (unit) paver(s), interlock(ing); "asphalt paving" is asphalt only). The text is never written anywhere. When line items are missing for a job, last run's hints are OR-ed in (`::warning::jobber: N job(s) came back without complete line items ...`).
+- **`jobs.json` record** gains `id` (Jobber encoded id, `null` for pending) and `hints`.
+- **Carry-forward** (`carry_forward`, L625; ADR-25): reads `stages.json` and `stages-beta.json` raw (`fetch_stages`; a 404 on the beta file = no entries yet; any other failure = "unreadable") and merges them per job exactly like the beta (`merge_entry`, L542; v1's stage wins when the beta entry has no `sat` or v1's `at` > the beta entry's `sat`). A job that left the active list is kept, with `closed: true`, in **`data/closed_jobs.json`** when `keep_when_closed` holds (stage beyond Ready, or asphalt/pavers/cut Required, or lane Required/Booked, and not field-work-done, and not removed). Kept jobs with an `id` are refreshed (`job(id)`: status + totals) within one 90 s budget (`REFRESH_BUDGET_S`). **Safety rules:** an unreadable stage file keeps every candidate; a file that suddenly has no entries while jobs were kept last run (or the beta file had entries last run, `meta.stage_entries`) counts as unreadable ("reset or stale copy?"); an entry value the sync does not understand keeps the job; an unreadable previous `jobs.json` or `closed_jobs.json` leaves `closed_jobs.json`, `closed_archive.json` and `prices.json` untouched (`::warning::carry-forward: ...`).
+- **Archive:** a job carry-forward stops keeping goes to **`data/closed_archive.json`** for `ARCHIVE_DAYS` 60 days and is re-evaluated every run, so restoring its stage entry brings it back on the next sync. Dropping a job that was closed in Jobber logs `::warning::carry-forward: dropped #N ...`.
+- **Prices** (`update_prices`, L750; ADR-26): with env `PRICE_KEY` (base64 of 32 bytes) and `cryptography` available, writes **`data/prices.json`** (AES-256-GCM, fresh 12-byte IV per run) for active + kept closed jobs; closed jobs whose refresh failed keep their previous values. Log lines (never amounts or the key): `prices: written (encrypted, N jobs)`; `prices: skipped (PRICE_KEY not set)` (plain line, file kept); `::warning::prices: skipped (PRICE_KEY invalid ...)`, `(cryptography package not installed)`, `(Jobber did not return complete totals this run; previous prices.json kept)`, `(<file> unreadable; previous prices.json kept)`, `(error: <type>)`. Prices never fail the sync.
+- **Order:** everything is computed before the first write; then `geocode_cache.json`, `jobs.json`, `meta.json`, `closed_jobs.json`, `closed_archive.json`, and prices last.
+- **Log:** `done: N jobs (C closed in Jobber in closed_jobs.json), M mapped, F failed, A geocode calls, cache K` (was `done: N jobs, M mapped, ...`); `carry-forward: kept #N closed in Jobber (<why>, refreshed)` per kept job.
+- **CLI:** `python sync_jobs.py [--out DIR] [--data DIR]`: `--out` = where every output is written (previous files are read from there when present, else from `--data`); `--data` = folder with `street_overrides.json` + `pending_manual.json`. Local real-data check 2026-09-26 (desktop keyring, `--out` to a scratch folder, never committed): 52 active jobs, hints asphalt 6 / pavers 7, prices for 52; Jobber `total` is **not** consistently pre-tax, so the app labels it "Jobber total".
+- **Tests:** `python tests/test_sync.py` (84, no network: fixtures in `tests/fixtures/`, including the JS/Python contract vectors).
+
 ### 4.2 GitHub Actions workflow: `.github/workflows/sync.yml` ("Sync jobs from Jobber")
 
 **Triggers:**
@@ -386,7 +421,9 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
 **Steps** (on `ubuntu-latest`):
 1. `actions/checkout@v5` with `fetch-depth: 0` (full history, needed for the rebase).
 2. `actions/setup-python@v6` with Python `3.12`.
-3. **Pull jobs + geocode**: `python sync_jobs.py` with env `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_REFRESH_TOKEN` and `TOMTOM_KEY` from secrets, plus `ROTATED_TOKEN_FILE=${{ runner.temp }}/rotated_refresh_token`.
+2a. **Install pinned cryptography (prices encryption)** (R-2): `python -m pip install --disable-pip-version-check --no-input --require-hashes --only-binary=:all: --no-deps -r .github/requirements-sync.txt`, with `continue-on-error: true`. Hash-locked wheels only, because the next step holds every sync secret. If it fails, the sync still runs and logs `::warning::prices: skipped (cryptography package not installed)`. To bump the pins: new manylinux x86_64 wheel sha256 values from PyPI into that file, plus a CHANGELOG entry.
+3. **Pull jobs + geocode**: `python sync_jobs.py` with env `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_REFRESH_TOKEN`, `TOMTOM_KEY` and (R-2) `PRICE_KEY` from secrets, plus `ROTATED_TOKEN_FILE=${{ runner.temp }}/rotated_refresh_token`. An unset `PRICE_KEY` arrives as an empty string: prices are skipped with a plain log line.
+   - **Never run this workflow from the `r2` branch** (`--ref r2` or "Run workflow" on `r2`): it always pushes to `main` after rebasing (`docs/r2-plan.md` §6a).
 4. **Persist rotated refresh token (if any)** (`if: always()`, `GH_TOKEN=${{ secrets.GH_PAT }}`). If the rotated file is non-empty:
    - With `GH_TOKEN` set, it runs `gh secret set JOBBER_REFRESH_TOKEN --repo <repo> < file` and prints `Updated JOBBER_REFRESH_TOKEN secret.`
    - Otherwise it emits `::warning::Jobber rotated the refresh token but no GH_PAT secret is set; add GH_PAT (repo scope) or re-paste JOBBER_REFRESH_TOKEN.`
@@ -414,6 +451,8 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
 - There have been 0 "Jobber ROTATED" messages ever.
 
 ### 4.3 Frontend: `index.html`, `css/*`, `js/*`, `vendor/`, `sw.js`, `manifest.json`, `icons/`
+
+**This section describes v1 (R-1), live at the root on `main`** and frozen during the beta trial. The R-2 app (the same paths on branch `r2`, published as `beta/`) is in §4.3b.
 
 Line numbers are as of the R-1 squash commit. None of these files contains a secret; the geocoder and tiles are keyless. The pre-R-1 single-file frontend (old CSS token table, hard-coded colours, 92 px header, popups, old TSP analysis, `showResult` map leak, `ej-v1`) is documented in git history at `48af459:APP_MASTER.md` §4.3 and `d1e9dfb:index.html`.
 
@@ -495,6 +534,35 @@ Line numbers are as of the R-1 squash commit. None of these files contains a sec
 - `manifest.json`: `name`/`short_name` "Eckstein Jobs"; `description` "All open Eckstein Repair jobs with stages, route maps, and a route planner."; `start_url` `./index.html`; `scope` `./`; `display` `standalone`; `background_color` and `theme_color` `#EFEFEF` (were `#f4f5f7` / `#0f172a`).
 - Icons: 192 `any`, 512 `any`, and a separate `icon-maskable-512.png` for `maskable`; the 180 px icon is referenced only by the `apple-touch-icon` link. Artwork: a white map pin with a route glyph on a blue-to-indigo gradient, on an isometric tile grid (replaces the white "EJ" on blue). All opaque RGB.
 - **iOS reads the status-bar style, theme colour and icon only at install time:** after R-1, Riley must **delete and re-add the Home Screen icon**.
+
+### 4.3b R-2 beta frontend (`beta/`, built from `r2`)
+
+Released 2026-09-26 at <https://claude69420.github.io/eckstein-jobs/beta/> (ADR-24 to ADR-29; spec `docs/r2-plan.md`). The source is the **root frontend on branch `r2`**; `beta/` on `main` is a generated copy. Everything in §4.3 still applies unless changed below. Line numbers are as of `r2` @ `122b954` (re-derive with grep).
+
+**(a) Source files on `r2`** (LF sizes): `index.html` 309 lines / 23.3 KB; `css/tokens.css` 178 / 8.5 KB (stage colours `--stage-1..7`, Setup = teal rgb(0 186 199), dark rgb(0 205 218)); `css/glass.css` 171 / 8.7 KB (unchanged from v1); `css/components.css` 637 / 50.3 KB; `js/tsp.js` 375 / 15.1 KB (unchanged from v1); `js/stages.js` 1,458 / 78.5 KB; `js/prices.js` 290 / 13.7 KB (new); `js/ui.js` 556 / 32.5 KB; `js/app.js` 2,176 / 148.8 KB; `sw.js` 138 / 6.6 KB (root cache `ej-v3`, prefix cleanup `ej-`); `manifest.json`. Script order: Leaflet, `tsp.js`, `stages.js`, `prices.js`, `ui.js`, `app.js` (`prices.js` is optional: without it no prices show).
+
+**(b) Build: `tools/build_beta.py` (r2 only).** `python tools/build_beta.py` writes `beta/` (only files whose bytes change; stale files removed); `--check` exits 1 if `beta/` is out of date; `--icons` also regenerates/verifies the icons (~30 s, `tools/make_icons.py --variant beta`; hashes in `tools/beta_icons.json`). It copies an explicit `APP_FILES` list only (a stray local file never reaches the public site), injects the config, sets `<title>` / `apple-mobile-web-app-title` "EJ Beta", writes the beta manifest and service worker, and **refuses a config that `Stages.resolveConfig` would lock**. Deterministic. Tests: `tests/test_build_beta.py` (5) and a "beta build" test in `tests/stages.test.js`. **Never run it on `main`.**
+
+**(c) Channel config (`window.EJ_CONFIG`, ADR-24).** `beta/index.html` L6–7, an inline script, **the first script in `<head>`** (right after `<meta charset>`): `{"channel":"beta","base":"../","ns":"ejb_","stateFile":"stages-beta.json","overlayFile":"stages.json","cachePrefix":"ejb-"}`. Missing config = the main app's defaults (`channel "main"`, `base ""`, `ns "ej_"`, `stateFile "stages.json"`, no overlay, `cachePrefix "ej-"`), so the `r2` root is the future promoted app. `js/stages.js` `resolveConfig` (L171) validates every field and **fails closed**: a bad field, an overlay equal to the state file, or a non-main channel that would write `stages.json` or use the `ej_` keys gives `locked` → the stage store is read-only, uses no localStorage, refuses `setKey`, and shows `MSG.config` ("This copy of the app is misconfigured (EJ_CONFIG) — stages are read-only here. Open the normal app link."). `js/app.js` (L23–38) derives `BETA`, `NS`, `BASE`, `APP_URL` (…`/beta/`) and `APP_NAME` ("EJ Beta"); an invalid `ns` becomes the quarantine prefix `ejx_` (never v1's `ej_`). `js/prices.js` and the boot script read the same object.
+
+**(d) Stages v2 (`js/stages.js`; §5 "Stage data (R-2)", ADR-27).** 7 stages (`setup` new, index 1); items `assess` (`no|virtual|onsite`, display-only `prior`), `lane` `{s: na|req|booked, from?, to?}`, `cut`, `asphalt`, `pavers` (`na|req|done`), `cleanup` (`todo|done`), `removed`. Pure helpers: `effective(entry, hints, jobNumber)` (L439), `canMove` (L456; lane Required blocks ≥ Setup, cut Required blocks ≥ Excavation; backwards always allowed), `canSetItem` (L466; asphalt/pavers/cleanup Done only at Poured; End ≥ Start), `fieldWorkDone` (L482), `keepWhenClosed` (L486), `itemShown` (L493), `LISTS` (L502: `unassessed`, `booklane`, `streetcuts`, `cleanup`, `asphalt`, `pavers`), `ASSESS_CUTOFF` 699 + `priorAssessed(jobNumber)` (L111, L433; ADR-29). Store: `set(jn, patch | stageKey, meta)` with per-field merge on 409/422; writes file `version: 2`; refuses to write over a file with version > 2 (`MSG.newer`) **and refuses to PUT its v2 document over an existing v1 file** (`MSG.oldFormat`; `env.allowUpgrade` only in tests or a one-off migration), which protects v1's live `stages.json`. Overlay (beta): reads `stages.json` read-only on the same poll (API with a key, raw CDN without), merges per job (`mergeEntry` L590: v1 stage wins when the beta entry has no `sat` or v1 `at` > `sat`; items only from the beta file), caches the last good overlay in `ejb_overlay_cache`; a damaged/newer/unreadable overlay only sets `status().overlay.note`, never blocks a save. Commit messages: `job #684 <street>: stage -> setup, lane -> booked` / `jobs: #684 …; #699 …`. Tests: `node tests/stages.test.js` 78 (incl. `tests/fixtures/contract_vectors.json` and `overlay_vectors.json`, which `tests/test_sync.py` also runs).
+
+**(e) UI (R-2 features, all in the beta).**
+- **Stage slider** (`js/ui.js` `StageSlider` L342): 7 stops with gate locks: blocked stops are dimmed, a lock glyph sits on the first blocked tick, a drag resists past it, and a tap/drag/key onto a blocked stop shakes the thumb; the app then toasts the reason and highlights the blocking item row (`blockedMove`, app.js L789).
+- **Job items card** (`#dItems`, `#dItemsH`, `#dItemList`; desktop hover card `#mcItems`): one 3-way (or 2-way) switch per shown item. Lane **Booked** shows Start/End date inputs (End ≥ Start; the dates turn red when the end date has passed and the job is not Poured, `laneLate` L133). An asphalt/pavers value that comes from the Jobber hint shows the caption "from Jobber" (L700); a stored value, including N/A, always beats the hint. Assessed on jobs ≤ 699 with nothing stored shows no selected segment plus "Assessed before beta"; "Not yet" is dimmed on those jobs (toast "Jobs from before the beta count as assessed").
+- **Closed in Jobber** tag (rows, sheet, card) for jobs from `data/closed_jobs.json`; **Remove from app** (`#dRemoveBox`, `#dRemove`; `confirm()` then Undo) sets `removed` and hides it on every device (the sync then drops it to the archive). **Field work done** check (tag in the sheet, badge on the row lead).
+- **Stage mode chips:** the 7 stage chips always, plus list chips (Unassessed, Book lane, Street cuts, Cuts & cleanup, Asphalt, Pavers) **only when non-empty**; "solo, then add" across both kinds (`ejb_vis_stage` holds stage and list keys). iPhone: one sideways 2-row band (the 4-column stage grid first, then the list chips, whose first column peeks in); desktop panel: the 4-column stage grid with the list chips below a divider. Stage chips show no visible count or $ (the tooltip/aria-label, route menu and group headers do).
+- **Route menu** (`#route-menu`): the 7 stages plus the non-empty lists, with counts (and Jobber totals when prices show).
+- **Route editor** (ADR-28; one editor for the one-click route and the Plan tab; ids `edHead edCap edList edFoot edTotal edParts edMaps edOpt edAdd edAddBox edSugg edHint edLive edClear edSave`): a skip switch per stop (skipped rows grey at the bottom; out-of-town jobs start skipped), a **drag handle** to reorder (handle-only), "+ Add stop" (one field for an address/intersection via Esri or a job, with suggestions; goes to its cheapest spot), **Re-optimize** (with Undo), a "Return to shop" switch row, live numbering, legs, totals and Google Maps parts (≤10 points), Save (saved routes keep `skipped[]`; old `ej_routes`-shaped entries still load). **Retired ids** (from v1's planner and result block): `stops addShop pickJob clearStops pickbox fxs fxe fxeRow rt opt pres` and the dynamic `plist saveR srRt srOot`.
+- **Pricing** (ADR-26): `js/prices.js` decrypts `../data/prices.json` with the pricing key (WebCrypto AES-GCM). The `$` button `#prTgl` sits in the control capsule **only on a device with a pricing key**; Settings → Pricing (`#setPrH`, `#prKey`, `#prSave`, `#prRemove`, `#prMsg`, `#prNote`, `#prStatus`, `#prStatusBox`). Shown as "Jobber total $X" (never "pre-tax") in rows (short form), the sheet (`#dPrice`, plus "Uninvoiced $Y" or "Fully invoiced"), the hover card (`#mcPrice`), list-group headers, list chips, the route menu and the route editor caption. **Never on map pins**, and all price text is removed from the DOM when hidden. No key / wrong key / no file = no prices, nothing else changes.
+- **Beta identity:** a "Beta" pill (`#betaPill`, `#betaPillAcc`, `#betaPillDetail`; tooltip "stage moves here do not show in v1"), About (`#aboutVer`) "Eckstein Jobs · R-2 beta", Settings → Stages notes the beta stages file and any overlay note, and "Share edit access" sends the beta URL and "open the EJ Beta app" steps.
+- **Data load** (`loadData` L1084): `BASE + data/jobs.json`, `data/meta.json`, `routes/index.json`, plus `data/closed_jobs.json` (merged with `closed: true`; a 404 = none; any other failure keeps the last good closed list); the status line adds the shown closed jobs to meta's counts.
+
+**(f) New DOM ids** (vs v1): `aboutVer dItemList dItems dItemsH dPrice dRemove dRemoveBox edAdd edAddBox edCap edClear edFoot edHead edHint edList edLive edMaps edOpt edParts edSave edSugg edTotal mcItems mcPrice prKey prMsg prNote prRemove prSave prStatus prStatusBox prTgl setPrH`; dynamic `betaPill betaPillAcc betaPillDetail`.
+
+**(g) Browser storage:** every key is `ejb_` + the v1 suffix (never shared with v1 on the PC): §5 "Browser-side state (beta)". Secret: `ejb_gh_token`, `ejb_price_key`.
+
+**(h) Service worker `beta/sw.js`, manifest, icons.** Cache `ejb-v1`; activate deletes only caches that start with `ejb-` and are not `ejb-v1`; scope `/eckstein-jobs/beta/`; SHELL adds `js/prices.js`; otherwise the same rules as §4.3l (network-first same-origin incl. `../data/*`, pinned unpkg cache-first, GitHub hosts never intercepted; `prices.json` is cached like any data file, still encrypted). **Caveat:** v1's live `sw.js` on `main` (`ej-v2`) deletes every cache that is not `ej-v2` when it activates, which only happens on a root `sw.js` deploy (frozen during the trial) or a first v1 install on a shared browser profile (PC, Android); the beta then simply re-caches on its next online load (iPhone Home Screen apps have separate storage). `beta/manifest.json`: `name` "Eckstein Jobs Beta", `short_name` "EJ Beta", `id` `/eckstein-jobs/beta/`, `start_url` and `scope` `./`, `display` standalone, colours `#EFEFEF`. Icons: orange variant with a "beta" badge (180/192/512/maskable-512), made by `tools/make_icons.py --variant beta`, sha256 in `tools/beta_icons.json`.
 
 ### 4.4 Route publishing: `publish_routes.py`
 
@@ -640,8 +708,10 @@ Snapshot 2026-09-25: 53 records (Winnipeg plus Altona, Portage la Prairie and Ca
 | `pending` | bool | True only for jobs from `pending_manual.json` |
 | `lat`, `lon` | float or null | Coordinates |
 | `ok` | bool | Mapped |
+| `id` | str or null | **R-2, optional** (from the first R-2 sync): Jobber encoded job id; `null` for pending jobs. Used only to refresh closed jobs. v1 ignores it. |
+| `hints` | object | **R-2, optional:** `{asphalt: bool, pavers: bool}` from the title + line-item text (the text itself is never published). The beta's default for Asphalt / Pavers ("from Jobber"). v1 ignores it. |
 
-`jobs.json` has **no `stage` field, by design**: the app adds `x.stage` at load from the state repo (`js/app.js` L627 and `mergeStages` L598; see "Stage data" below).
+`jobs.json` keeps exactly v1's membership (active + pending); closed jobs never appear in it (they go to `closed_jobs.json`). `jobs.json` has **no `stage` field, by design**: the app adds `x.stage` at load from the state repo (`js/app.js` L627 and `mergeStages` L598; see "Stage data" below).
 
 ### `data/meta.json` (generated)
 
@@ -654,10 +724,24 @@ Snapshot 2026-09-25: 53 records (Winnipeg plus Altona, Portage la Prairie and Ca
 | `by_client` | Count per clientKey |
 | `cache_entries` | Geocode cache size after the run |
 | `geocode_api_calls` | TomTom calls for Jobber jobs this run, failures included, pending jobs excluded |
+| `closed` | **R-2:** records in `closed_jobs.json` (the previous value when the closed-job files were left untouched) |
+| `stages_read`, `stages_beta_read` | **R-2:** how the sync read `stages.json` / `stages-beta.json`: `ok`, `not found (no entries yet)` (beta file only), `fetch failed (HTTP n)` / `fetch failed (<error type>)`, `empty file`, `not valid JSON`, `damaged (no stages object)`, `version n is newer …`, `could not be read (<error type>)`, a "reset or stale copy?" note, or `not read (<file> unreadable)` |
+| `stage_entries` | **R-2:** `{"stages.json": n, "stages-beta.json": m}`, the last good entry count per file (the "looks reset" guard compares against it) |
+
+`total`, `mapped`, `failed` and `by_client` describe `jobs.json` only (v1 shows "mapped/total"); the beta adds its shown closed jobs itself.
 
 Snapshot: 53 total, 53 mapped, 0 failed. Crown 21, Harris 14, Other 8, ACV 7, MyTec 2, NoLimits 1. Cache 312; 2 calls.
 
 **Job count over time:** 45 (09-17) → 44–46 (09-18 to 09-23) → 49 (09-24 01:36, commit `1b1baca`) → 52 (09-24 17:05) → 51 (09-25 12:04) → 53 (09-25 17:05).
+
+### `data/closed_jobs.json` (generated from the first R-2 sync; read only by the beta)
+An array of carried-forward records, jobNumber descending, the same fields as `jobs.json` plus `closed: true` (`hints` always present, `id` or `null`, `pending` false). A job is here when it left Jobber's active list and the merged stage entry (both stage files, §5 "Stage data (R-2)") says `keepWhenClosed`; status (and totals) are refreshed from Jobber when its `id` is known. The first R-2 run can only keep jobs that left Jobber since the previous sync (older closed jobs were never recorded). **Never hand-edit** (Rule 8); to drop a job use "Remove from app" in the beta, to bring one back restore its stage entry (§7.14).
+
+### `data/closed_archive.json` (generated; 60-day safety archive)
+`{"version": 1, "days": 60, "jobs": [ <record> + "droppedAt": "YYYY-MM-DD", "droppedWhy": "<reason>" ]}`: every job carry-forward stopped keeping in the last 60 days (public data only). Re-evaluated each run: a job whose stage entry says keep again (an accidental Remove from app or slide back to Ready undone) returns to `closed_jobs.json` on the next sync. Never hand-edit.
+
+### `data/prices.json` (generated when `PRICE_KEY` is set; ENCRYPTED)
+`{"v": 1, "alg": "A256GCM", "iv": "<base64, 12 bytes>", "ct": "<base64 ciphertext + 16-byte tag>", "at": "<ISO UTC>"}`. The plaintext (never committed, never printed, never documented with values) is `{"<jobNumber>": {"t": <Jobber total>, "u": <uninvoicedTotal>}}` for active and kept closed jobs. Key: the GitHub secret `PRICE_KEY` (base64 of 32 bytes); decrypted only in the beta on devices with the pricing key. Absent until the first sync with `PRICE_KEY`; a run without a usable key leaves the file exactly as it is (`at` shows its age). **Claude never decrypts it.** Test values only in `tests/fixtures/prices.*.json`.
 
 ### `data/geocode_cache.json` (generated and committed by the bot; hand-editable to fix geocodes)
 `{ "<street>, <city>, MB, Canada": [lat, lon], ... }`. It has 312 entries, all ending `, MB, Canada`.
@@ -688,7 +772,7 @@ The desktop copy `…/Claude Code/_pending_manual.json` holds the same entry, bu
 - **Colours:** Riley never answered Q5, so these are Claude's defaults (iOS system colours, brief §2.5). Change them in `css/tokens.css` only; JS refers only to `var(--stage-N)`. Prep's black ink is hard-coded in `js/app.js` L70 (`stageVars`) and `js/ui.js` L343 and L362 (`StageSlider`): change those too if Prep's colour ever changes. The digit 1–6 is shown on stage pins and chips.
 - **Store shape** (the same for every backend): `{"version":1,"stages":{"<jobNumber>":{"stage":"<key>","at":"<ISO-8601 UTC>","by":"<device label>"}}}`. Only non-`ready` entries are stored. A missing or unknown entry means `ready`.
 - **The frontend is authoritative and does the merge** (`js/app.js` L627 and `mergeStages` L598: `x.stage = normStage(STAGEMAP[x.jobNumber])`), so a change shows at once. For stages, this replaces the older "have `sync_jobs.py` merge it in" pattern (Rule 8, ADR-08).
-- **The sync bot must never write the stage store.** `sync.yml` pushes after `git rebase -X theirs` (L68), which would silently overwrite a stage change made between checkout and push. **Orphan cleanup** (job numbers no longer in `jobs.json`) is **not implemented** in the app: orphans are harmless and are removed by hand only (§7.14), never by `sync_jobs.py`.
+- **The sync bot must never write the stage store.** `sync.yml` pushes after `git rebase -X theirs` (L78 since R-2, was L68), which would silently overwrite a stage change made between checkout and push. **Orphan cleanup** (job numbers no longer in `jobs.json`) is **not implemented** in the app: orphans are harmless and are removed by hand only (§7.14), never by `sync_jobs.py`.
 - **Where the code goes:** `STAGES` (key, label, short) in `js/stages.js` L23–30; the slider is `js/ui.js` `StageSlider` (L334–417); filter, pins, moves and the stage route in `js/app.js`; colours in `css/tokens.css`. The store is `stages.json` at the root of the separate public repo `Claude69420/eckstein-jobs-state` (branch `main`), ADR-20.
 
 **Stage store API** (`Stages.createStore(env?)`, `js/stages.js` L226–760; `env` injects fetch/storage/timers for the tests):
@@ -708,6 +792,21 @@ The desktop copy `…/Claude Code/_pending_manual.json` holds the same entry, bu
 - **Commit messages:** one job `stage: #684 <street or title, max 80 chars> -> base`; several `stages: #684 -> base, #699 -> prep` (up to 30 listed, then "+N more"). All commits are authored as the key owner, `Claude69420`.
 - **File format:** 2-space JSON plus a trailing newline; numeric job keys ascending; unknown top-level fields preserved; `at` is ISO UTC without milliseconds; `by` is the device label (default "iPhone app" in standalone, "PC" on Windows, otherwise "browser"; max 40 chars); moving to `ready` deletes the entry; job keys must match `^[0-9A-Za-z-]{1,32}$`. Entries with unknown stage keys are dropped on read, so the next save removes them from the file.
 - **Pending jobs:** when a pending 9000+ job is replaced by its real Jobber job (§7.6), move its stage entry to the new jobNumber in the state repo's `stages.json` (in the app: after the sync, set the real job's stage; the old 9000+ entry becomes a harmless orphan, removable by hand. Or rename the key by hand, §7.14).
+
+### Stage data (R-2): `stages.json` (v1) vs `stages-beta.json` (beta)
+Canonical contract: `docs/r2-plan.md` §2a (JS `js/stages.js` on `r2` and Python `sync_jobs.py` implement it; shared vectors in `tests/fixtures/`).
+
+| | `stages.json` | `stages-beta.json` |
+|---|---|---|
+| Written by | v1 only (root app), format `version: 1` | the beta only, format `version: 2` |
+| Read by | v1; the beta (read-only overlay); the sync | the beta; the sync |
+| Exists | yes | **404 until the beta's first move** (the sync and the beta treat 404 as "no entries") |
+
+- **v2 entry** (only non-default fields are stored): `{"stage":"setup","assess":"virtual","lane":{"s":"booked","from":"2026-10-06","to":"2026-10-08"},"cut":"req","asphalt":"req","pavers":"na","cleanup":"todo","removed":true,"sat":"<ISO UTC>","at":"<ISO UTC>","by":"<device>"}`. Defaults: stage `ready`, assess `no`, lane `{s:"na"}`, cut `na`, asphalt/pavers = the Jobber hint (`req` if `hints.x` is true, else `na`; any stored value, including `na`, beats the hint, so they are stored once someone sets them), cleanup `todo`, removed false. Unknown values are dropped on read. `assess` `prior` ("Assessed before beta", jobs ≤ `ASSESS_CUTOFF` 699 with nothing stored) is display-only and never stored.
+- **`sat`** (beta only): the time the beta last set `stage`. **Merge rule** (beta display and sync carry-forward): per job, take the beta entry; if `stages.json` has a valid stage for the job and (the beta entry has no `sat` **or** v1's `at` > `sat`), the stage comes from v1; items only ever come from the beta file. v1 records "Ready" by deleting its entry, so a v1 move back to Ready is not visible in the beta (the beta falls back to its own last stage for that job, or Ready when it never moved the job itself).
+- **Stages and gates:** 7 stages `ready setup excavation base prep inspected poured`; lane `req` blocks moves to ≥ Setup, cut `req` blocks ≥ Excavation; asphalt/pavers/cleanup `done` only at Poured. **fieldWorkDone** = poured AND cleanup done AND asphalt ≠ req AND pavers ≠ req. **keepWhenClosed** = not removed AND not fieldWorkDone AND (stage > ready OR asphalt/pavers/cut req OR lane req/booked).
+- **Guards:** the beta never writes `stages.json` (config fail-closed) and no v2 store ever PUTs over an existing v1 file; both apps refuse to write a newer format than they know. Promotion converts `stages.json` to v2 first (§7.17).
+- Commit messages (beta): `job #684 <street>: stage -> setup, lane -> booked`, several jobs `jobs: #684 …; #699 …; +N more`.
 
 ### `routes/index.json` (generated by `publish_routes.py`)
 `[{"file": "Route_X.html", "title": "<title text>", "date": "Sep 15, 2026 06:39 AM"}, ...]`, newest first. It has 65 entries (2026-09-26).
@@ -729,7 +828,24 @@ Every read and write is wrapped in try/catch; the app works (with defaults) when
 | `ej_device` | Device name for `by`, max 40 chars |
 | Cache Storage `ej-v2` | Same-origin GET responses keyed by origin + path (no query), plus the 2 pinned unpkg Leaflet files. `ej-v1` is deleted on activate. |
 
-- The Home Screen app's storage is separate from Safari's (WebKit bug 181849): keys, routes and preferences do not carry between them.
+**Browser-side state (beta, `/beta/`):** the same suffixes with the prefix **`ejb_`** instead of `ej_` (`EJ_CONFIG.ns`), so v1 and the beta never share a key on the same browser:
+
+| Key or store | Contents |
+|---|---|
+| `ejb_routes`, `ejb_mode`, `ejb_vis_client`, `ejb_theme`, `ejb_glass`, `ejb_device` | As v1. Saved routes may also hold `skipped: [{…, skip:true}]` |
+| `ejb_vis_stage` | Selected Stage-mode chips: stage keys **and** list keys (`unassessed`, `booklane`, `streetcuts`, `cleanup`, `asphalt`, `pavers`) |
+| `ejb_gh_token` | The stage edit key (same key as v1). **Secret** (Rule 1) |
+| `ejb_stages` | Local mode only (localhost), v2 shape |
+| `ejb_stage_queue` | Unsaved beta changes (per-field patches) |
+| `ejb_stages_cache` | Last good `stages-beta.json` map |
+| `ejb_overlay_cache` | Last good v1 overlay map `{version, at, map}` (public data) |
+| `ejb_price_key` | The pricing key. **Secret** (Rule 1); never read it in the Browser pane |
+| `ejb_show_prices` | `$` toggle, `"1"`/`"0"` |
+| Cache Storage `ejb-v1` | The beta service worker's cache (§4.3b h) |
+
+After promotion the same keys use `ej_` (`ej_price_key` is then secret too). A locked (bad) config uses no localStorage at all.
+
+- The Home Screen app's storage is separate from Safari's (WebKit bug 181849): keys, routes and preferences do not carry between them. "EJ Beta" and the v1 Home Screen app are separate apps with separate storage.
 - `navigator.storage.persist()` is requested after a key is saved.
 - **Any new key must be wrapped in try/catch** and added to this table.
 
@@ -746,7 +862,8 @@ Every read and write is wrapped in try/catch; the app works (with defaults) when
 | `JOBBER_REFRESH_TOKEN` | GitHub Actions secret | sync step | **2026-09-17 16:44:43** | 32 chars. Rotation is OFF, so it is stable. |
 | `TOMTOM_KEY` | GitHub Actions secret, plus a plaintext copy in `ROUTING_PLAYBOOK.md` (line 15) and 31 desktop scripts | server geocoding and desktop builders | 2026-09-16 03:11:14 | Never copy into the repo |
 | `GH_PAT` | **not set** | workflow step "Persist rotated refresh token" | — | Only needed if Jobber ever rotates the token |
-| Stage edit key (fine-grained PAT, suggested name "Eckstein stages", owner `Claude69420`) | Each device's `localStorage['ej_gh_token']` (iPhone app, PC browser, crew devices) and Riley's password manager | `Authorization` header to `api.github.com` only (read/write `stages.json`); scope **only `eckstein-jobs-state`, Contents: Read and write** | Riley supplies the date (not created yet as of 2026-09-26) | Expiry ≤ 1 year: log the **date**, never the value. Recipe F |
+| `PRICE_KEY` (R-2) | GitHub Actions secret, plus a copy in Riley's password manager and, as the **pricing key**, each of Riley's devices' `localStorage['ejb_price_key']` (beta's Settings → Pricing) | sync step (encrypts `data/prices.json`, AES-256-GCM); the beta (decrypts in the browser) | **not set yet** (Riley creates it after the beta release; log the date only) | base64 of 32 random bytes (44 chars). Only Riley's devices, never crew (Q4). Missing → prices skipped, sync fine. Recipe G |
+| Stage edit key (fine-grained PAT, suggested name "Eckstein stages", owner `Claude69420`) | Each device's `localStorage['ej_gh_token']` (iPhone app, PC browser, crew devices) and Riley's password manager | `Authorization` header to `api.github.com` only (read/write `stages.json` from v1, `stages-beta.json` from the beta, which only reads `stages.json`); scope **only `eckstein-jobs-state`, Contents: Read and write** | Created by Riley on 2026-09-26 (in use on the PC; he supplies the expiry date) | **One key for v1 and the beta** (the beta stores it as `ejb_gh_token`). Expiry ≤ 1 year: log the **date**, never the value. Recipe F |
 | Desktop Jobber app credentials | `%USERPROFILE%\.config\eckstein_jobber\credentials.json` (client_id, client_secret, redirect_uri) | desktop MCP and local-mode sync | — | Outside OneDrive on purpose |
 | Desktop Jobber tokens | Windows Credential Manager via keyring: service `eckstein_jobber`, user `token` (JSON: access_token, refresh_token, expires_at) | desktop MCP and local-mode sync | auto-refreshes about hourly | Never read |
 | Sync-app refresh token file | `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt` | written by `get_refresh_token.py` | 2026-09-15 22:05 CDT (file mtime) | Temporary. Delete it right after pasting (recipe A step 5). Claude never reads it. **It still exists as of 2026-09-25** (32 bytes, never deleted) and likely holds the live token; see §0 "Current state" and §10. |
@@ -837,6 +954,19 @@ Claude declined to extract or relay the desktop token during setup, and must kee
 3. Crew: Settings → Stages → **Share edit access** (share sheet, or clipboard on the PC). The text holds the app link, the key and the iPhone/PC steps; send it privately.
 4. Rotate: create a new key, re-paste it on every device, revoke the old one on GitHub, log the date in the CHANGELOG.
 5. Remove from a device: Settings → Stages → Remove key (that device becomes read-only).
+6. **Beta:** the same key works in "EJ Beta" (it only writes `stages-beta.json`); paste it separately inside the beta app on each device (separate storage, `ejb_gh_token`). The beta's "Share edit access" text points to the beta URL.
+
+**G. Create, rotate or remove `PRICE_KEY` / the pricing key** (R-2, ADR-26). Riley does every step; Claude never sees, types or decrypts with the value.
+1. **Riley, in PowerShell** (makes 32 random bytes, base64, straight to the clipboard; nothing is printed):
+   ```powershell
+   $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b) | Set-Clipboard
+   ```
+2. Save it in the password manager first.
+3. GitHub → `Claude69420/eckstein-jobs` → Settings → Secrets and variables → Actions → **New repository secret** `PRICE_KEY` → paste (<https://github.com/Claude69420/eckstein-jobs/settings/secrets/actions>).
+4. On each of **Riley's** devices, inside the "EJ Beta" app: ⚙ → **Pricing** → paste → Save. Before the first sync with the key it says "No prices yet — they appear after the next sync" (the key is kept and checked on the next load). Never share it with crew.
+5. Prices appear after the next sync (7 AM / noon CDT) or a manual Run workflow (§7.2). Check the log for `prices: written (encrypted, N jobs)` (§7.18).
+6. **Rotate:** repeat 1–3 (update the secret), run the workflow, then paste the new key on every device (the old key then says "wrong key?"). Log the date in the CHANGELOG. **Remove:** delete the secret (the last `prices.json` stays but can no longer be refreshed; delete it from `data/` with a logged commit if wanted) and Settings → Pricing → Remove key on each device.
+7. If the key leaked: rotate (6). Old `prices.json` versions in git history stay readable with the old key, so treat the old key as exposed for past prices only.
 
 ---
 
@@ -867,7 +997,7 @@ Claude declined to extract or relay the desktop token during setup, and must kee
 2. Report to Riley:
    - total, mapped and failed;
    - NEW jobs, and any out-of-town ones;
-   - GONE jobs (closed or completed in Jobber).
+   - GONE jobs (closed or completed in Jobber). Since R-2 the ones with unfinished field work stay in the beta through `data/closed_jobs.json` (`meta.json` `closed`; v1 never shows them).
 3. Fix failures (§7.7). Remind Riley the live site updates about 1–2 minutes after the push; he should tap ↻, and the CDN cache can add up to about 10 minutes.
 4. If the run fails, go to §7.13 (triage), §7.3 and §8.
 
@@ -891,9 +1021,12 @@ gh run view RUNID -R Claude69420/eckstein-jobs --log | grep -E "auth:|jobber:|do
 ```
 What a healthy log looks like:
 - `auth: cloud mode ... [client_id len 36, secret len 64, refresh len 32]`
+- `jobber: query cost N per page of 25 (bucket A / M)` (R-2)
 - `jobber: N active jobs`
-- `done: N jobs, N mapped, 0 failed, A geocode calls, cache C`
+- `done: N jobs (C closed in Jobber in closed_jobs.json), N mapped, 0 failed, A geocode calls, cache K` (R-2 form; before R-2: `done: N jobs, N mapped, …`)
+- `prices: skipped (PRICE_KEY not set)` (until `PRICE_KEY` exists) or `prices: written (encrypted, N jobs)`
 - `Pushed.`
+- First R-2 run: §7.18.
 
 Then match any error against §8. Pages builds are listed at <https://github.com/Claude69420/eckstein-jobs/deployments>, or via `gh api repos/Claude69420/eckstein-jobs/pages/builds/latest`.
 
@@ -902,7 +1035,7 @@ Then match any error against §8. Pages builds are listed at <https://github.com
 ```powershell
 $env:TOMTOM_KEY = Read-Host "Paste the TomTom key from ROUTING_PLAYBOOK.md"
 ```
-Don't set `TOMTOM_KEY` to placeholder text: a non-empty bogus value turns every cache miss into `!! geocode error … HTTP Error 4xx` (counted as an API call) instead of the clear `!! no TOMTOM_KEY` message (`sync_jobs.py` L152–159, L177). Then run:
+Don't set `TOMTOM_KEY` to placeholder text: a non-empty bogus value turns every cache miss into `!! geocode error … HTTPError HTTP 4xx` (R-1: `… HTTP Error 4xx`; counted as an API call) instead of the clear `!! no TOMTOM_KEY` message (`sync_jobs.py` `geocode()`, L801–821 since R-2). Then run:
 ```powershell
 Remove-Item Env:JOBBER_CLIENT_ID, Env:JOBBER_CLIENT_SECRET, Env:JOBBER_REFRESH_TOKEN -ErrorAction SilentlyContinue
 git -C C:/Users/Riley/eckstein-jobs pull --rebase
@@ -919,7 +1052,8 @@ Run it without the Jobber env vars set, and don't print or paste the TomTom key 
 
 What to expect:
 - `auth: local mode (desktop keyring)`. If the desktop token can't refresh, a browser consent opens on port 8080.
-- It writes only `data/`, so commit and push as shown above.
+- It writes only `data/`, so commit and push as shown above. Since R-2 that includes `closed_jobs.json` and `closed_archive.json`; without `PRICE_KEY` in the environment it prints `prices: skipped (PRICE_KEY not set)` and leaves `prices.json` alone (never set `PRICE_KEY` in a shared terminal).
+- **Test run without touching the repo:** add `--out` with a scratch folder (Claude: its scratchpad), e.g. `& "C:\Users\Riley\OneDrive\Documents\Agents\.venv\Scripts\python.exe" C:\Users\Riley\eckstein-jobs\sync_jobs.py --out "$env:TEMP\ej-sync-test"`. Outputs go there; previous files are read from there when present, otherwise from `data/`. Never commit such output.
 
 ### 7.5a Build a new route map (desktop)
 1. Read `ROUTING_PLAYBOOK.md` for the rules. Never print its TomTom key. Tiles are Esri Light Gray (ADR-06; the playbook heading was fixed on 2026-09-25).
@@ -980,7 +1114,7 @@ What to expect:
 0. If Riley gives only a display name (for example "Acme Paving"), find the exact Jobber `companyName`:
    - `grep -i acme /c/Users/Riley/eckstein-jobs/data/jobs.json` (Claude only, Git Bash) works only if the client has an active job.
    - Otherwise use the read-only desktop MCP tool `jobber_search_clients`.
-   - The match is exact and case-sensitive, including punctuation such as "Ltd." (compare `"Crown Pipeline Ltd."` with `"MyTec Industry Ltd"` in `sync_jobs.py` L36–42). For an individual with no companyName, the sync uses `name`.
+   - The match is exact and case-sensitive, including punctuation such as "Ltd." (compare `"Crown Pipeline Ltd."` with `"MyTec Industry Ltd"` in `sync_jobs.py` L87–93). For an individual with no companyName, the sync uses `name`.
 
 **Key, colour and verification rules:**
 - **Key:** PascalCase, with no spaces or punctuation (for example `Acme`).
@@ -994,7 +1128,7 @@ What to expect:
 
 **Steps:**
 1. Get the **exact** Jobber `companyName` (from `jobs.json` `client`, or the Jobber MCP; see step 0).
-2. `sync_jobs.py`: add `"<exact companyName>": "<Key>"` to `CLIENT_KEYS` (around lines 36–42).
+2. `sync_jobs.py`: add `"<exact companyName>": "<Key>"` to `CLIENT_KEYS` (L87–93 since R-2). During the beta trial, also follow Rule 12 (v1 `js/app.js` on `main` **and** `r2` `js/app.js` + a beta rebuild, §7.16).
 3. `js/app.js` (the "ONE place" block, L9–20; no CSS token needed):
    - L13 `CLIENT_KEYS`: add `'<Key>'` before `'Other'` (it sets chip and group order). Without it, the jobs show under Other / Residential.
    - L14 `COL`: add `<Key>: '#hex'`, a colour distinct from blue, red, green, purple, teal and amber.
@@ -1048,7 +1182,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - After the move, see the §8 row "(After Cloudflare Access only) 'failed to load data' while the app was left open".
 
 ### 7.12 Preview or test a frontend change locally, then deploy
-1. Run both Node tests first: `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 pass) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39/39).
+1. Run both Node tests first: `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 pass) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39/39 on `main`). **R-2 / beta work happens on `r2`, not here: use §7.16** (its tests, build and ship steps). A v1 hotfix on `main` during the trial is still possible, but it changes the root that the trial compares against: tell Riley, and never touch `beta/` by hand.
 2. Start the preview: from the Claude Code folder run `preview_start` with name `eckstein-jobs`, which runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`. Then open <http://localhost:8765/>.
    - No key means **local mode**: the slider is writable, stages stay on this machine, and Settings → Stages shows "Saved on this device only (local preview)".
    - To test read-only mode, open the preview through the PC's LAN IP: any non-local hostname reads the real raw file.
@@ -1074,7 +1208,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 2. `gh run view RUNID -R Claude69420/eckstein-jobs --log-failed | grep -E "auth:|jobber:|Traceback|HTTPError|Error|::"` (replace `RUNID` with the id from step 1; `<run-id>` would be parsed as a redirection)
 3. Classify the failure:
    - `auth: Jobber token endpoint HTTP 401 -> …` means the token endpoint failed. Body `invalid_grant` or "refresh token is not valid" means the refresh token (recipe A). `invalid_client` means the client ID or secret (recipe B). Compare the lengths line with 36 / 64 / 32.
-   - A normal `auth: cloud mode …` line and **no** token-endpoint line, followed after about 15 s of retries by a traceback in `fetch_active_jobs` ending `HTTPError: HTTP Error 401: Unauthorized`, means GraphQL rejected the access token (see §8).
+   - A normal `auth: cloud mode …` line and **no** token-endpoint line, followed by a traceback ending `HTTPError: HTTP Error 401: Unauthorized` (since R-2 preceded at once by `jobber: jobs page 1 HTTP 401 (not retried)`; before R-2 it came after about 15 s of silent retries), means GraphQL rejected the access token (see §8).
    - `auth: local mode` means a secret is empty (see §8).
 4. `gh secret list -R Claude69420/eckstein-jobs` shows when each secret was last updated (names and dates only). A recent change points to a mis-paste. Also check the previous green run for a rotation: `gh run view <prev-id> -R Claude69420/eckstein-jobs --log | grep ROTATED`.
 5. Give Riley the recipe as PowerShell. Claude never runs `get_refresh_token.py`, never reads the token file, and never sets a secret value.
@@ -1104,6 +1238,40 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 3. `git -C C:/Users/Riley/eckstein-jobs push`, then verify <https://claude69420.github.io/eckstein-jobs/?t=1>.
 
 After a rollback: stage data stays in the state repo, untouched (a later re-ship picks it up); the status-bar style and icon revert, so Riley re-adds the Home Screen icon again; the old `sw.js` (`ej-v1`) never deletes `ej-v2`, which is harmless. Log it in the CHANGELOG.
+
+### 7.16 Update the beta (change R-2, publish a new `beta/`)
+All lines work in PowerShell and Git Bash. Root v1 files on `main` must stay untouched until promotion (§7.17).
+1. On `r2`: `git -C C:/Users/Riley/eckstein-jobs switch r2` (commit or stash anything first). Make the change in the **root** files (`index.html`, `css/`, `js/`, `sw.js`, …; never edit `beta/` by hand). Update §11 R-2 Work log on the way.
+2. Run every test on `r2`: `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js`, `node C:/Users/Riley/eckstein-jobs/tests/prices.test.js`, `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js`, `python C:/Users/Riley/eckstein-jobs/tests/test_sync.py`, `python C:/Users/Riley/eckstein-jobs/tests/test_build_beta.py`.
+3. Build and check: `python C:/Users/Riley/eckstein-jobs/tools/build_beta.py` then `python C:/Users/Riley/eckstein-jobs/tools/build_beta.py --check` ("beta/ is up to date"). If the service worker's SHELL or `sw.js` logic changed, bump `CACHE` in `tools/build_beta.py` (`ejb-v2`, …) first. Preview <http://localhost:8765/beta/> (§7.12).
+4. Commit on `r2` (list the paths), e.g. `git -C C:/Users/Riley/eckstein-jobs add js/app.js beta APP_MASTER.md` → `git -C C:/Users/Riley/eckstein-jobs commit -m "r2: what changed"`.
+5. Ship to `main` (or do steps 5–8 in a temporary worktree of `main`, as for `c2a1d43`): `git -C C:/Users/Riley/eckstein-jobs switch main` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs checkout r2 -- beta/` (plus, only if they changed on `r2`: `sync_jobs.py`, `tests/test_sync.py`, `tests/fixtures/`, `.github/workflows/sync.yml`, `.github/requirements-sync.txt`, `docs/r2-plan.md`). A file the build **deleted** is not removed by `checkout`: `git -C C:/Users/Riley/eckstein-jobs diff --stat r2 -- beta/` must print nothing, else `git rm` the leftovers. **Never** take `data/`, root frontend files, `tools/` or the r2-only tests from `r2`, and never run `tools/build_beta.py` here.
+6. Verify v1 is untouched: `git -C C:/Users/Riley/eckstein-jobs diff --stat HEAD -- index.html css js sw.js manifest.json icons vendor` and `git -C C:/Users/Riley/eckstein-jobs diff --stat origin/main -- index.html css js sw.js manifest.json icons vendor` both print nothing. If the sync changed: `python C:/Users/Riley/eckstein-jobs/tests/test_sync.py`.
+7. Add the §12 CHANGELOG entry (and §0/§11) in `APP_MASTER.md` on `main` → `git -C C:/Users/Riley/eckstein-jobs add beta APP_MASTER.md` (+ any sync paths) → `git -C C:/Users/Riley/eckstein-jobs commit -m "beta: what changed"` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs push` (if Claude's push is blocked, Riley runs it; Rule 10).
+8. After the Pages build: open <https://claude69420.github.io/eckstein-jobs/beta/?t=1> and <https://claude69420.github.io/eckstein-jobs/?t=1> (both load, beta shows "Beta" and About "R-2 beta", v1 unchanged). On the phone the beta shows new code after closing and reopening "EJ Beta".
+9. Bring `main` back into `r2` so the docs and data match: `git -C C:/Users/Riley/eckstein-jobs switch r2` → `git -C C:/Users/Riley/eckstein-jobs merge main`.
+
+### 7.17 Promote the beta to main (future; only when Riley approves)
+Per `docs/r2-plan.md` §9. Plan it as **one change with its own rollback**, logged in §12, at a quiet time (tell the crew; no moves for a few minutes).
+1. **Convert and merge the stage files** (state repo, by hand or a one-off script with tests; §7.14): for each job, stage = the newer of v1's `at` and the beta's `sat` (the overlay rule), items from `stages-beta.json`; write the result as `stages.json` with `"version": 2` (drop `sat`). This must happen **before** the new root app ships, because a v2 store refuses to PUT over an existing v1 file (and v1 refuses to write a v2 file). Keep `stages-beta.json` as the backup.
+2. **Ship the `r2` root files to `main`** with the default config (no `EJ_CONFIG`): `index.html`, `css/`, `js/` (incl. `prices.js`), `sw.js` (cache `ej-v3`, prefix cleanup), plus the r2 tests (`tests/stages.test.js`, `tests/prices.test.js`, `tests/tsp.test.js`). The root `manifest.json` and `icons/` are unchanged on `r2`, so v1 users keep their Home Screen app.
+3. **Sync to single-file mode:** `sync_jobs.py` carry-forward reads only `stages.json` (no overlay, no `stages-beta.json`); update `tests/test_sync.py`.
+4. **`beta/`**: replace with a small redirect to `../` (so "EJ Beta" icons land on the main app), remove it in a later commit. Devices re-paste the pricing key in the main app (`ej_price_key`); the edit key is already in `ej_gh_token`; beta-only saved routes stay under `ejb_routes` (tell Riley).
+5. Update §0, §4.3/§4.3b, §5, §10, §11, Rule 13e, and the CHANGELOG.
+6. **Rollback:** `git revert` the promotion commit **and** restore v1's `stages.json` (revert the conversion commit in the state repo), because v1 code refuses to write a v2 file.
+
+### 7.18 Watch the first R-2 sync run (after the beta release)
+The first cron after the release (7:00 AM or 12:00 PM CDT) is the first real run of the R-2 sync; or trigger one (§7.1 Call A). **Claude only, in Git Bash** (one call; replace `RUNID`):
+```bash
+export PATH="$PATH:/c/Program Files/GitHub CLI"; gh run view RUNID -R Claude69420/eckstein-jobs --log | grep -E "auth:|jobber:|done:|carry-forward|prices:|::warning::|::error::|Pushed|Install pinned"
+```
+Check, in order:
+1. **Run green** and `Pushed.`; the "Install pinned cryptography" step succeeded (a failure there is harmless: prices are skipped).
+2. **No `::warning::jobber: job list query refused`.** If present, Jobber refused totals and/or line items for the read-only cloud app: the job list still synced, but prices (and maybe hints) are degraded. Tell Riley; options are to accept it, or for Riley to give "Eckstein Jobs Sync" more read access in the Jobber Developer Center and re-consent (§6 recipe A). Never use the desktop app's credentials for this (Rule 9).
+3. **Same job set as v1 had:** `jobber: N active jobs` and `done: N jobs (C closed in Jobber in closed_jobs.json), …` with N equal to the previous `meta.json` total except real Jobber changes; run the §7.1 NEW/GONE diff. v1 at the root still loads with the same count.
+4. **New files:** `data/closed_jobs.json` exists (a list; usually short or empty on the first run), `data/closed_archive.json` exists, `meta.json` has `closed`, `stages_read` "ok", `stages_beta_read` "not found (no entries yet)" (until the beta's first move, then "ok"), `stage_entries`. `jobs.json` records now have `id` and `hints`. **Claude only, in Git Bash:** `python -c "import json;j=json.load(open('C:/Users/Riley/eckstein-jobs/data/jobs.json'));print(len(j),sum(1 for x in j if x.get('hints',{}).get('asphalt')),sum(1 for x in j if x.get('hints',{}).get('pavers')),sum(1 for x in j if x.get('id')))"`.
+5. **Prices:** `prices: skipped (PRICE_KEY not set)` until Riley adds the secret (expected, not a warning); afterwards `prices: written (encrypted, N jobs)` and `data/prices.json` exists. Any `::warning::prices: …` → §8. Never decrypt or print the file.
+6. Open `/beta/`: jobs load, closed jobs (if any) show "Closed in Jobber", "from Jobber" captions appear on hinted jobs. Record the result in §11 R-2 Work log and the §12 entry's Verified line.
 
 ---
 
@@ -1197,6 +1365,28 @@ Most of these are toasts or the Settings → Stages status line.
 | No refraction on the PC | The gate needs all of: Chromium brand in `userAgentData`, hover + fine pointer, width ≥900, not `prefers-contrast: more`, not `prefers-reduced-transparency`, Glass = Liquid, `Hyalite.supported()` | None needed: frosted glass is the expected fallback on Safari, Firefox and iPhone. |
 | Preview (localhost) writes to the real state repo | A key is saved in localhost's storage (a key always wins over local mode) | Settings → Stages → Remove key. |
 
+#### R-2 beta, closed jobs and prices (since 2026-09-26)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Log: `prices: skipped (PRICE_KEY not set)` (plain line) | Expected until Riley creates the secret | §6 recipe G. `prices.json` is left as it is. |
+| `::warning::prices: skipped (PRICE_KEY invalid: must be base64 of 32 bytes)` | Mis-pasted secret | Riley re-pastes the secret (recipe G); never print it. |
+| `::warning::prices: skipped (cryptography package not installed)` | The hash-locked install step failed (network, or pins no longer installable on the runner's Python) | Look at the "Install pinned cryptography" step log; bump the pins (§4.2 step 2a) with a logged commit. The sync itself is fine. |
+| `::warning::prices: skipped (Jobber did not return complete totals this run; …)` or `(… unreadable; previous prices.json kept)` | Totals refused or partial this run, or a previous data file unreadable | Previous prices stay. If it repeats, see the next row. |
+| `::warning::jobber: job list query refused (…); retrying without totals…` | Jobber refused the new fields for the read-only "Eckstein Jobs Sync" app (the risk noted for the first run) | The job list still syncs; prices (and maybe hints) are degraded. Tell Riley: accept it, or he grants more read access to the sync app in Jobber and re-consents (recipe A). Never use desktop credentials (Rule 9). |
+| `::warning::jobber: N job(s) came back without complete line items` | Line items refused, null, or a page with errors | Their previous hints were kept. Harmless unless it repeats. |
+| `::warning::prices: previous prices.json not readable with this key` | `PRICE_KEY` was rotated | Closed jobs whose refresh failed have no price until their next refresh; paste the new key on each device. |
+| `::warning::carry-forward: stages.json unreadable (…)` / `stages-beta.json unreadable (…)` (incl. "reset or stale copy?") | Raw fetch failed, damaged file, or a file that suddenly has no entries | Every closed job is **kept** (never dropped on a read failure). Check the state repo (§7.14); it clears on the next good run. |
+| A closed job disappeared from the beta; log `::warning::carry-forward: dropped #N, which was closed in Jobber (…)` | "Remove from app", or its merged entry became field-work-done / Ready (e.g. a v1 move back to Ready on a job the beta never moved itself) | Its record is in `data/closed_archive.json` for 60 days. Restore its entry in `stages-beta.json` (§7.14: set the stage/items again, remove `removed`), or set it again in the beta if it is still shown; it returns on the next sync. |
+| Beta: "This copy of the app is misconfigured (EJ_CONFIG) — stages are read-only here. Open the normal app link." | The beta's `EJ_CONFIG` is missing a field or invalid (hand-edited `beta/index.html`, a bad build): the store **locks** read-only instead of touching v1's file or keys | Rebuild `beta/` on `r2` and re-ship (§7.16). Never "fix" it by pointing the beta at `stages.json` or the `ej_` keys. |
+| Beta (or an `r2` root preview with a key): "… is still in the v1 format (the live v1 app's file) — this version never converts it, so saving is paused" | A v2 store found a v1 file at its state path (e.g. the `r2` root app, default config, would write `stages.json`) | By design (protects v1). Use the beta, or convert the file only as part of promotion (§7.17). |
+| Beta and v1 show different stages for a job | **By design (one-way):** beta moves never reach v1; a v1 move shows in the beta only when it is newer than the beta's own move (`sat`); a v1 move back to Ready is invisible in the beta | Repeat the move in v1 if the crew needs it. Nothing to fix. |
+| Beta Settings → Stages: "v1 stages file is damaged / in a newer format — v1 moves are not shown" or "Couldn't read v1 stages …" | Overlay note only | Beta saves still work. Fix `stages.json` if it is damaged (§7.14). |
+| Beta starts without its offline copy (or slowly) on the PC after a v1 deploy | v1's `sw.js` (`ej-v2`) deletes every other cache, including `ejb-v1`, when it activates (a root `sw.js` deploy or first v1 install on that browser profile) | Open the beta online once; it re-caches. No stage or job data is lost. |
+| No `$` button in the beta | No pricing key on this device (by design), or prices are loading | Settings → Pricing → paste the key (Riley's devices only). |
+| Settings → Pricing: "No prices yet — they appear after the next sync" / "That key does not unlock the prices (wrong key?)" / "This browser cannot decrypt prices here (needs https)" | No `prices.json` yet / the key does not match `PRICE_KEY` (rotated or mis-pasted) / a plain-http page (LAN preview) | Wait for a sync with `PRICE_KEY` / paste the current key / use https or localhost. |
+| "EJ Beta" on the Home Screen opens v1, or has the blue icon | It was added from the root URL | Delete it and add it again from `…/eckstein-jobs/beta/` in Safari. |
+
 ---
 
 ## 9. Design decisions (ADR-style)
@@ -1224,6 +1414,7 @@ Most of these are toasts or the Settings → Stages status line.
   - Applied to the app and to the desktop builders in use at the time (reported then as "all 68"). Today 71 of 86 `_route_*`/`_map_*` builders use Esri; 3 older builders (`_build_route_map.py`, `_multiclient_map.py`, `_route2_finalize.py`) still use raw OSM tiles (§4.5).
   - **Amended by R-1 (app only; desktop builders unchanged):** a dark theme uses Esri `World_Dark_Gray_Base` plus `_Reference`; the `brightness(0.9) contrast(1.2)` filter is removed (the `--canvas` colours `#EFEFEF`/`#474749` match the tiles and drive `theme-color`); reference labels sit in pane `labels` (z 450) above route lines.
 - **ADR-07 `sync_jobs.py` is stdlib-only.** No pip step, so the workflow is fast (about 12 s) and has no dependency drift.
+  - **Amended by R-2 (2026-09-26):** still stdlib for everything the job list needs; `cryptography` is imported lazily for the encrypted prices only, installed by a hash-locked, wheels-only, `continue-on-error` step (`.github/requirements-sync.txt`), so a failed install can only skip prices (ADR-26).
 - **ADR-08 `jobs.json` is rebuilt from scratch every run.**
   - The output is always a faithful mirror of Jobber's active jobs.
   - Human inputs live in separate files keyed by `jobNumber` (`street_overrides.json`, `pending_manual.json`), and the sync merges them. **Future per-job state (stages) also lives in a separate store keyed by `jobNumber`, but is merged by the frontend and never written by the bot** (§5 "Stage data"), so a stage change shows at once and the bot's `-X theirs` rebase can't overwrite it.
@@ -1269,6 +1460,23 @@ Most of these are toasts or the Settings → Stages status line.
   - Desktop: panel on the left; Settings in the capsule; tabs Jobs · Routes · Plan.
   - Stage control: the detail-sheet slider plus the desktop hover card. No inline slider in the list row; a row tap opens the detail slider.
 - **ADR-23 Ship R-1 as ONE squash commit** (build spec §1.7). Amends the brief's two-merge plan and §11's old "reskin and stages ship as separate merges". Rollback is a single revert (§7.15).
+- **ADR-24 R-2 ships as a beta channel next to v1, with a one-way stage overlay** (2026-09-26; Riley: "When complete please dont overwrite v1, would like to trial it in parallel if possible."; stages answer "v1 → beta only").
+  - `beta/` on `main`, generated from branch `r2` by `tools/build_beta.py`; root v1 stays byte-for-byte. Own manifest `id`/scope, service worker (`ejb-v1`, cleans only `ejb-` caches), orange icons, `ejb_` storage, "Beta" pill: a separate Home Screen app.
+  - `window.EJ_CONFIG` (channel, base, ns, stateFile, overlayFile, cachePrefix) with defaults = the future main app, so promotion is "ship the root without a config". **Fail closed:** any bad beta config locks the store read-only rather than falling back to v1's file and keys.
+  - The beta writes only `stages-beta.json` and reads v1's `stages.json` read-only; v1 stage wins per job when v1's `at` is newer than the beta's `sat`; items only from the beta. v1 never reads the beta file, so the trial cannot affect the crew. Costs: beta moves never reach v1; a v1 move back to Ready is invisible in the beta (§10).
+  - Promotion (§7.17) is one change with its own rollback.
+- **ADR-25 Closed-but-unfinished jobs live in a separate `data/closed_jobs.json`** (2026-09-26; Riley Q6 plus Claude's safety net).
+  - `jobs.json` keeps exactly v1's membership, so v1 is unaffected; only the beta reads `closed_jobs.json`. The sync decides with the merged entry of both stage files (`keepWhenClosed`), and **never drops on a read failure** (unreadable/reset file → keep all). Dropped jobs go to `data/closed_archive.json` for 60 days and come back when their stage entry is restored. The bot still never writes the stage store (it only reads it).
+- **ADR-26 Prices are published encrypted and decrypted only in the browser** (2026-09-26; Riley Q4 "Only my devices", Q5 "Job total").
+  - `data/prices.json` = AES-256-GCM (random 12-byte IV per run) of `{jobNumber: {t, u}}` under the GitHub secret `PRICE_KEY` (base64 of 32 bytes). The public repo never holds a plaintext price; line-item text and prices are never published (only boolean hints). The beta decrypts with WebCrypto using the pricing key Riley pastes per device (`ejb_price_key`); crew with only the edit key never see prices.
+  - Shown as "Jobber total" (Jobber's `total` is not consistently pre-tax, checked 2026-09-26), never on map pins; hidden prices are removed from the DOM. Prices never fail the sync.
+- **ADR-27 Stages v2: 7 stages, job items, gates, per-field merge** (2026-09-26; Riley Q1–Q3, Q8; `docs/r2-plan.md` §1–2a).
+  - Stage = the work happening now/next (a crew's list); Setup added between Ready and Excavation. Items share one 3-way switch; gates only block moves (never auto-advance): lane Required blocks ≥ Setup, street cut Required blocks ≥ Excavation; asphalt/pavers/cleanup Done only at Poured. Only non-default fields are stored; a stored asphalt/pavers value (even N/A) beats the Jobber hint.
+  - Per-field merge on 409/422 (this device's changed fields win, others keep the remote value) fixes the lost-update risk of whole-entry writes. File version 2; the store refuses newer versions and never PUTs v2 over an existing v1 file. JS and Python share one contract with shared test vectors.
+- **ADR-28 One route editor for one-click routes and the Plan tab** (2026-09-26; Riley: deselect jobs, add stops, drag like Apple Maps, re-optimize).
+  - Replaces v1's separate result block and Plan stop list: skip switches, a drag **handle** (handle-only, so list scrolling never starts a drag), "+ Add stop", Re-optimize with Undo, a Return-to-shop row, live legs/totals/Google Maps parts; saved routes keep `skipped[]`. Hand-rolled drag (no SortableJS vendored).
+- **ADR-29 "Existing jobs = assessed": `ASSESS_CUTOFF` 699** (2026-09-26; Riley's answer).
+  - Jobs ≤ 699 (the highest Jobber jobNumber on launch day; pending 9000+ excluded) with no stored assess show "Assessed before beta" (`prior`, display-only, never stored), so the Unassessed list starts with only new jobs. Because `no` is the default and never stored, an old job cannot be set back to "Not yet" (the switch dims it); changing that needs a stored non-default marker (open design call, §11).
 
 ### Third-party code
 Settings → About points here (brief §1.5).
@@ -1283,6 +1491,7 @@ Settings → About points here (brief §1.5).
 
 - Verify the hyalite hash: **Claude only, in Git Bash:** `openssl dgst -sha256 -binary /c/Users/Riley/eckstein-jobs/vendor/hyalite.js | openssl base64 -A`. **Riley, in PowerShell:** `Get-FileHash C:\Users\Riley\eckstein-jobs\vendor\hyalite.js -Algorithm SHA256` (prints the hex form).
 - Upgrade hyalite: replace the file and LICENSE byte-for-byte from the new pinned commit, then update the commit, size and hashes here (and the About notice if the version changes).
+- `beta/vendor/hyalite.js` and `beta/vendor/hyalite.LICENSE` are byte-identical copies made by `tools/build_beta.py` (`.gitattributes` `beta/vendor/* -text`). The beta adds no new third-party code (the route editor's drag is hand-rolled; prices use the browser's WebCrypto). The sync's optional `cryptography` (Apache-2.0/BSD) runs only in GitHub Actions and is never served.
 
 ---
 
@@ -1299,13 +1508,13 @@ Settings → About points here (brief §1.5).
 - Local mode shares the desktop keyring token with several MCP processes, so concurrent refreshes could race (not observed). It can also block on browser consent on port 8080.
 
 **Sync and data**
-- Pagination has a 5,000-job cap with silent truncation.
-- GraphQL `errors` responses aren't retried, and 401s are retried pointlessly.
+- Pagination has a 5,000-job cap (since R-2 the run fails beyond it instead of truncating).
+- GraphQL `errors` responses other than THROTTLED aren't retried (since R-2: throttling is retried with backoff, 401s are no longer retried).
 - `load_json` silently swallows corruption, so a corrupt cache means a full re-geocode.
 - Failed geocodes aren't cached, so they are re-billed every run. Wrong results inside Manitoba are cached forever.
 - `clean_addr` quirks: a leading "Unit N" eats the civic number, and real "Lane" street names get stripped.
 - `extract_permit` treats any 5–6 digit number as a permit, and its "Gas" check is case-sensitive.
-- Jobber `id`, `createdAt` and `updatedAt` are dropped, so `jobNumber` is the only key.
+- Jobber `createdAt` and `updatedAt` are dropped; `jobNumber` is the only key (R-2 writes `id` too, only for refreshing closed jobs).
 - Pending manual jobs are never auto-removed (duplicate risk). There are separate desktop and repo copies.
 - **Geocode-cache divergence risk:**
   - The desktop cache has 296 entries and the repo cache 312. 19 keys are repo-only and 3 are desktop-only; there are 0 conflicts.
@@ -1349,6 +1558,20 @@ Settings → About points here (brief §1.5).
   - Client chips use "solo, then add" (spec default); the old app hid one client per tap.
   - The state repo has 4 throwaway contract-test commits from 2026-09-26 (§12). Harmless; leave them.
   - Esri legacy Canvas tiles may be deactivated without notice (§9 "Third-party code").
+
+**R-2 beta (since 2026-09-26)**
+- **One-way stages (ADR-24):** beta moves never reach v1 (repeat them in v1 if the crew needs them). A v1 move back to **Ready** is not visible in the beta (v1 records Ready by deleting its entry). A v1 move shows in the beta only when newer than the beta's own last move of that job (`sat`).
+- **Old jobs cannot be set back to "Not yet"** (jobs ≤ 699 count as assessed; `no` is never stored; ADR-29). The Unassessed list only fills with new jobs.
+- **v1's live `sw.js` (`ej-v2`) deletes the beta's `ejb-v1` cache** if it ever activates again (a root `sw.js` deploy, frozen during the trial, or a first v1 install on a shared browser profile); the beta just re-caches online. Any v1 `sw.js` change during the trial should adopt the prefix filter.
+- **Jobber `total` is not consistently pre-tax** (checked on real data 2026-09-26), so it is labelled "Jobber total", never "pre-tax"; sums mix taxed and untaxed totals.
+- **Prices only on devices with the pricing key**; no key / wrong key = no prices anywhere. Prices appear only after a sync with `PRICE_KEY`, and are as old as the file's `at`.
+- **Read-only cloud Jobber app may not be allowed to read totals / line items** (unverified until the first run, §7.18): the job list still syncs, prices and/or hints degrade.
+- **Route editor drag is handle-only** (no long-press on the row).
+- **Stage chips show no visible count or $** (tooltip/aria-label, route menu and group headers do); **desktop Stage mode can show up to 5 chip rows**.
+- The beta's Settings (theme, device name, saved routes, keys) are separate from v1's: `ejb_` keys on the PC, a separate Home Screen app on the iPhone. Keys must be pasted in both apps.
+- Carry-forward only knows jobs that were in the previous `jobs.json` or `closed_jobs.json`: jobs closed in Jobber before the first R-2 sync never come back. A job closed and then dropped is recoverable from `closed_archive.json` only for 60 days.
+- Closed-job refreshes share a 90 s budget per run; beyond it, closed jobs keep their previous status and totals.
+- Two copies of the frontend exist during the trial (root v1 on `main`, R-2 on `r2` → `beta/`); a client or shared fix must be made in both (Rule 12, §7.16).
 
 ---
 
@@ -1418,7 +1641,37 @@ When Riley confirms on his iPhone, mark R-1 **done** here and in §0.
 
 ### R-2: Setup stage, before/after-work items (lane closure, street cut, asphalt, pavers, cuts & cleanup), route editing, pricing
 
-**Status: planning, answers received (2026-09-26).** Plan: `docs/r2-plan.md` (updated with the answers). Build starts after R-1 ships (Q7). R-1 continues independently.
+**Status: BETA RELEASED at `/beta/` on 2026-09-26 (this commit)**, next to the untouched v1 at the root. Development continues on branch `r2` (created 2026-09-26 from `main` @ `a538397`; merged `origin/main` in `79e9d70`; pushed to origin: no). Spec: `docs/r2-plan.md` (§2a shared contract; §6a never run the sync workflow from the branch; §9 beta channel; §10 Assessed default). Update recipe §7.16, promotion §7.17 (only with Riley's OK), first sync run §7.18.
+
+**Next step (resume here):** (1) watch the first R-2 sync run (§7.18) and record it below and in the §12 entry; (2) Riley's steps below; (3) Riley trials the beta next to v1 and sends feedback → fix on `r2`, re-ship via §7.16; (4) promotion (§7.17) when Riley approves.
+
+**Riley's steps (after the release; Claude guides, never handles a key):**
+1. iPhone: open <https://claude69420.github.io/eckstein-jobs/beta/> in Safari → Share → Add to Home Screen ("EJ Beta"); open it → ⚙ → Stages → paste the **same** edit key → Save; device name without personal info (e.g. "iPhone beta").
+2. PC: open the beta URL → the same (e.g. "PC beta").
+3. Create `PRICE_KEY` (§6 recipe G one-liner) → GitHub repo secret → paste it in the beta's ⚙ → Pricing on each of his devices; keep it in the password manager.
+4. Prices appear after the next sync (7 AM / noon CDT) or a run Claude triggers.
+5. Use the beta alongside v1; beta moves stay in the beta; the crew stays on v1.
+
+**Open design calls for Riley** (defaults in place; change on request):
+- Stage chips show no visible count or $ (the tooltip, route menu and group headers do).
+- Desktop Stage mode can show up to 5 chip rows.
+- Drag in the route editor is handle-only (Apple Maps style).
+- Old jobs (≤ 699) cannot be set back to "Assessed: Not yet" (would need a stored non-default marker, §2a/§10 contract change).
+- A v1 move back to Ready is not visible in the beta (one-way overlay; v1 deletes the entry).
+
+**Work log** (newest first)
+- 2026-09-26: **BETA RELEASED (this commit on `main`)**: one commit with exactly the ship paths (Rule 13e): `beta/` (generated, `python tools/build_beta.py --check` up to date, 17 files), `sync_jobs.py`, `.github/workflows/sync.yml`, `.github/requirements-sync.txt`, `tests/test_sync.py`, `tests/fixtures/`, `docs/r2-plan.md`, `.gitattributes`, `APP_MASTER.md`. Root v1 files, `js/prices.js`, `tools/`, the r2 test suites and `data/` stay as they are on `main`. Tests on `r2` @ `122b954`: stages 78/78, prices 25, tsp 15, test_sync 84, test_build_beta 5. APP_MASTER updated for the release (§0, §2, §3, §4.1, §4.2, §4.3b, §5, §6 G, §7.16–7.18, §8, ADR-24–29, §10, §12). Uncommitted on `r2`: none besides this doc update.
+- 2026-09-26: **Assessed default committed** as WIP `122b954` on `r2` (review: 2 findings → fixed).
+- 2026-09-26: **phase 3 (beta channel) DONE** as WIP `71bda62` on `r2`, then `origin/main` merged in (`79e9d70`). Review: 21 findings incl. 2 major → fixed. Browser verification of `/` and `/beta/`.
+- 2026-09-26: **§10 Assessed default BUILT (committed later as `122b954`)**: `Stages.ASSESS_CUTOFF = 699` (highest non-pending Jobber jobNumber in `data/jobs.json` on launch day 2026-09-26); `Stages.effective(entry, hints, jobNumber)` gives assess `prior` when assess is not stored and the jobNumber is a number ≤ 699 (and < 9000); without the 3rd argument nothing changes (contract vectors, `sync_jobs.py` untouched). `prior` is display only (label "Assessed before beta", not in `values`, rejected in patches, dropped from files). App: `refreshEff` passes `x.jobNumber`; the Assessed row shows no selected segment (`.seg--item.is-none` hides the thumb) + the caption "Assessed before beta"; tapping Virtual/On site stores normally, Undo returns to the caption; "Not yet" is dimmed on every job ≤ 699, also after a Virtual/On site was stored (new `Stages.priorAssessed(jobNumber)`; the rule looks at the jobNumber, not the current value, so the toast/commit can never claim "Assessed: Not yet" while the job falls back to "Assessed before beta"); tapping it toasts "Jobs from before the beta count as assessed" (Undo still takes back a mistaken Virtual/On site), because `no` is the default and is never stored, so it could not stick; open design call for Riley if he wants to un-assess an old job (would need a stored non-default marker + §2a/§10, vectors, `sync_jobs.py` clean rules); the Unassessed chip/search excludes prior jobs. Files: `js/stages.js`, `js/app.js`, `css/components.css`, `tests/stages.test.js`, regenerated `beta/`, this file. Changelog entry to be written with the commit.
+- 2026-09-26: **Riley: Assessed default** (question panel): "Existing jobs = assessed" → jobs already in Jobber at beta launch count as assessed (`prior`); only newer jobs start as Not yet. Spec: `docs/r2-plan.md` §10. To build after phase 3 (small change in `js/stages.js` + UI + tests, then rebuild `beta/`).
+- 2026-09-26: **phase 3 (beta channel) RUNNING** (done: `71bda62`, entry above): workflow `wf_40f016ee-8f3` (parallel: `js/stages.js` overlay + `sat` | `sync_jobs.py` → `data/closed_jobs.json` + dual-file carry-forward | `EJ_CONFIG` plumbing (ns/base), `tools/build_beta.py` + `tools/make_icons.py`, generated `beta/`, prefix-scoped sw cleanup; then browser verify of `/` and `/beta/` + 3 lenses (v1-safety, correctness, security) + fix ≤2). After it: re-run `python tools/build_beta.py --check`, commit, then ship ONLY `beta/`, sync files, sync tests/fixtures, `tools/`, docs to `main` (root v1 files untouched; never `data/` from r2).
+- 2026-09-26: **phase 2 DONE** (`b4f7cf0`): items/gates/lists UI, route editor (one editor for one-click + manual; skip switches, drag handle, add stop with suggestions, Re-optimize, Return-to-shop switch row, live totals/parts, save with skipped[]), pricing UI (`$` in the capsule only with a pricing key, Settings → Pricing, "Jobber total", Uninvoiced line, totals in list headers/route menu/list chips/editor), sw `ej-v3`. Review: 48 findings (1 critical, 11 major) → 2 fix rounds → 0 critical/major. Open design calls for Riley: stage chips show no visible count/$ (tooltip, route menu, headers do); desktop Stage mode can show up to 5 chip rows; "Unassessed" holds nearly every job at launch (no bulk action); drag is handle-only (Apple Maps style).
+- 2026-09-26: on `main` (via a temporary worktree, not this branch): pending job 9001 removed (`c2a1d43`, cancelled) and a sync run. **When shipping the beta to `main`, never take `data/` from `r2`** (its `data/` is stale; take only the listed code/docs paths).
+- 2026-09-26: **Riley: trial R-2 in parallel, don't overwrite v1.** Verbatim: "When complete please dont overwrite v1, would like to trial it in parallel if possible. Let me know". Answer to "how should stages flow": **"v1 → beta only (Recommended)"**. Plan: `docs/r2-plan.md` §9 (beta at `/beta/`, separate Home Screen app "EJ Beta", own stage file `stages-beta.json` with a read-only v1 overlay, `ejb_` storage prefix, closed jobs in `data/closed_jobs.json`, root v1 untouched). Adds **phase 3 = beta channel** after phase 2.
+- 2026-09-26: **phase 2 (UI) RUNNING**: workflow `wf_2088e519-2bc` (sequential builders: items/gates/lists UI → route editor → pricing UI incl. `sw.js` → `ej-v3`; then browser acceptance + 4 review lenses + fix loop ≤2 rounds). Agents don't commit. If the session dies mid-run: check `git -C C:/Users/Riley/eckstein-jobs status --short` on `r2`, make sure no temporary `data/prices.json` is left (delete it; never commit it), run all 4 test suites, then resume the workflow with `resumeFromRunId` or continue with verify/review.
+- 2026-09-26: **phase 1 DONE** (workflow `wf_9ee71935-654`, build → adversarial review → fix, committed on `r2` as WIP): `js/stages.js` v2 (7 stages incl. `setup`, items, per-field merge, patch API, v2 file, refuses > v2; review caught + fixed a lost-update bug in the per-field queue) 63/63; `sync_jobs.py` (`id`, `hints`, carry-forward with `closed:true` + `data/closed_archive.json` 60-day safety archive, encrypted `data/prices.json` when `PRICE_KEY` is set, throttle/cost handling, `--out`/`--data`), hash-locked `cryptography` install (`.github/requirements-sync.txt`, continue-on-error), `tests/test_sync.py` 59 OK; `js/prices.js` (WebCrypto decrypt, price store, `ej_price_key` SECRET, `ej_show_prices`) 22/22; shared contract vectors `tests/fixtures/contract_vectors.json` (42, both languages pass). Local read-only real-data run (desktop keyring, output to scratch): 52 active jobs, hints asphalt 6 / pavers 7, prices for 52; Jobber `total` is NOT consistently pre-tax → label it "Jobber total". Risk to watch at the first post-merge Actions run: the read-only cloud Jobber app may not be allowed to read totals/line items (fallback keeps the job list syncing; look for `::warning::jobber: job list query refused`).
+- 2026-09-26: branch `r2` created; phase 1 workflow launched (`js/stages.js` v2 + tests; `sync_jobs.py` hints / carry-forward / encrypted prices + `js/prices.js` + tests; each built, adversarially reviewed, fixed). Agents do not commit. If the session dies: `git -C C:/Users/Riley/eckstein-jobs status --short` on `r2`, run `node tests/stages.test.js`, `node tests/prices.test.js`, `python tests/test_sync.py`, then continue with phase 3 (UI) per `docs/r2-plan.md` §7.
 
 **Riley's request, 2026-09-26 (verbatim):**
 > "After each site is poured, there are a couple additional stages that not every job moves through but we will need to track and route map them. Asphalt and paving stones need to be done, as well as cuts and cleanup. Asphalt needs to be done before cuts and cleanup if its a road cut, but can be done after if its just isolations so its not always linear progression but always after concrete is poured. As well paving stones can be done after cuts and cleanup if theyre just blockout etc but need to be done first if its a full paving stone section of sidewalk or something. I think the best way for this is if there is a checkbox for asphalt and paving stones available during the previous stages that when poured puts them on a separate list that can be mapped (asphalt of pavers). I just dont want things to become too cluttered adding more stuff. Importantly, often sites get invoiced after the concrete is poured before asphalt, paving stones and cleanup are complete, so if the asphalt/pavers checkbox is set to positive then even when the jobs are marked complete in jobber they need to remain on this list until both asphalt, paving stones, and cleanup are all complete.
@@ -1472,6 +1725,18 @@ When Riley confirms on his iPhone, mark R-1 **done** here and in §0.
 ```
 
 ---
+
+### 2026-09-26 — R-2 beta released at /beta/ (v1 untouched)
+- **What:**
+  - **R-2 beta app** at <https://claude69420.github.io/eckstein-jobs/beta/> (Home Screen app "EJ Beta"), generated into `beta/` from branch `r2` by `tools/build_beta.py`: inline `EJ_CONFIG` (beta channel, `base ../`, `ns ejb_`, state file `stages-beta.json`, read-only overlay `stages.json`, fail-closed), own manifest/`sw.js` (`ejb-v1`)/orange beta icons, "Beta" pill. Features: 7 stages (Setup), job items with 3-way switches and gates, lane booking dates, "from Jobber" hints, Closed in Jobber + Remove from app, Field work done, list chips, route menu with lists, one route editor (skip, drag handle, add stop, Re-optimize, Return to shop, live totals/parts), encrypted pricing ("Jobber total", `$` only with a pricing key), "Existing jobs = assessed" (`ASSESS_CUTOFF` 699). Details §4.3b, §5, ADR-24 to ADR-29.
+  - **Sync** (`sync_jobs.py`, backward compatible for v1): query adds `id`, `total`, `uninvoicedTotal`, line items (cost/throttle handling, fallbacks when Jobber refuses fields); `jobs.json` gains optional `id` and `hints`; carried-forward closed jobs in new `data/closed_jobs.json` (dual stage-file merge, keep-on-read-failure, reset guards) with a 60-day `data/closed_archive.json`; encrypted `data/prices.json` (AES-256-GCM, secret `PRICE_KEY`; skipped with a plain line until the secret exists); `meta.json` adds `closed`, `stages_read`, `stages_beta_read`, `stage_entries`; `--out`/`--data`. Workflow: hash-locked `cryptography` install (continue-on-error) and `PRICE_KEY` env. §4.1, §4.2.
+  - **v1 untouched:** root `index.html`, `css/`, `js/`, `sw.js`, `manifest.json`, `icons/`, `vendor/` unchanged; `jobs.json` keeps v1's job set; v1 never reads the beta's files.
+- **Why:** Riley's R-2 request (§11 "R-2") and, on 2026-09-26: "When complete please dont overwrite v1, would like to trial it in parallel if possible." (stages answer "v1 → beta only"; Assessed answer "Existing jobs = assessed").
+- **Files:** `beta/` (17 generated files), `sync_jobs.py`, `.github/workflows/sync.yml`, `.github/requirements-sync.txt`, `tests/test_sync.py`, `tests/fixtures/` (`contract_vectors.json`, `overlay_vectors.json`, `make_prices_fixture.py`, `prices.enc.json`, `prices.plain.json`, `sync_jobber_pages.json`, `sync_prev_jobs.json`, `sync_stages.json`, `sync_stages_beta.json`, `sync_stages_v1.json`), `docs/r2-plan.md`, `.gitattributes` (adds `beta/vendor/* -text`), `APP_MASTER.md`. **Not shipped** (stay on `r2`): root frontend files incl. `js/prices.js`, `tests/stages.test.js`, `tests/prices.test.js`, `tests/tsp.test.js`, `tests/test_build_beta.py`, `tools/`; `data/` never from `r2`.
+- **Commit:** (this commit) (built on `r2` WIP commits `56361be`…`122b954`; see §11 Work log).
+- **Verified:** on `r2` @ `122b954`: `node tests/stages.test.js` 78/78, `node tests/prices.test.js` 25 passed, `node tests/tsp.test.js` 15 passed, `python tests/test_sync.py` 84 OK, `python tests/test_build_beta.py` 5 OK, `python tools/build_beta.py --check` "beta/ is up to date (17 files, icons match tools/beta_icons.json)". Browser verification of `/` and `/beta/` in phases 2–3. Reviews: phase 1 (stages 6 + sync 13 findings, all fixed); phase 2 (48 findings incl. 1 critical / 11 major → 0 critical/major); phase 3 (21 findings incl. 2 major → fixed); Assessed default (2 findings → fixed). Local real-data sync check 2026-09-26 (desktop keyring, scratch `--out`): 52 jobs, hints asphalt 6 / pavers 7, prices for 52. **Still to verify:** live `/beta/` after the Pages build, and the first Actions run (§7.18).
+- **Rollback:** `git revert` this commit: removes `beta/` and the sync changes; v1 is unaffected. The generated `data/closed_jobs.json`, `data/closed_archive.json` and `data/prices.json` stay harmless (nothing else reads them; delete them in a logged commit if wanted); `stages-beta.json` in the state repo is ignored by v1. Optionally delete the `PRICE_KEY` secret.
+- **Riley actions:** **(1) iPhone: add "EJ Beta" to the Home Screen from the beta URL in Safari, open it, ⚙ → Stages → paste the same edit key → Save (device name e.g. "iPhone beta"). (2) PC: same in the browser. (3) Create `PRICE_KEY` (§6 recipe G), add it as a repo secret, paste it in the beta's ⚙ → Pricing on each device. (4) Prices show after the next sync. (5) Trial the beta next to v1 (crew stays on v1) and send feedback.**
 
 ### 2026-09-26 — pending: remove 9001 Jessie & Warsaw (job cancelled)
 - **What:** Removed pending manual job #9001 ("Jessie Ave & Warsaw Ave", Crown) from `data/pending_manual.json` (now an empty list), then ran the sync so `data/jobs.json` drops it. It had no stage entry in the state repo. Backfilled `a538397` in the entry below.

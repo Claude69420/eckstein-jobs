@@ -27,12 +27,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Only needed for the encrypted prices file. The next step holds every sync secret, so the install is
+      # hash-locked: wheels only (no sdist build), exact versions, every file checked against the sha256 in
+      # .github/requirements-sync.txt (cryptography + its deps cffi, pycparser). If this install fails the sync
+      # still runs: sync_jobs.py warns "prices: skipped (cryptography package not installed)" and leaves
+      # prices.json alone.
+      - name: Install pinned cryptography (prices encryption)
+        continue-on-error: true
+        run: python -m pip install --disable-pip-version-check --no-input --require-hashes --only-binary=:all: --no-deps -r .github/requirements-sync.txt
+
       - name: Pull jobs + geocode
         env:
           JOBBER_CLIENT_ID: ${{ secrets.JOBBER_CLIENT_ID }}
           JOBBER_CLIENT_SECRET: ${{ secrets.JOBBER_CLIENT_SECRET }}
           JOBBER_REFRESH_TOKEN: ${{ secrets.JOBBER_REFRESH_TOKEN }}
           TOMTOM_KEY: ${{ secrets.TOMTOM_KEY }}
+          PRICE_KEY: ${{ secrets.PRICE_KEY }}
           ROTATED_TOKEN_FILE: ${{ runner.temp }}/rotated_refresh_token
         run: python sync_jobs.py
 

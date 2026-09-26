@@ -1,0 +1,43 @@
+{
+ "about": "Two fake Jobber ListJobs pages for tests/test_sync.py. Made-up jobs, streets and amounts (TEST DATA ONLY).",
+ "pages": [
+  {
+   "data": {"jobs": {
+    "nodes": [
+     {"id": "TEST-ID-201", "jobNumber": 201, "title": "Sidewalk repair M12345", "jobStatus": "action_required",
+      "total": 43210.99, "uninvoicedTotal": 43210.99,
+      "client": {"id": "C1", "name": "Test Person", "companyName": "Crown Pipeline Ltd."},
+      "property": {"address": {"street1": "100 Test Ave", "city": "Winnipeg"}},
+      "lineItems": {"nodes": [{"name": "Concrete sidewalk", "description": "Replace 3 flags"},
+                              {"name": "Asphalt patch", "description": null}],
+                    "pageInfo": {"hasNextPage": false}},
+      "createdAt": "2026-09-01T00:00:00Z", "updatedAt": "2026-09-02T00:00:00Z"},
+     {"id": "TEST-ID-202", "jobNumber": 202, "title": "Curb and gutter", "jobStatus": "unscheduled",
+      "total": 31337.5, "uninvoicedTotal": null,
+      "client": {"id": "C2", "name": "Test Person 2", "companyName": "Harris Holdings Ltd."},
+      "property": {"address": {"street1": "200 Test St (rear)", "city": "Winnipeg"}},
+      "lineItems": {"nodes": [{"name": "Paving stone reset", "description": ""}],
+                    "pageInfo": {"hasNextPage": false}},
+      "createdAt": "2026-09-01T00:00:00Z", "updatedAt": "2026-09-02T00:00:00Z"}
+    ],
+    "pageInfo": {"hasNextPage": true, "endCursor": "CURSOR-1"}}},
+   "extensions": {"cost": {"requestedQueryCost": 1300, "actualQueryCost": 120,
+                           "throttleStatus": {"maximumAvailable": 10000, "currentlyAvailable": 9880, "restoreRate": 500}}}
+  },
+  {
+   "data": {"jobs": {
+    "nodes": [
+     {"id": "TEST-ID-203", "jobNumber": 203, "title": "Driveway apron", "jobStatus": "upcoming",
+      "total": null, "uninvoicedTotal": null,
+      "client": {"id": "C3", "name": "Test Person 3", "companyName": null},
+      "property": {"address": {"street1": "300 Test Blvd", "city": "Winnipeg"}},
+      "lineItems": {"nodes": [{"name": "Asphalt paving", "description": "Hot mix, 2 lifts"}],
+                    "pageInfo": {"hasNextPage": false}},
+      "createdAt": "2026-09-01T00:00:00Z", "updatedAt": "2026-09-02T00:00:00Z"}
+    ],
+    "pageInfo": {"hasNextPage": false, "endCursor": "CURSOR-2"}}},
+   "extensions": {"cost": {"requestedQueryCost": 1300, "actualQueryCost": 60,
+                           "throttleStatus": {"maximumAvailable": 10000, "currentlyAvailable": 9820, "restoreRate": 500}}}
+  }
+ ]
+}
