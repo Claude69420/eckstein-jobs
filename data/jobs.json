@@ -1,6 +1,7 @@
 [
  {
   "jobNumber": 699,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4ODQ=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "Bailley Ave and Glen Meadow St",
@@ -11,12 +12,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.827334,
   "lon": -97.117732,
   "ok": true
  },
  {
   "jobNumber": 698,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4NTA=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Pembina Hwy",
@@ -27,12 +33,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8591131,
   "lon": -97.1505409,
   "ok": true
  },
  {
   "jobNumber": 696,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzM1MTI=",
   "client": "Workers Compensation Board of Manitoba",
   "clientKey": "Other",
   "street": "333 Broadway",
@@ -43,12 +54,17 @@
   "status": "upcoming",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8875672,
   "lon": -97.1423939,
   "ok": true
  },
  {
   "jobNumber": 695,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzI0NjA=",
   "client": "James Friesen",
   "clientKey": "Other",
   "street": "68 Roslyn Crescent",
@@ -59,12 +75,17 @@
   "status": "upcoming",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.880494,
   "lon": -97.153376,
   "ok": true
  },
  {
   "jobNumber": 694,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNDk5NDU=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Middle Gate and Cornish Ave",
@@ -75,12 +96,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.878979,
   "lon": -97.158302,
   "ok": true
  },
  {
   "jobNumber": 693,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjMyNDA=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "137 Innovation Dr",
@@ -91,12 +117,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.803353,
   "lon": -97.14788,
   "ok": true
  },
  {
   "jobNumber": 692,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjMyMzI=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Donnelly St and Waller Ave",
@@ -107,12 +138,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.836939,
   "lon": -97.160302,
   "ok": true
  },
  {
   "jobNumber": 691,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjI1NzU=",
   "client": "MyTec Industry Ltd",
   "clientKey": "MyTec",
   "street": "Main St",
@@ -123,12 +159,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.107026,
   "lon": -97.557846,
   "ok": true
  },
  {
   "jobNumber": 690,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjIwODA=",
   "client": "MyTec Industry Ltd",
   "clientKey": "MyTec",
   "street": "Colony St",
@@ -139,12 +180,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.887959,
   "lon": -97.151152,
   "ok": true
  },
  {
   "jobNumber": 689,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc3OTA3NzQ=",
   "client": "Gary Harris Builders",
   "clientKey": "Other",
   "street": "115 Lamont Boulevard",
@@ -155,12 +201,17 @@
   "status": "upcoming",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.871879,
   "lon": -97.217771,
   "ok": true
  },
  {
   "jobNumber": 688,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc0NTE2ODk=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "Portage Ave",
@@ -171,12 +222,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8799513,
   "lon": -97.2821122,
   "ok": true
  },
  {
   "jobNumber": 687,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcxODMxOTg=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Pembina Hwy & Waller Ave",
@@ -187,12 +243,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8397616,
   "lon": -97.152046,
   "ok": true
  },
  {
   "jobNumber": 686,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcxODMxODI=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Pembina Hwy & Clarence Ave",
@@ -203,12 +264,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8365568,
   "lon": -97.1506482,
   "ok": true
  },
  {
   "jobNumber": 685,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcxMTIyNjE=",
   "client": "No Limits Underground Ltd.",
   "clientKey": "NoLimits",
   "street": "Beaumont Street",
@@ -219,12 +285,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
   "lat": 49.84388,
   "lon": -97.160585,
   "ok": true
  },
  {
   "jobNumber": 684,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNTY3NzQ=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "SW Corner Ellice Ave and Kennedy St",
@@ -235,12 +306,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8936833,
   "lon": -97.1501786,
   "ok": true
  },
  {
   "jobNumber": 683,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwNTA=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "235 Isabel Street",
@@ -251,12 +327,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.9048468,
   "lon": -97.1472692,
   "ok": true
  },
  {
   "jobNumber": 682,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwMzg=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "350 River Avenue",
@@ -267,12 +348,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
   "lat": 49.8804605,
   "lon": -97.1418485,
   "ok": true
  },
  {
   "jobNumber": 681,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwMTk=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "508 Regent Avenue West",
@@ -283,12 +369,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
   "lat": 49.8951262,
   "lon": -97.0192951,
   "ok": true
  },
  {
   "jobNumber": 680,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4NzQ=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "174 Hargrave Street",
@@ -299,12 +390,17 @@
   "status": "late",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": true
+  },
   "lat": 49.889565,
   "lon": -97.143084,
   "ok": true
  },
  {
   "jobNumber": 679,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4NDM=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "185 Provencher Boulevard",
@@ -315,12 +411,17 @@
   "status": "late",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
   "lat": 49.892487,
   "lon": -97.122171,
   "ok": true
  },
  {
   "jobNumber": 678,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4MTI=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "802 Saint Mary's Road",
@@ -331,12 +432,17 @@
   "status": "upcoming",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
   "lat": 49.850882,
   "lon": -97.112551,
   "ok": true
  },
  {
   "jobNumber": 676,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY5MTE5MDc=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "1493 Ross Ave W",
@@ -347,12 +453,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.916888,
   "lon": -97.188321,
   "ok": true
  },
  {
   "jobNumber": 675,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY3MzcyNjc=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "165 Saskatchewan Ave E",
@@ -363,12 +474,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.9725533,
   "lon": -98.2878493,
   "ok": true
  },
  {
   "jobNumber": 672,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY2MTc4NjM=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "505 Munroe Ave",
@@ -379,12 +495,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.9178123,
   "lon": -97.0971877,
   "ok": true
  },
  {
   "jobNumber": 665,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTU1NDA2MDE=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "905 Portage Ave",
@@ -395,12 +516,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.885679,
   "lon": -97.170449,
   "ok": true
  },
  {
   "jobNumber": 661,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ3OTI3MzQ=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Shady Shores Dr E",
@@ -411,12 +537,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8844264,
   "lon": -97.0321091,
   "ok": true
  },
  {
   "jobNumber": 660,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ3OTI3MTg=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Princess St & William Ave",
@@ -427,12 +558,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.899577,
   "lon": -97.141319,
   "ok": true
  },
  {
   "jobNumber": 657,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNzU=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "225 Allard Ave",
@@ -443,12 +579,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.879,
   "lon": -97.3093,
   "ok": true
  },
  {
   "jobNumber": 656,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNjU=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "374 Highcliff Bay",
@@ -459,12 +600,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8894,
   "lon": -97.3052,
   "ok": true
  },
  {
   "jobNumber": 655,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNTg=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "123 Princess St",
@@ -475,12 +621,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.898966,
   "lon": -97.14141,
   "ok": true
  },
  {
   "jobNumber": 653,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyMzQ=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "2050 Warde Ave",
@@ -491,12 +642,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8272472,
   "lon": -97.04022,
   "ok": true
  },
  {
   "jobNumber": 651,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQyODc0Mzk=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "133 Niakwa Rd",
@@ -507,12 +663,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8560713,
   "lon": -97.0983628,
   "ok": true
  },
  {
   "jobNumber": 648,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQwMTgwOTk=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "277 Provencher Blvd",
@@ -523,12 +684,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.893657,
   "lon": -97.117632,
   "ok": true
  },
  {
   "jobNumber": 642,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTM2NjU2NjQ=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Sterling Lyon Pkwy",
@@ -539,12 +705,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8426633,
   "lon": -97.2201234,
   "ok": true
  },
  {
   "jobNumber": 627,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTE3NTU1NDA=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "1877 Henderson Hwy",
@@ -555,12 +726,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.9547988,
   "lon": -97.0741852,
   "ok": true
  },
  {
   "jobNumber": 609,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYxNDE=",
   "client": "Rosemary Schallmann",
   "clientKey": "Other",
   "street": "30 Manring Cove",
@@ -571,12 +747,17 @@
   "status": "late",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.843054,
   "lon": -97.060679,
   "ok": true
  },
  {
   "jobNumber": 608,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYwNjI=",
   "client": "Ashley Landridge",
   "clientKey": "Other",
   "street": "815 Lemay Avenue",
@@ -587,12 +768,17 @@
   "status": "late",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.768919,
   "lon": -97.143536,
   "ok": true
  },
  {
   "jobNumber": 596,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA1MTYwMjQ=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "821 Nottingham Ave",
@@ -603,12 +789,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.908258,
   "lon": -97.083602,
   "ok": true
  },
  {
   "jobNumber": 571,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDkwODU5Nzg=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "15 Barnes St",
@@ -619,12 +810,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.97333,
   "lon": -97.08752,
   "ok": true
  },
  {
   "jobNumber": 554,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDY3NTMxMzI=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
   "street": "475 Broadway",
@@ -635,12 +831,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.885806,
   "lon": -97.1495237,
   "ok": true
  },
  {
   "jobNumber": 528,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDYxNTQzNTI=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "2049 Dugald Rd",
@@ -651,12 +852,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.886745,
   "lon": -97.028731,
   "ok": true
  },
  {
   "jobNumber": 517,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDUzNjA5MDI=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "1 St NW & 2 Ave NW",
@@ -667,12 +873,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.510295,
   "lon": -98.003022,
   "ok": true
  },
  {
   "jobNumber": 509,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDQyODY3ODY=",
   "client": "Leanne Docking",
   "clientKey": "Other",
   "street": "1421 Wellington Crescent",
@@ -683,12 +894,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.877383,
   "lon": -97.196044,
   "ok": true
  },
  {
   "jobNumber": 448,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkxNjE=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "Des Hivernants",
@@ -699,12 +915,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.827569,
   "lon": -97.043755,
   "ok": true
  },
  {
   "jobNumber": 444,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkwNzI=",
   "client": "Crown Pipeline Ltd.",
   "clientKey": "Crown",
   "street": "1924 St Mary's Rd",
@@ -715,12 +936,17 @@
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.814203,
   "lon": -97.112556,
   "ok": true
  },
  {
   "jobNumber": 412,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjY2NDY3OTA=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "560 Main Street",
@@ -731,12 +957,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.901011,
   "lon": -97.137721,
   "ok": true
  },
  {
   "jobNumber": 411,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjY2NDY3NTY=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "157 Garton Avenue",
@@ -747,12 +978,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.950531,
   "lon": -97.200188,
   "ok": true
  },
  {
   "jobNumber": 402,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjYxOTcwNzA=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "1600 Pembina Highway",
@@ -763,12 +999,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.831661,
   "lon": -97.150463,
   "ok": true
  },
  {
   "jobNumber": 401,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjYxOTY2OTA=",
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",
   "street": "480 Ellice Avenue",
@@ -779,12 +1020,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.8923743,
   "lon": -97.1531583,
   "ok": true
  },
  {
   "jobNumber": 365,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjQ3ODY3ODY=",
   "client": "Cheryl  Levene",
   "clientKey": "Other",
   "street": "98 Colchester Bay",
@@ -795,12 +1041,17 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
   "lat": 49.851588,
   "lon": -97.224916,
   "ok": true
  },
  {
   "jobNumber": 222,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMTU4MzQ1NjE=",
   "client": "JIM PATTISON TOYOTA ON REGENT",
   "clientKey": "Other",
   "street": "1486 Regent Ave W",
@@ -811,6 +1062,10 @@
   "status": "unscheduled",
   "unscheduled": true,
   "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
   "lat": 49.895042,
   "lon": -97.04865,
   "ok": true

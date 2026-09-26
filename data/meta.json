@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-09-26T19:12:56+00:00",
+ "updated_utc": "2026-09-26T22:18:49+00:00",
  "total": 51,
  "mapped": 51,
  "failed": [],
@@ -12,5 +12,12 @@
   "ACV": 7
  },
  "cache_entries": 312,
- "geocode_api_calls": 0
+ "geocode_api_calls": 0,
+ "closed": 0,
+ "stages_read": "ok",
+ "stages_beta_read": "not found (no entries yet)",
+ "stage_entries": {
+  "stages.json": 31,
+  "stages-beta.json": 0
+ }
 }
