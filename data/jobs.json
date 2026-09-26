@@ -384,22 +384,6 @@
   "ok": true
  },
  {
-  "jobNumber": 671,
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "McDermot Ave & Tecumseh St",
-  "streetRaw": "McDermot Ave (Tecumseh St to Pearl St)",
-  "city": "Winnipeg",
-  "title": "McDermot Ave - Tecumseh St to Pearl St - TM62857",
-  "permit": "TM62857",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "lat": 49.904603,
-  "lon": -97.163918,
-  "ok": true
- },
- {
   "jobNumber": 665,
   "client": "Harris Holdings Ltd.",
   "clientKey": "Harris",

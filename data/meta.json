@@ -1,10 +1,10 @@
 {
- "updated_utc": "2026-09-26T18:57:52+00:00",
- "total": 52,
- "mapped": 52,
+ "updated_utc": "2026-09-26T19:12:56+00:00",
+ "total": 51,
+ "mapped": 51,
  "failed": [],
  "by_client": {
-  "Harris": 14,
+  "Harris": 13,
   "Crown": 20,
   "Other": 8,
   "MyTec": 2,
