@@ -1384,7 +1384,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - Done: master doc + pointers (2026-09-25); Liquid Glass research workflow launched (repos, technique, WebKit support, Apple HIG -> design brief)
 - Half-done: design brief (research workflow `liquid-glass-research`); when it returns, save it as `docs/liquid-glass-brief.md` in this repo
 - Uncommitted files: none after the docs commit
-- Next step: (1) save the design brief; (2) create the empty state repo `Claude69420/eckstein-jobs-state` with `stages.json` = `{"version":1,"stages":{}}`; (3) build R-1 on branch `r1-stages`; (4) verify at 375x812 and desktop width, light + dark; (5) give Riley the key-creation steps (he creates the key himself)
+- Next step: (1) save the design brief; (2) ~~create the empty state repo~~ DONE 2026-09-25 (`Claude69420/eckstein-jobs-state`, local clone `C:/Users/Riley/eckstein-jobs-state`); (3) build R-1 on branch `r1-stages`; (4) verify at 375x812 and desktop width, light + dark; (5) give Riley the key-creation steps (he creates the key himself)
 - Blocked on: nothing for the build. Riley must create the fine-grained key before stage **writes** work on his devices
 
 **Riley's request, 2026-09-25 (verbatim):**
@@ -1565,6 +1565,14 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
 ```
 
 ---
+
+### 2026-09-25 — Created the stage state repo `Claude69420/eckstein-jobs-state` (R-1 step 2)
+- **What:** New public repo with `stages.json` = `{"version":1,"stages":{}}` and a README. Local clone at `C:/Users/Riley/eckstein-jobs-state` (repo-local git identity set). No Pages.
+- **Why:** R-1 decided design (§11): stages live in a separate repo so the app's edit key cannot modify the app, and stage writes never trigger Pages builds or collide with the sync bot.
+- **Files:** in the new repo only (`stages.json`, `README.md`). No change to this repo except this entry.
+- **Commit:** state repo initial commit (`Initial empty stage store`); this entry is logged in (this commit).
+- **Verified:** `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` returns the empty store; repo is public on branch `main`.
+- **Rollback:** `gh repo delete Claude69420/eckstein-jobs-state` (only if R-1 is abandoned; it would erase stage history).
 
 ### 2026-09-25 — Fix: `publish_routes.py` could not commit (no git identity in the clone)
 - **What:** Set a repo-local git identity (`git config user.name` / `user.email` in `C:/Users/Riley/eckstein-jobs/.git/config`; not versioned). Then published the two waiting routes (`Route_Setup_ShopToEmily.html`, `Route_Princess_Cuts.html`); the site now lists 65 routes.
