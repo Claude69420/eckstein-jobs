@@ -1473,11 +1473,17 @@ When Riley confirms on his iPhone, mark R-1 **done** here and in §0.
 
 ---
 
+### 2026-09-26 — pending: remove 9001 Jessie & Warsaw (job cancelled)
+- **What:** Removed pending manual job #9001 ("Jessie Ave & Warsaw Ave", Crown) from `data/pending_manual.json` (now an empty list), then ran the sync so `data/jobs.json` drops it. It had no stage entry in the state repo. Backfilled `a538397` in the entry below.
+- **Why:** Riley 2026-09-26: "Jessie & Warsaw job has been cancelled and can be removed. I dont see a way to get rid of it" (pending manual jobs live only in this file; the app has no remove button for them; §7.6).
+- **Files:** `data/pending_manual.json`, `APP_MASTER.md`. Made in a temporary worktree of `main` (`C:/Users/Riley/eckstein-jobs-hotfix`, branch `hotfix-9001`, removed afterwards) because R-2 build agents were editing the main clone on `r2`.
+- **Commit:** (this commit). **Verified:** sync run after push (see the next bot commit); `jobs.json` no longer contains 9001. **Rollback:** `git revert` this commit, then run the sync.
+
 ### 2026-09-26 — Stages: never write over a newer-format stages.json (forward-compat guard before R-2)
 - **What:** `js/stages.js` records the file's `version` on every read (`remoteVersion`) and refuses to save when it is greater than 1 (error `MSG.newer`, code `http`, no PUT; the UI rolls the move back with that message). Stages from a newer file still display. New test in `tests/stages.test.js` (now 39/39).
 - **Why:** R-2 will write `stages.json` v2 (job items). Without this guard, a phone or PC still running R-1 code (cached, or offline-queued moves replayed later) would rewrite the file with only `stage/at/by` and silently strip every item. Shipping the guard now, before anyone has an edit key, closes that window.
 - **Files:** `js/stages.js`, `tests/stages.test.js`, `APP_MASTER.md` (§5 store notes, §8 row).
-- **Commit:** (this commit). **Verified:** `node tests/stages.test.js` 39/39, `node tests/tsp.test.js` 15 passed. **Rollback:** `git revert` this commit (safe while the file is still v1).
+- **Commit:** `a538397`. **Verified:** `node tests/stages.test.js` 39/39, `node tests/tsp.test.js` 15 passed. **Rollback:** `git revert a538397` (safe while the file is still v1).
 
 ### 2026-09-26 — docs: backfill R-1 hash `005a671`, record the live check
 - **What:** Backfilled `005a671` in §0, §11 and the §12 R-1 entry; recorded the post-push live check in the §11 Work log.
