@@ -3,6 +3,7 @@
 > **Read this file first**, at the start of every session and again after any context compaction.
 > This repo is **public**, so this file contains **no secret values**. Secrets are named, and their storage locations are described, but their values never appear here.
 > Last full rewrite: **2026-09-25** (baseline HEAD `dd9cf03`, 53 jobs).
+> Last major update: **R-1 (2026-09-26)**: job stages, Liquid Glass reskin, multi-file frontend (`index.html`, `css/`, `js/`, `vendor/`).
 
 **Contents**
 0. [Read first](#0-read-first)
@@ -23,10 +24,13 @@
 
 ## 0. READ FIRST
 
-**What this is.** "Eckstein Jobs" is a phone-first PWA (installed to Riley's home screen). It has three tabs:
-- **Jobs:** a map and list of every active Jobber job.
+**What this is.** "Eckstein Jobs" is an iPhone Home Screen PWA **and** a first-class desktop web app on Riley's PC (Chrome/Edge, 1440×900), with an Apple-style "Liquid Glass" look. Views:
+- **Jobs:** a full-screen map plus a list of every active Jobber job, filtered by Client **or** by Stage, with a one-click shop route per stage.
 - **Routes:** route maps that Claude built on the desktop and published.
-- **Plan a Route:** an in-browser route optimizer that works without Claude.
+- **Plan** (sheet title "Plan a Route"): an in-browser route optimizer that works without Claude.
+- **Settings** (from the ⚙ control): theme, glass style, the stage edit key, data sync.
+
+**Job stages** (Ready to start → Excavation → Base → Prep → Passed inspection → Poured) are stored in a separate public repo, `Claude69420/eckstein-jobs-state` (§5 "Stage data", ADR-20). Devices with an edit key can move stages; others see them read-only.
 
 It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-jobs/>. A GitHub Actions cron (`sync.yml`) refreshes the data headlessly at **7:00 AM and 12:00 PM Winnipeg time (CDT)**. The cron calls the Jobber GraphQL API with a dedicated read-only Jobber app, and does not use Claude or the Max plan.
 
@@ -34,8 +38,8 @@ It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-j
 
 | # | Rule |
 |---|---|
-| 1 | **Never read, print, or relay secret values.** This covers the Jobber client ID, secret and refresh tokens; the TomTom key; the Windows keyring contents (`eckstein_jobber`); `%USERPROFILE%\.config\eckstein_jobber\credentials.json`; `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt`; and GitHub secrets. **Riley pastes secrets himself.** Name a secret and say where it lives; never show its value. |
-| 2 | **The repo is PUBLIC.** Never commit secret values, phone numbers, emails, or other personal contact details. **Never copy a desktop builder's `TOMTOM_KEY = "..."` line into this repo.** Private-individual client names already appear in `data/jobs.json` (the "Other" bucket), which is a known, accepted tradeoff (see §10). Don't add more personal data. |
+| 1 | **Never read, print, or relay secret values.** This covers the Jobber client ID, secret and refresh tokens; the TomTom key; the Windows keyring contents (`eckstein_jobber`); `%USERPROFILE%\.config\eckstein_jobber\credentials.json`; `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt`; GitHub secrets; and the **stage edit key** (a fine-grained PAT stored per device in `localStorage['ej_gh_token']` and in Riley's password manager). **Riley pastes secrets himself.** Name a secret and say where it lives; never show its value. In the Browser pane, never read `localStorage.ej_gh_token`, never call `EJ.store.getKeyForShare()`, and never type a key into Settings → Stages. |
+| 2 | **The repo is PUBLIC.** Never commit secret values, phone numbers, emails, or other personal contact details. **Never copy a desktop builder's `TOMTOM_KEY = "..."` line into this repo.** Private-individual client names already appear in `data/jobs.json` (the "Other" bucket), which is a known, accepted tradeoff (see §10). Don't add more personal data. The stage edit key never goes into either repo. The state repo is public too: `stages.json` (including each device label `by`) and its commit messages (`stage: #684 <street> -> base`) are visible to anyone, so device names must not contain personal info. |
 | 3 | **Log every app change in the [CHANGELOG](#12-changelog) of this file, in the same commit as the change.** Also keep §11 (ROADMAP / IN-FLIGHT) current while a feature is mid-build, so a resumed session knows exactly where work stopped. Bot data syncs are not logged individually. |
 | 4 | **After building any route map, run the publish step:** `python C:/Users/Riley/eckstein-jobs/publish_routes.py`. The file must be named `Route_*.html` in `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes`, or it never reaches the app. |
 | 5 | **Commands given to Riley must be PowerShell-safe.** His terminal is Windows PowerShell 5.1. No `&&`, no `/c/...` paths, and no `<` input redirection. Use forms like `git -C C:/Users/Riley/eckstein-jobs pull --rebase`, one command per line. **Claude's own Bash tool is Git Bash**: `/c/Users/...` paths work there, but `git -C C:/Users/Riley/eckstein-jobs …` works in **both** shells, so prefer that form in any command Riley might end up running. Put gh on the PATH first with `export PATH="$PATH:/c/Program Files/GitHub CLI"`. Bash-only lines (`export`, `grep`, `cat`, `sleep`, `/c/...`) must be labelled Claude-only. |
@@ -43,10 +47,10 @@ It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-j
 | 7 | **Manual refresh means "Run workflow"** (`gh workflow run sync.yml -R Claude69420/eckstein-jobs`). **Never use "Re-run jobs"** on an old run. |
 | 8 | **Never hand-edit `data/jobs.json` or `data/meta.json`.** The bot rebuilds both from scratch every run. Put per-job user state in a **separate file keyed by `jobNumber`**. Street overrides and pending jobs are merged by `sync_jobs.py`. **Stages are merged by the frontend and never written by the bot** (see §5 "Stage data"). |
 | 9 | **Keep the two Jobber apps separate.** The desktop MCP app is "Eckstein AI" (read/write, keyring, port 8080). The cloud sync app is "Eckstein Jobs Sync" (read-only, GitHub secrets, port 8081). Never put desktop credentials in GitHub, and never run `get_refresh_token.py` with desktop credentials. |
-| 10 | **Pull before you push.** The bot commits `data/` twice a day. **Commit first, then pull, then push:** `git -C C:/Users/Riley/eckstein-jobs add index.html APP_MASTER.md` (the files you changed) → `git -C C:/Users/Riley/eckstein-jobs commit -m "app: what changed"` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs push` (this exact path form works in both PowerShell and Git Bash). A plain `pull --rebase` **refuses to run with uncommitted edits** ("cannot pull with rebase: You have unstaged changes"), because this clone has no `rebase.autoStash` and `pull.rebase=false`; `git pull --rebase --autostash` (what `publish_routes.py` uses) is the alternative. If Claude's `git push` is **blocked by the auto-mode safety classifier** (it once flagged a push of job data to this public repo as "data exfiltration"), **stop and ask Riley to run the push himself** with `git -C C:/Users/Riley/eckstein-jobs push`. |
+| 10 | **Pull before you push.** The bot commits `data/` twice a day. **Commit first, then pull, then push:** `git -C C:/Users/Riley/eckstein-jobs add js/app.js APP_MASTER.md` (list the paths you actually changed) → `git -C C:/Users/Riley/eckstein-jobs commit -m "app: what changed"` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs push` (this exact path form works in both PowerShell and Git Bash). A plain `pull --rebase` **refuses to run with uncommitted edits** ("cannot pull with rebase: You have unstaged changes"), because this clone has no `rebase.autoStash` and `pull.rebase=false`; `git pull --rebase --autostash` (what `publish_routes.py` uses) is the alternative. If Claude's `git push` is **blocked by the auto-mode safety classifier** (it once flagged a push of job data to this public repo as "data exfiltration"), **stop and ask Riley to run the push himself** with `git -C C:/Users/Riley/eckstein-jobs push`. |
 | 11 | **Geocodes: read back and verify.** Check TomTom's `freeformAddress` and postal code. TomTom mis-snaps rural towns and duplicate street names to other provinces. Server-side sync has a Manitoba bounding-box guard; the desktop builders don't. |
-| 12 | **Adding a client key touches 4 places in 2 files:** `CLIENT_KEYS` in `sync_jobs.py`, and `COL` (L78), `LABEL` (L79) and `keys` (L100) in `index.html`. If you miss `keys`, that client's jobs **silently vanish** from the app. |
-| 13 | **Multi-step feature work never sits on local `main`.** Any push of `main` deploys to Riley's phone in about 1 minute, and `publish_routes.py` runs `git pull --rebase --autostash` + `git push` on the *current* branch.<br>(a) Do R-1 and other multi-session work on a branch: `git -C C:/Users/Riley/eckstein-jobs switch -c r1-stages`. Commit there, with the CHANGELOG entry in the same commit. Optionally run `git -C C:/Users/Riley/eckstein-jobs push -u origin r1-stages` as an off-site backup (Pages serves only `main`).<br>(b) **Before running `publish_routes.py` or making any hotfix**, commit or stash the branch work and run `git -C C:/Users/Riley/eckstein-jobs switch main`. On a branch with no upstream, the script dies at `git pull` ("There is no tracking information for the current branch"), with the route files written but not committed. On a branch pushed with `-u`, it silently commits and pushes the routes to that branch, and they never go live, because Pages serves only `main`.<br>(c) To ship: `git switch main`, then `git pull --rebase`, then `git merge --ff-only r1-stages` (rebase the branch onto `main` first if needed), then push and verify live.<br>(d) Record the branch name, and whether it is pushed or merged, in the §11 Work log. |
+| 12 | **Adding a client key touches 5 places in 2 files:** `CLIENT_KEYS` in `sync_jobs.py` (around L36–42), plus the "ONE place" constants block in `js/app.js` (L9–20): L13 `var CLIENT_KEYS` (insert before `'Other'`), L14 `var COL`, L15 `var LABEL`, L16 `var SHORT` (list-row badge). `css/tokens.css` has no client tokens (its header L5 says so). A `clientKey` missing from the app's `CLIENT_KEYS` no longer vanishes: `clientGroup()` (app.js L57) files it under "Other / Residential" (amber). §7.8. |
+| 13 | **Multi-step feature work never sits on local `main`.** Any push of `main` deploys to Riley's phone in about 1 minute, and `publish_routes.py` runs `git pull --rebase --autostash` + `git push` on the *current* branch.<br>(a) Do R-1 and other multi-session work on a branch: `git -C C:/Users/Riley/eckstein-jobs switch -c r1-stages`. Commit there, with the CHANGELOG entry in the same commit. Optionally run `git -C C:/Users/Riley/eckstein-jobs push -u origin r1-stages` as an off-site backup (Pages serves only `main`).<br>(b) **Before running `publish_routes.py` or making any hotfix**, commit or stash the branch work and run `git -C C:/Users/Riley/eckstein-jobs switch main`. On a branch with no upstream, the script dies at `git pull` ("There is no tracking information for the current branch"), with the route files written but not committed. On a branch pushed with `-u`, it silently commits and pushes the routes to that branch, and they never go live, because Pages serves only `main`.<br>(c) To ship R-1: ONE squash commit (build spec §1.7): `git -C C:/Users/Riley/eckstein-jobs switch main` → `git -C C:/Users/Riley/eckstein-jobs pull --rebase` → `git -C C:/Users/Riley/eckstein-jobs merge --squash r1-stages` → commit with the CHANGELOG entry → push → verify live. Rollback = `git revert` of that single commit (§7.15). For later multi-session work either a squash or `merge --ff-only` is fine; record which one was used in §11.<br>(d) Record the branch name, and whether it is pushed or merged, in the §11 Work log. |
 
 **Where the other context lives:**
 - `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/ROUTING_PLAYBOOK.md` is private and holds routing rules and the TomTom key. **Read it before any routing work.** Some parts are stale (see §10).
@@ -54,31 +58,34 @@ It is a static site on GitHub Pages at <https://claude69420.github.io/eckstein-j
   - `project_route_mapping.md` (routing workflow);
   - `project_eckstein_jobs_app.md` (this app; indexed in that folder's `MEMORY.md`).
 - **Pointers to this file** (all in place as of 2026-09-25):
-  - `C:/Users/Riley/eckstein-jobs/CLAUDE.md` (in the repo, not yet committed) auto-loads when the Claude Code session's working directory is the repo.
+  - `C:/Users/Riley/eckstein-jobs/CLAUDE.md` (tracked in the repo) auto-loads when the Claude Code session's working directory is the repo.
   - `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/CLAUDE.md` (out of repo) auto-loads in Claude's usual working directory and routes app work here.
   - Memory `…/memory/project_eckstein_jobs_app.md` (out of repo, listed in `MEMORY.md`): "Read APP_MASTER.md before any app work". The auto-memory entry **points here (done 2026-09-25)**, so this file is found after compaction even from the Claude Code folder.
   - `ROUTING_PLAYBOOK.md`, section "Eckstein Jobs phone app", first bullet ("Master doc").
 - The out-of-repo stale pointers found during the 2026-09-25 doc review (folder `CLAUDE.md` routing table, `ROUTING_PLAYBOOK.md` "Leaflet + OSM" heading and local-run wording) were **fixed on 2026-09-25**.
+- **Out-of-repo pointers updated for R-1 on 2026-09-26** (not versioned here): memory `project_eckstein_jobs_app.md` now says R-1 shipped as one squash commit and R-2 is next (`docs/r2-plan.md`); `ROUTING_PLAYBOOK.md` "Eckstein Jobs phone app" section (L88–90) now lists the views Jobs (Client or Stage filter, stage slider, stage route) / Routes / Plan / Settings and the state repo.
 
-### Current state and in-flight work (as of 2026-09-25, after the 17:05 UTC sync)
+### Current state and in-flight work (as of 2026-09-26, after the 12:04 UTC sync)
 
 The app is **live and healthy**:
 - **53 jobs, 53 mapped, 0 failed**: 52 active in Jobber plus 1 pending manual job, 9001.
 - Geocode cache: 312 entries.
-- 63 published routes.
-- When this was written, local `main` was level with `origin/main` at `dd9cf03`. **Every number in this box is a snapshot** and goes stale twice a day. After `git pull --rebase`, re-read `data/meta.json` before quoting counts to Riley.
+- 65 published routes (the 2 waiting desktop routes were published 2026-09-25 in `bce1803`).
+- When this was written, local `main` was level with `origin/main` at `d1e9dfb` (bot sync 2026-09-26 12:04 UTC). **Every number in this box is a snapshot** and goes stale twice a day. After `git pull --rebase`, re-read `data/meta.json` before quoting counts to Riley.
 - Every scheduled sync since the 2026-09-17 token fix has been green. The one failure since then was a "Re-run jobs" push rejection on 09-24, now fixed by `8b2e72f`.
-- The two previously unpublished desktop routes (`Route_Setup_ShopToEmily.html`, `Route_Princess_Cuts.html`) were published 2026-09-25 right after the docs commit.
 - **Open security item:** `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt` still exists (32 bytes, written 2026-09-15 22:05 CDT, never deleted) and likely holds the live sync-app refresh token in plaintext. Ask Riley to run (PowerShell): `Remove-Item "$env:USERPROFILE\.config\eckstein_jobs_sync\refresh_token.txt"`. Claude never reads it. Remove this bullet (and the matching §10 item) once Riley confirms.
 
-**In flight:** Riley's 2026-09-25 request for:
-- **Job stage tracking**: Ready to start → Excavation → Base → Prep → Passed inspection → Poured.
-- **Filtering** by client **or** by stage.
-- **One-click shop-start routing** for every job in a stage.
-- A **stage slider** on map dots and sidebar rows.
-- An **Apple-style "Liquid Glass" reskin**.
+**R-1 (job stages, Client|Stage filter, one-click stage route, stage slider, Liquid Glass reskin): shipping 2026-09-26** as ONE squash commit of branch `r1-stages` (local WIP commits `be33936` build + `7b5449d` review fixes) onto `main`. Riley decided on 2026-09-26 (R-2 Q7) to ship now. Built, tested (Node 15/15 + 38/38), browser-accepted and reviewed; see the §12 entry and the §11 Work log. Squash hash: see the §12 R-1 entry (written "(this commit)" until backfilled).
 
-Status: **Design in progress (2026-09-25).** Riley answered the clarifying questions (recorded in §11 "Answers from Riley"). Storage is **decided**: a dedicated public repo `Claude69420/eckstein-jobs-state` written from the app with a fine-grained key scoped to that repo only, plus a "setup link" to share edit access. **PC (Chrome/Edge on Windows) is a first-class target alongside iPhone**, and both must get the Liquid Glass look. Liquid Glass research (repos, technique, iOS Safari support, Apple HIG) is running; the build follows on branch `r1-stages`. See the §11 Work log for the exact next step.
+**Open Riley steps** (`docs/r1-build-spec.md` §3; Claude guides, never handles the key):
+1. Create the fine-grained stage edit key (§6 recipe F).
+2. **Delete and re-add the Home Screen icon** (status bar, theme colour and icon changed). Note any saved planner routes first: they live only in that app's storage.
+3. Paste the key on the iPhone (inside the installed app) and on the PC: Settings → Stages → paste → Save.
+4. Share edit access with crew: Settings → Stages → Share edit access.
+5. Delete `refresh_token.txt` (security item above).
+6. Confirm the new look on his iPhone PWA (the one R-1 acceptance item Claude cannot test).
+
+**Next feature: R-2** (Setup stage, before/after-work items, route editing, pricing): **planned**, answers recorded 2026-09-26, plan in `docs/r2-plan.md`. Build starts after R-1 ships (§11 "R-2").
 
 ### Resuming after compaction or in a new session (do this before anything else)
 1. Read §0 and the §11 **Work log**.
@@ -94,7 +101,7 @@ Status: **Design in progress (2026-09-25).** Riley answered the clarifying quest
 3. Compare what git shows with the Work log's *Uncommitted* and *Half-done* lines. If they disagree, trust git, describe the difference to Riley, and never discard changes without his OK.
 4. Compare the newest CHANGELOG entry with `git -C C:/Users/Riley/eckstein-jobs log -5 --oneline`. A missing entry means the previous session stopped before logging, so add it.
 5. Run `preview_list`. If the preview is down, `preview_start` with name `eckstein-jobs`.
-6. Check §11 *Answers from Riley*. Open questions stay blocking (see §11 "If the answers are not recorded here").
+6. Check the *Answers from Riley* of the §11 block you are working on. An unanswered question that changes storage, accounts, keys or repo visibility stays blocking: ask Riley.
 7. Continue from *Next step*. Update the Work log after every meaningful step, not only at the end.
 
 ---
@@ -117,8 +124,9 @@ Status: **Design in progress (2026-09-25).** Riley answered the clarifying quest
 - **Crew roles** that appear in route names: cuts & cleanup, setup, excavation, base, prep, asphalt, steel, measurements. David's measurements route is one example.
 - **Users:**
   - **Riley** uses the app on his phone in the field. The PWA is pinned to his home screen. On 2026-09-25 he said it has been "very helpful this week".
-  - He triggers manual syncs from the header's **Sync** button, which needs a GitHub login with write access (the `Claude69420` account).
-  - The site is public, but nobody else is a known regular user yet. Sharing with crew is part of the stage-tracking discussion.
+  - Since R-1 the PC (Chrome/Edge) is a first-class device too (Riley, 2026-09-25).
+  - He triggers manual syncs from the **Sync** link beside the status line in the sheet header (`.sheet-sub`, index.html L105; on iPhone visible only while the sheet is open, on the PC panel always), or Settings → Data → "Sync from Jobber now" (L189). Both open the Actions page, which needs a GitHub login with write access (the `Claude69420` account).
+  - The site is public, but nobody else is a known regular user yet. Crew get stage edit access through Settings → Stages → "Share edit access" (§6 recipe F).
 - **Where Claude works:** Claude Code on Riley's Windows laptop (a Surface Laptop Studio). The working directory is `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code`. The app repo lives **outside OneDrive** at `C:/Users/Riley/eckstein-jobs`.
 
 ---
@@ -132,7 +140,7 @@ Status: **Design in progress (2026-09-25).** Riley answered the clarifying quest
 | Local clone | `C:/Users/Riley/eckstein-jobs` (outside OneDrive) |
 | GitHub account | `Claude69420`. It was created by Riley for this app. The gh CLI is logged in as this account through a device login. |
 | gh CLI | `C:/Program Files/GitHub CLI/gh.exe`. In Git Bash, run `export PATH="$PATH:/c/Program Files/GitHub CLI"` first. |
-| Actions page | <https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml> (the app's **Sync** button links here) |
+| Actions page | <https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml> (the app's **Sync** links point here) |
 | Secrets page | <https://github.com/Claude69420/eckstein-jobs/settings/secrets/actions> |
 | Pages settings | <https://github.com/Claude69420/eckstein-jobs/settings/pages> (legacy build, source `main` at `/`, HTTPS enforced, no custom domain) |
 | Jobber app: cloud sync | **"Eckstein Jobs Sync"**: Clients read and Jobs read only, refresh-token rotation **OFF**. Callback registered as `https://claude69420.github.io/eckstein-jobs/callback`; `get_refresh_token.py` actually uses `http://localhost:8081/callback`. |
@@ -141,19 +149,38 @@ Status: **Design in progress (2026-09-25).** Riley answered the clarifying quest
 | Schedule | Cron `0 12 * * *` and `0 17 * * *` UTC. That is 7:00 AM and 12:00 PM CDT, or **6:00 AM and 11:00 AM CST** from 2026-11-01 to 2027-03-14. Runs start about 5 minutes late and data is live about 6 minutes after the cron time. |
 | Jobber API | GraphQL `https://api.getjobber.com/api/graphql`, header `X-JOBBER-GRAPHQL-VERSION: 2026-03-10`. OAuth token endpoint `https://api.getjobber.com/api/oauth/token`. |
 | Geocoders | Server: TomTom Search (cache misses only). Browser planner: Esri ArcGIS World Geocoder (no key). |
-| Map tiles | Esri `Canvas/World_Light_Gray_Base` plus `World_Light_Gray_Reference` |
+| Map tiles | Esri Canvas, keyless: light `World_Light_Gray_Base` + `World_Light_Gray_Reference`, dark `World_Dark_Gray_Base` + `World_Dark_Gray_Reference`; `maxNativeZoom 16`, `maxZoom 19`, **no CSS filter**. Reference (label) tiles sit in a custom pane `labels` (z 450: above route lines at 400, below markers at 600). |
+| Leaflet | 1.9.4 from unpkg with SRI (`crossorigin=""`): CSS `sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=`, JS `sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=`. Cached cache-first by `sw.js`. |
+| State repo | `Claude69420/eckstein-jobs-state` (**PUBLIC**, no Pages, branch `main`, file `stages.json`). Local clone `C:/Users/Riley/eckstein-jobs-state`: **pull before any hand edit** (§7.14). |
+| Stage API | With a key: `https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`. Without: `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (CDN `Cache-Control: max-age=300`). |
+| Stage edit key | Fine-grained PAT on `Claude69420`, "Only select repositories → eckstein-jobs-state", Contents: Read and write, expiry ≤ 1 year. Stored per device in `localStorage['ej_gh_token']` and in Riley's password manager. The value never appears in docs (§6). |
+| Tests | `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 tests) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (38). Node v24, no npm, no dependencies. The same lines work in PowerShell. |
 | Desktop route output | `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes` |
 | Desktop builders and playbook | `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/` (`_route_*.py`, `_map_*.py`, `ROUTING_PLAYBOOK.md`) |
-| Local preview | The `.claude/launch.json` config `eckstein-jobs` in the Claude Code folder runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`, served at <http://localhost:8765/> |
+| Local preview | The `.claude/launch.json` config `eckstein-jobs` in the Claude Code folder runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`, served at <http://localhost:8765/>. On localhost / 127.0.0.1 / [::1] **with no key**, stages run in **local mode** (`localStorage['ej_stages']`, this machine only, never shared). |
 | Python for local sync | `C:/Users/Riley/OneDrive/Documents/Agents/.venv/Scripts/python.exe` (has `keyring` and `requests`) |
 
-**Key files in the repo:**
+**Key files in the repo** (sizes are the committed LF sizes, as served; a Windows checkout with `core.autocrlf=true` can show CRLF copies a little larger):
 
 | File | Role |
 |---|---|
-| `index.html` | The entire frontend: 185 lines, inline CSS and JS, Leaflet 1.9.4 from unpkg |
-| `sw.js` | Service worker: network-first, cache `ej-v1` |
-| `manifest.json`, `icons/icon-192.png`, `icons/icon-512.png` | PWA install metadata |
+| `index.html` | Markup, inline boot script (L18–46: theme/glass before first paint), stylesheet and script tags (load order §4.3a). 282 lines, 21.1 KB |
+| `css/tokens.css` | Design tokens: light, `[data-theme="dark"]`, Tinted overrides, stage colours `--stage-1..6`. 159 lines, 7.3 KB |
+| `css/glass.css` | Glass material; MIT notice for sohumsuthar/liquid-glass in its header (L1–31), file rules L33–42. 171 lines, 8.7 KB |
+| `css/components.css` | Geometry and content styles, desktop ≥900 px block, reduced motion. 444 lines, 34.4 KB |
+| `js/tsp.js` | Global `TSP`: optimizer, leg estimates, Google Maps parts; also a Node module. 375 lines, 15.1 KB |
+| `js/stages.js` | Global `Stages`: `STAGES` + the stage store; also a Node module. 776 lines, 39.1 KB |
+| `js/ui.js` | Global `UI`: shell, sheets, toast, `StageSlider`, refraction gate. 485 lines, 27.5 KB |
+| `js/app.js` | App logic (one IIFE); the single home of `CLIENT_KEYS`/`COL`/`LABEL`/`SHORT`/`SHOP`. 1,168 lines, 75.8 KB |
+| `vendor/hyalite.js`, `vendor/hyalite.LICENSE` | Third-party desktop refraction, byte-for-byte, **never edit** (51,559 B; LICENSE 1,070 B). §9 "Third-party code" |
+| `sw.js` | Service worker, cache `ej-v2`. 128 lines, 5.6 KB |
+| `manifest.json` | PWA install metadata (638 B) |
+| `icons/icon-180.png` · `icon-192.png` · `icon-512.png` · `icon-maskable-512.png` | apple-touch-icon · favicon + manifest `any` · manifest `any` · manifest `maskable` (17.4 / 19.4 / 100.6 / 95.8 KB; all opaque RGB) |
+| `tests/tsp.test.js`, `tests/stages.test.js` | Node tests, no npm (stages test mocks `fetch`). 471 and 947 lines |
+| `docs/liquid-glass-brief.md` | R-1 design brief (137 KB) |
+| `docs/r1-build-spec.md` | R-1 build spec; **overrides the brief** (6.8 KB) |
+| `docs/r2-plan.md` | R-2 plan and build spec (6.8 KB), §11 "R-2" |
+| `.gitattributes` | `vendor/* -text` (never convert line endings, so the hyalite hash stays stable) |
 | `sync_jobs.py` | Jobber to `data/*.json` sync (stdlib only, 222 lines) |
 | `.github/workflows/sync.yml` | Cron and manual workflow ("Sync jobs from Jobber") |
 | `get_refresh_token.py` | One-time OAuth consent helper for the sync app (run by Riley) |
@@ -185,10 +212,14 @@ flowchart LR
     GC["data/geocode_cache.json"]
     OUT["data/jobs.json and data/meta.json"]
     RT["routes/Route_*.html and routes/index.json"]
-    FE["index.html, sw.js, manifest.json, icons"]
+    FE["index.html, css/*, js/*, vendor/hyalite.js, sw.js, manifest.json, icons"]
   end
+  STATE["Repo Claude69420/eckstein-jobs-state - PUBLIC - stages.json"]
+  GHAPI["api.github.com contents API"]
+  RAW["raw.githubusercontent.com CDN max-age 300"]
+  UNPKG["unpkg Leaflet 1.9.4 SRI"]
   PAGES["GitHub Pages - claude69420.github.io/eckstein-jobs"]
-  PHONE["Riley's phone - PWA"]
+  PHONE["Riley's iPhone PWA + PC Chrome/Edge"]
   ESRI["Esri tiles and ArcGIS geocoder - keyless, browser side"]
   subgraph DESK["Riley's Windows laptop - Claude Code"]
     BLD["_route_*.py builders - desktop geocode cache and TomTom"]
@@ -208,7 +239,12 @@ flowchart LR
   FE --> PAGES
   PAGES -- "fetch with ?t= cache bust" --> PHONE
   PHONE --> ESRI
-  PHONE -. "Sync button opens Actions page, Run workflow" .-> GHA
+  PHONE --> UNPKG
+  PHONE -- "edit key: GET every 60 s, PUT batched 3 s" --> GHAPI
+  GHAPI --> STATE
+  PHONE -- "no key: read-only GET ?t=, every 300 s" --> RAW
+  RAW --> STATE
+  PHONE -. "Sync link (sheet header or Settings) opens Actions page, Run workflow" .-> GHA
   BLD --> RH
   RH --> PUB
   PUB -- "copy, responsive patch, index.json, pull, commit, push" --> RT
@@ -225,13 +261,14 @@ flowchart LR
    - writes `data/geocode_cache.json`, `data/jobs.json` and `data/meta.json`.
 2. **Commit.** The workflow commits `data/` as `eckstein-sync-bot` ("Sync jobs YYYY-MM-DD HH:MM UTC"), rebases onto `origin/main` with `-X theirs` (fresh data wins), and pushes with up to 4 tries.
 3. **Deploy.** The push to `main` triggers GitHub's "pages build and deployment", which takes about 31–106 s (typically 35–47 s). Files are served with `Cache-Control: max-age=600`.
-4. **App.** On load or on the ↻ button, `index.html` fetches `data/jobs.json`, `data/meta.json` and `routes/index.json` with `?t=<now>`. It renders the Jobs map and list and the Routes cards. The Plan tab geocodes typed addresses with Esri in the browser and runs an in-browser TSP optimizer.
+4. **App.** `js/app.js` `loadData()` (L618–656) fetches `data/jobs.json`, `data/meta.json` (optional) and `routes/index.json` with `?t=<now>` and `cache:'no-store'`, checking `r.ok`. In parallel it calls `store.load()` for the stages, then merges them (`mergeStages`, L598) and renders the Jobs map and list and the Routes cards. ↻ (`#rf`) re-runs `loadData()` in place (no page reload). The Plan view geocodes typed addresses with Esri in the browser and runs the optimizer in `js/tsp.js`.
 5. **Routes.** Claude builds route maps on the desktop with per-route Python builders into OneDrive `.../Jobs/Routes/Route_*.html`. Then `publish_routes.py`:
    - copies new or changed files into `routes/`;
    - injects a phone-responsive media query;
    - rebuilds `routes/index.json`;
    - runs `git pull --rebase --autostash`, commits and pushes.
 6. **Local fallback.** With no Jobber cloud env vars set, `sync_jobs.py` borrows the desktop MCP's keyring token ("Eckstein AI"). It writes only `data/`, and a human or Claude commits and pushes by hand.
+7. **Stages.** The frontend is authoritative. Devices with an edit key read and write `stages.json` in the state repo through the GitHub contents API (poll 60 s; writes batched 3 s into one commit); devices without a key read the raw CDN copy (poll 300 s). The sync bot never reads or writes the stage store, and stage writes never trigger this site's Pages builds (§5 "Stage data", ADR-20).
 
 ---
 
@@ -376,260 +413,88 @@ from agents.services.eckstein_jobber.auth import get_access_token as _local
 - All successful runs had `0 failed` geocodes.
 - There have been 0 "Jobber ROTATED" messages ever.
 
-### 4.3 Frontend: `index.html`, `sw.js`, `manifest.json`, `icons/`
+### 4.3 Frontend: `index.html`, `css/*`, `js/*`, `vendor/`, `sw.js`, `manifest.json`, `icons/`
 
-All line numbers refer to `index.html` as of `8b2e72f` (185 lines). None of these files contains a secret; the geocoder is keyless.
+Line numbers are as of the R-1 squash commit. None of these files contains a secret; the geocoder and tiles are keyless. The pre-R-1 single-file frontend (old CSS token table, hard-coded colours, 92 px header, popups, old TSP analysis, `showResult` map leak, `ej-v1`) is documented in git history at `48af459:APP_MASTER.md` §4.3 and `d1e9dfb:index.html`.
 
-**Head and libraries:**
-- Leaflet 1.9.4 from unpkg (`https://unpkg.com/leaflet@1.9.4/dist/leaflet.css` and `.../leaflet.js`, L11–12). There are **no SRI attributes** and no other dependencies.
-- Meta tags:
-  - `viewport` is `width=device-width,initial-scale=1,viewport-fit=cover`.
-  - `theme-color` is `#0f172a` (L4).
-  - `apple-mobile-web-app-capable=yes`.
-  - `apple-mobile-web-app-status-bar-style=black-translucent`.
-  - `apple-mobile-web-app-title="Eckstein Jobs"`.
-- Links: `manifest.json`. `apple-touch-icon` and `icon` both point to `icons/icon-192.png`; there is no 180 px Apple icon.
-- `<title>`: "Eckstein Jobs".
+**(a) Load order and degradation (`index.html`)**
+1. `<head>`: meta (`viewport … viewport-fit=cover`, `apple-mobile-web-app-capable`, `mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style` **`default`** (was `black-translucent`), `apple-mobile-web-app-title`, `theme-color`, `description`); `manifest.json`; `apple-touch-icon` `icons/icon-180.png` (`sizes="180x180"`) and `icon` `icons/icon-192.png`; Leaflet CSS with SRI; the inline boot script (L18–46); then `css/tokens.css`, `css/glass.css`, `css/components.css` (L47–49; **source order is precedence**).
+2. The boot script reads `ej_theme` (auto|light|dark) and `ej_glass` (liquid|tinted|solid) in try/catch; sets `html[data-theme]`, `[data-glass]`, `[data-glass-user]` and the `.is-standalone` class; sets `meta theme-color` to `#EFEFEF` (light) or `#474749` (dark); picks Tinted automatically under `prefers-reduced-transparency` (unless the user chose a glass); defines `window.getUiPrefs` / `setUiPrefs`; fires a `uiprefs` event on every change (app.js swaps the basemap, ui.js re-runs the refraction gate).
+3. End of `<body>` (L276–280): Leaflet JS with SRI, then `js/tsp.js`, `js/stages.js`, `js/ui.js`, `js/app.js`.
+4. `vendor/hyalite.js` is **not** in the HTML: `ui.js` injects it on `window` load only if the refraction gate passes (m).
+5. The service worker is registered at the end of `app.js` (L1162).
+6. Degradation: no Leaflet (`HAS_MAP` false) → status "map library failed to load — check the connection and reload", lists and stages still work; `stages.js` failed → `NULL_STORE` (read-only); `tsp.js` failed → toast "Route optimizer failed to load — reload the app".
+7. Debug hook `window.EJ` = `{jobs, mode, sel, store, map, reload, esc, stops, lastResult}`. `EJ.store.getKeyForShare()` returns the key: **never call it** (Rule 1).
 
-**DOM ids:**
+**(b) Layout**
+- **iPhone (<900 px):** `#jmap` is full-bleed (`position:fixed`, `100dvh`, z 0). `#ctl` is a glass capsule at the top right: locate, ↻ `#rf`, ⚙ Settings (zoom ± are desktop-only; the Leaflet zoom control is off). `#accessory` is the collapsed sheet; it holds `#filterbar` = `#mode` (Client|Stage segmented control), `#count`, the Route split button (`#routeSel` + chevron `#routeMore`, 44×44 hit) and `#chips`. `#tabs` is the tab bar (Jobs · Routes · Plan). A tab, or a tap/swipe up on the accessory, opens `#sheet` with detents: medium (52 % of the height), large (opaque, `.is-opaque`, plus `#scrim`) and closed. In the Jobs view `#filterbar` moves into the sheet head. Focusing a text field snaps the sheet to large before the keyboard opens. The toast wraps to 2 lines; while a sheet is large it moves to the bottom (`.toast.is-low`).
+- **Desktop (≥900 px, `components.css` L404):** `#sheet` becomes a 380 px left inset glass panel (12 px margins) with `.panel-views` icon buttons (Jobs, Routes, Plan, Settings); accessory, tab bar and scrim are hidden; `#detail` replaces the panel while open. Thin styled scrollbars inside the panel (L423–426, any mouse/trackpad device). Hover on a pin (fine pointer, after 120 ms) shows `#map-card` with the compact slider `#mcStage`; hovering another pin replaces it (even a pinned one); interacting with the card pins it; it closes on map click, on Esc, or 250 ms after the pointer leaves an unpinned card. "Details" opens `#detail`.
+- **Esc** closes, in order: the route menu, the card, the detail, the iPhone sheet.
+- **Z-order:** map 0 · map-card 30 · ctl 40 · accessory and tab bar 50 · scrim 55 · sheets 60 · route menu 65 · toast 70. `#jmap` is its own stacking context and contains Leaflet's 200–1000 z-indexes (fixes the old z-index 1000 clash). No `L.popup`, `bindPopup` or `bindTooltip` anywhere (`components.css` L401: Leaflet's inline opacity breaks the glass).
 
-| id | Element | Purpose |
-|---|---|---|
-| `top` | div | Sticky header (`z-index:1000`), top padding `env(safe-area-inset-top)`. Contains `.bar` (h1 plus controls). |
-| `upd` | div.upd | Status text: "loading…", then `"{mapped}/{total} mapped · updated {Mon D, h:mm}"`, or "failed to load data" / "refreshing…" |
-| `rf` | button.tb "↻" | Sets `#upd` to "refreshing…", then calls `location.reload()` |
-| (no id) | a.tb "Sync" | Opens `https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml` in a new tab (`target=_blank rel=noopener`). The user taps **Run workflow** there, which needs a GitHub login with write access. |
-| `tabs` | div | Buttons with `data-v="jobs"`, `"routes"`, `"plan"`, labelled Jobs / Routes / Plan a Route |
-| `v-jobs` | div.view.on | Jobs view. Holds `.split`, which contains `#jmap` and `.side`. |
-| `jmap` | div.mapbox | Jobs Leaflet map |
-| `chips` | div.chips | Client filter chips |
-| `q` | input | Search ("Search address, permit, job #…"); `oninput = renderJobs` |
-| `jlist` | div | Job list grouped by client |
-| `v-routes` | div.view | Routes view |
-| `rlist` | div.muted | Route cards |
-| `v-plan` | div.view (.pane) | Plan a Route view |
-| `stops` | ul.stops | Editable stop list |
-| `addr` | input | Address entry. Pressing Enter clicks `#addAddr`. |
-| `addAddr` | button.btn.sm | Geocode the address and add it as a stop |
-| `addShop` | button.btn.sm.alt | "+ Shop" |
-| `pickJob` | button.btn.sm.alt | "+ From jobs list". Toggles `#pickbox`. |
-| `clearStops` | button.btn.sm.alt | Empties the stops and clears `#pres` |
-| `pickbox` | div.picker | Job picker: hidden by default, max-height 220 px, scrolls |
-| `fxs` | checkbox (checked by default) | "First stop is fixed start" |
-| `fxe` | checkbox | "Last stop is fixed end" |
-| `rt` | checkbox | "Return to start" |
-| `opt` | button.btn.go | "Optimize route" |
-| `pres` | div | Result panel, rebuilt by `showResult` on every run |
-| `saveR` | button (dynamic, inside `#pres`) | Save the current result |
-| `pmap` | div.mapbox (dynamic, 44vh) | Planned-route map |
-| `plist` | div (dynamic) | Ordered result stops |
-| `savedlist` | div.muted | Saved-route cards ("none yet" when empty) |
+**(c) DOM ids**
+- Kept from before: `jmap chips q jlist rf upd tabs v-jobs v-routes v-plan rlist stops addr addAddr addShop pickJob clearStops pickbox fxs fxe rt opt pres saveR plist savedlist`.
+- Retired: `top` (old header), `pmap` (old planner map).
+- New: shell `ctl accessory filterbar mode count routeSel routeMore route-menu scrim sheet v-settings toast`; detail `detail dTitle dSub dTags dStage dLock dDir dAdd dCopy dInfo` (+ dynamic `dStageInfo`); map card `map-card mcTitle mcSub mcStage mcLock mcMore`; planner `fxeRow`; Settings `setTheme setGlass` (segmented), `stStatus`, `stKey` (masked password field), `stSave stMsg stShare stRemove stDevice setUpd`, headings `setAppH setStH setDataH setAboutH`; dynamic `srRt` (Return to shop) and `srOot` (Include out-of-town) inside a stage-route result.
 
-**Tabs (L87–89):**
-- A click moves `.on` to the clicked button and to `#v-{data-v}`. CSS: `.view{display:none}`, `.view.on{display:block}`.
-- 50 ms later it calls `invalidateSize()` on `jmap` (Jobs) or `pmap` (Plan).
-- There is no hash routing and the tab is not remembered. Every load opens on Jobs.
+**(d) Constants** (`js/app.js` L9–20, "the ONE place")
+- L13 `CLIENT_KEYS` (order of chips and groups), L14 `COL`, L15 `LABEL`, L16 `SHORT` (row badges), L17 `SHOP = {name:'Shop (1279 Loudoun Rd)', lat:49.8401, lon:-97.2546, shop:true}`, L18 `APP_URL`, L19 `ROUTE_CONFIRM_ABOVE = 25`.
+- Other colours are tokens in `css/tokens.css`: `--canvas` `#EFEFEF`/`#474749`, `--accent`, `--stage-1..6` (§5), `--uns-ring #b45309` and `--pend-ring #7c3aed` (same meaning as before), `--route` and `--route-casing`, glass tints.
 
-**CSS tokens (L14):**
+**(e) Jobs view**
+- **Filter model:** `MODE` is `client` or `stage` (`ej_mode`). `SEL.client` / `SEL.stage` are arrays of selected keys (`ej_vis_client`, `ej_vis_stage`); empty = All. Chips use "solo, then add": from All a tap selects only that chip, later taps add or remove, "All" resets. Client chips are drawn only for clients with jobs (or selected). Stage chips are always the 6 stages with digits 1–6; on iPhone in Stage mode they wrap onto 2 rows (`.chips--wrap`) with short names and no per-chip counts (counts in the aria-label, the route menu and the group headers); on the PC they show full names and counts. Chip counts ignore search. An active search shows as a “query” chip in the accessory; tapping it clears the search.
+- **Search `#q`** (placeholder "Search jobs, clients, permits"): street, permit, jobNumber, title, city, client, client label, stage label and short label; rAF-throttled.
+- **List:** grouped by the current mode; each group header shows a live count "(n)" and a **Route** button (routes every job in that group, plus search). Trailing pill: the stage in Client mode, the client in Stage mode. Tags: PENDING, UNSCHED, "not mapped".
+- **Pins `.jpin`:** 22 px circles with a 44 px hit area; colour from the client or the stage; the stage digit in Stage mode; `.is-uns` gets the `#b45309` ring, `.is-pend` a dashed `#7c3aed` outline, `.is-selected` scales 1.35. Markers are reused and re-iconed only when their signature changes.
+- **Map:** initial `setView([49.8951,-97.1384],11)`; first fit covers the shown Winnipeg jobs (`maxZoom 14`); `fitVisible` on chip changes (`maxZoom 15`); padding avoids the glass (`UI.mapPadding`). Light/dark basemaps swap on theme change once the new base has loaded (4 s safety net). No tile filter.
+- **Pin tap** opens `#detail` and **never changes the zoom**; it only pans when the pin is under the glass. **List-row tap** does the same, but zooms to 15 only if its pin is off-screen and zoom < 14 (`focusJob`, L447–460).
+- **Detail sheet:** stage slider `#dStage`; Directions (`google.com/maps/dir/?api=1&destination=lat,lon`, replaces the old popup "Navigate"); Add to Plan; Copy address ("street, city, MB"); info lines (title; address and client; "Stage set <time> by <device>").
 
-| Token | Value | Used? |
-|---|---|---|
-| `--crown` | `#2563eb` | no (JS `COL` is used instead) |
-| `--harris` | `#dc2626` | no |
-| `--acv` | `#16a34a` | no |
-| `--mytec` | `#7c3aed` | no |
-| `--other` | `#f59e0b` | no |
-| `--ink` | `#0f172a` | yes (header background) |
-| `--bg` | `#f4f5f7` | yes (body background) |
+**(f) Stage slider and moves**
+- `UI.StageSlider` (`ui.js` L334–417): 6 discrete stops; drag with a lens that magnifies the thumb; label buttons; Arrow/Home/End keys; `role="slider"`. On the PC, mouse hover over the track previews the stage under the pointer ("Click to move here"); nothing is saved until a click.
+- Moves are optimistic: `applyStage` (app.js L541) patches the pin, row, chip counts, group counts and Route count in place and **never re-filters**, so a moved job stays visible until the next render. Toast "Moved to X" with Undo for 5 s. A failed save rolls back with an error toast (overlapping moves roll back to the last saved stage).
+- Read-only devices get a locked slider and the note "Stages are read-only on this device." with a "Settings → Stages" button; it and every stage-error toast's "Settings" action call `UI.openSettings('stages')` (opens Settings scrolled to Stages).
 
-- There is no NoLimits CSS variable. JS `COL` has `NoLimits:'#0d9488'`.
+**(g) One-click shop route**
+- The Route split button: the main half `#routeSel` shows "Route N" when chips are selected, where N counts the **mapped Winnipeg jobs** in the selection plus search (out-of-town only if there are no Winnipeg jobs); with nothing selected it reads "Route" and opens the menu. The chevron `#routeMore` opens the glass popover `#route-menu`, listing all 6 stages with routable counts (any stage in 2 taps, whatever the mode or filter; search still applies). Each list group header also has "Route".
+- The route starts at SHOP (fixed start, labels `S` then 1..n) with an open end. Result switches: "Return to shop" (`#srRt`) and "Include out-of-town (n)" (`#srOot`). Out-of-town = `city` ≠ Winnipeg (case-insensitive); excluded by default and listed under the result. Unmapped jobs are listed in a note. A `confirm()` above 25 stops states how many Google Maps links the route needs. Title "<selection> from shop"; caption "N jobs + shop".
+- The result opens in the Plan view but lives in its own state (`#pres` / `lastResult`): **the Plan's own stops and switches are never touched.** "Edit stops" copies the route into the stop list (asks first if the Plan has stops; Undo restores).
 
-**Hard-coded colours** (a retheme must tokenise these):
+**(h) Planner, on the single map**
+- The result is drawn in `routeLayer` on `#jmap`; job pins are hidden while the Plan view shows a result (`window.onViewChange`). A Plan "Optimize route" writes the optimized order back to `stops`. Job stops keep `jobNumber`; typed stops keep the geocoder's `Match_addr` as `match`, shown under the stop.
+- Geocoder (app.js L733–741): regex `\b(mb|manitoba|winnipeg)\b`; `searchExtent=-98.6,49.0,-95.8,50.7` (Altona inside).
+- The picker is multi-select and respects the current filter and search (All / Add N). `#fxe` is disabled while "Return to start" is ticked.
+- Result block: total `~min · ~km`; caption "… · ~ straight-line ×1.39 at 40 km/h (70 km/h rural legs) · no live traffic"; a Google Maps button or "Part i/n" buttons; Save `#saveR`; `#plist` (row tap pans to the stop).
+- Route pins `.rpin` are 26 px rounded squares (so route "3" is not confused with stage digit 3); the shop is `.is-shop`, the last stop `.is-end`. The route line is two solid polylines: casing weight 8 and line weight 5.
+- Saved routes: `ej_routes`, cap 50, newest first; names ≤120 chars; stops cleaned to `{name, lat, lon, shop?, jobNumber?, match?}`; delete asks for confirmation; loading re-shows the route without re-optimizing.
 
-| Area | Colours |
-|---|---|
-| Text | Body `#111`; muted `#6b7280`; `.leg` `#9ca3af` |
-| Header | Tab bar `#1e293b`; tab text `#cbd5e1`; active tab white with a 3 px `#38bdf8` bottom border; `.tb` buttons `#334155` |
-| Borders | `#d0d4db`, `#e0e4eb` (rows), `#cbd5e1` (inputs), `#eee` (picker rows), `#999` (list-dot ring, a `box-shadow`); row `:active` `#eef2ff` |
-| Buttons | `.btn` `#0369a1`; `.btn.alt` `#475569`; `.btn.go` `#16a34a` (full width); `.ib` white with a `#cbd5e1` border |
-| Result panel | `.res .hd` background `#e0f2fe` with `#0369a1` bold text; link buttons `#0369a1` |
-| Status | Unscheduled `#b45309`; pending `#7c3aed`; unmapped tag `#6b7280` |
-| Route pins | Start `#16a34a`; end `#dc2626`; middle `#0369a1`; planner stop-number circles `#334155`; polyline `#0369a1` |
+**(i) Routes view**
+- Cards open `routes/<file>`. In the Home Screen app (`.is-standalone`) they open with `target=_blank`, a viewer with a Done button (fixes the old "no back button").
 
-**Other styling:**
-- Radii are mostly 3–8 px; exceptions are the planner's stop-number circles (`.stops li .n{…border-radius:12px…}`, L43) and the `50%` circles (markers and pins). Shadows appear on markers and pins, plus the list dots: `.dot` (L31) has `border:2px solid #fff;box-shadow:0 0 0 1px #999`. There is no dark mode.
-- Fonts: `-apple-system, Segoe UI, Roboto, Arial, sans-serif`. Permit badges use `Menlo, Consolas, monospace`.
-- One breakpoint, `min-width:900px`:
-  - `.split{display:flex;height:calc(100vh - 92px)}` (**the 92 px header height is hard-coded**, L24).
-  - `.mapbox{flex:1}`.
-  - `.side` is 440 px wide, scrolls, and has a left border.
-- Below 900 px: `.mapbox` is 52vh (min 280 px), the list sits under the map, and the page scrolls.
-- Markers:
-  - `.mk` is a 16 px circle with a 2 px white border.
-  - `.mk.uns` has a 2 px solid `#b45309` border.
-  - `.mk.pend` has a 2 px **dashed** `#7c3aed` border.
-  - `.pin` is a 28 px circle with white bold text.
+**(j) Settings `#v-settings`**
+- Appearance: Theme Auto/Light/Dark, Glass Liquid/Tinted/Solid.
+- Stages: status line per mode ("Shared on GitHub — edits on" / "Read-only — no edit key on this device" / "Saved on this device only (local preview)" / "Edit key rejected — stages are read-only", plus pending count, last sync, last error); the hint "Needs a fine-grained GitHub key with Contents: Read and write on eckstein-jobs-state."; paste-key field and Save (validates with an authenticated GET, then calls `navigator.storage.persist()`; the success message says the first move confirms write access); Share edit access (`navigator.share`, clipboard fallback; text = app link, key, iPhone/PC steps); Remove key; device name (`ej_device`, max 40 chars).
+- Data: status, "Sync from Jobber now" (Actions page), "Reload data".
+- About: "Eckstein Jobs · version R-1" plus third-party notices (§9 "Third-party code").
 
-**Constants (L78–80):**
-- `COL = {Crown:'#2563eb', Harris:'#dc2626', ACV:'#16a34a', MyTec:'#7c3aed', NoLimits:'#0d9488', Other:'#f59e0b'}`
-- `LABEL = {Crown:'Crown Pipeline', Harris:'Harris Holdings', ACV:'ACV Sewer & Water', MyTec:'MyTec', NoLimits:'No Limits Underground', Other:'Other / Residential'}`
-- `SHOP = {name:'Shop (1279 Loudoun Rd)', lat:49.8401, lon:-97.2546, shop:true}`
-- `bust()` returns `'?t=' + Date.now()`.
+**(k) Escaping:** every job, route and geocoder string reaches the DOM through `textContent` or `esc()`; no raw `innerHTML` of data.
 
-**Data loading (`loadAll`, L93–97):**
-1. Fetches `data/jobs.json?t=…` and `data/meta.json?t=…` in parallel.
-2. Sets `JOBS` and `#upd` (using `toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})`).
-3. Calls `renderJobs()`.
+**(l) Service worker `sw.js` (cache `ej-v2`)**
+- Install: `skipWaiting`; tolerant precache of `SHELL` (L16–30: `./`, `index.html`, the 3 CSS, the 4 JS, `manifest.json`, `icon-180`, `icon-192`, `vendor/hyalite.js`) and of the 2 unpkg Leaflet URLs (`CDN`, L32–35). A missing file never fails install.
+- Activate: deletes every cache that is not `ej-v2` (so `ej-v1` goes), then `clients.claim`.
+- Same-origin GET: **plain network-first** (no slow-network timer: it could mix an old cached page with new css/js after a deploy). A full 200, non-redirected response is stored under origin + path with no query; the offline fallback matches with `ignoreSearch`; the scope root and `index.html` are interchangeable for navigations.
+- Version-pinned unpkg URLs: cache-first (SRI is still enforced by the page).
+- `api.github.com` and `raw.githubusercontent.com` are never intercepted or cached (`NEVER`, L37); Esri tiles and the geocoder are not intercepted either.
+- **Rule:** if the Leaflet URL or version changes, update the index.html SRI hashes and the `sw.js` `CDN` list together, and bump `C`.
 
-Details:
-- Any error shows "failed to load data" and logs to `console.error`. `r.ok` is never checked, so a 404 fails at `.json()` and lands in the same catch.
-- `routes/index.json?t=…` is fetched separately and passed to `renderRoutes`. On failure, `#rlist` shows "no routes published yet".
-- Data reloads **only** on a full page reload (the ↻ button). There is no polling and no reload when the app comes back into view.
-- The UI uses only `updated_utc`, `mapped` and `total` from meta. It never displays the Jobber `status`.
+**(m) Glass and the refraction gate**
+- Material in `css/glass.css` (ADR-17). Liquid/Tinted/Solid via `html[data-glass]`.
+- Refraction (`ui.js` `refractGate`, L421–451) runs only when **all** hold: a Chromium brand in `navigator.userAgentData`, hover + fine pointer, width ≥900 px, not `prefers-contrast: more`, not `prefers-reduced-transparency`, Glass = Liquid. Then `vendor/hyalite.js` is loaded once; if `Hyalite.supported()`, it watches `.lens-panel` (blur 12) and `.lens-ctl` (blur 3) and `html` gets `lg-refract`. The gate re-runs on `uiprefs`, width, hover/pointer (`FINE.on`), contrast and transparency changes. Everywhere else the frosted CSS glass is the expected look.
 
-**Jobs view (`renderJobs`, L98–117):**
-- **Map:** `jmap` is created lazily with `L.map('jmap')` plus `baseTiles`. There is no initial `setView`. It fits to the markers **once** (custom flag `jmap._fitted`, 30 px padding).
-- **Full rebuild on every render:** all markers, chips and list rows are rebuilt on every search keystroke and every chip click.
-- **Chips:**
-  - `keys = ['Crown','Harris','ACV','MyTec','NoLimits','Other']` (L100) is fixed and sets the order of chips and groups.
-  - `vis[k]` defaults to `true`.
-  - A chip is drawn only if that client has more than 0 jobs in **all** of `JOBS`; the count ignores the search box.
-  - Chip background is `COL[k]`, and the text is `LABEL[k]` plus a `.ct` count. `.chip.off` has opacity .3, and a click toggles the client and re-renders.
-  - **A `clientKey` missing from `keys` gets `vis` = undefined, so its jobs silently disappear.**
-- **Search:** a lowercase substring test on `street + ' ' + permit + ' ' + jobNumber + ' ' + title + ' ' + city`. The client name, `status` and `streetRaw` are **not** searched.
-- **Markers:**
-  - Only jobs with `ok` get one.
-  - Class is `'mk' + (pending ? ' pend' : unscheduled ? ' uns' : '')`.
-  - `L.divIcon` with `iconSize [16,16]`, `iconAnchor [8,8]` and `className:''`. Background is `COL[clientKey]`.
-  - The job number is stored as `m._jn`, and markers are kept in the array `jmarkers`.
-- **Popup (L108), an HTML string built with `bindPopup(pop)`:**
-  - `<b>#{jobNumber} · {client}</b>`.
-  - `{street}`, plus `, <i>{city}</i>` when the city is not Winnipeg.
-  - `Permit: {permit}` if there is one.
-  - `{title}` in grey `#888`.
-  - "UNSCHEDULED" (`#b45309`) or "PENDING – not in Jobber yet" (`#7c3aed`) where they apply.
-  - A **Navigate** link to `https://www.google.com/maps/dir/?api=1&destination={lat},{lon}` (new tab).
-  - It opens on click only; there is no hover behaviour.
-- **List:**
-  - Per key: a `.grp` header with background `COL[k]` and text `"{LABEL} ({filtered count})"`.
-  - Each `.row` has a coloured `.dot`, `#jobNumber`, the street in bold (or "(no address)"), "– City" when not Winnipeg, the permit `.badge` in the client colour, and tags where they apply: UNSCHED `#b45309`, PENDING `#7c3aed`, UNMAPPED `#6b7280` (when `!ok`).
-  - If nothing matches, it shows "no jobs match".
-- **Row click (L115):** unmapped rows do nothing. Otherwise it calls `jmap.setView([lat,lon],16)`, finds the marker by `_jn`, opens its popup, and smooth-scrolls the window to the top.
-
-**Routes view (L120–121):**
-- One `a.card` per entry, with `href="routes/"+file` (**same window**, no target). Each card shows `<b>{title}</b>` and a `.d` line with `{date}`.
-- In iOS standalone mode a route page opens with **no back button**, so the user has to relaunch the app.
-
-**Plan a Route:**
-- **Stop model:** `stops = [{name, lat, lon, shop?}]`.
-  - A typed address becomes `{name: typedText, lat, lon}`. The geocoder's matched address is thrown away.
-  - The shop is added as `{...SHOP}`, a new copy each time, so it can be added twice.
-  - A job becomes `{name: street + (permit ? ' · '+permit : ''), lat, lon}`. **`jobNumber`, client and colour are not stored.**
-- **`renderStops` (L125–128):** each `li` shows the number 1..n, the name, and `lat.toFixed(4)`/`lon.toFixed(4)` in a `<small>`, with ▲ / ▼ / ✕ buttons. When there are no stops it shows a grey hint.
-- **Geocoder (L129–130):** ArcGIS `findAddressCandidates`, with no key:
-  ```
-  https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates
-   ?f=json&maxLocations=1&countryCode=CAN
-   &searchExtent=-98.6,49.2,-95.8,50.7        (xmin,ymin,xmax,ymax WGS84)
-   &outFields=Match_addr
-   &singleLine=<text + (/(mb|manitoba|winnipeg)/i.test(text) ? '' : ', Winnipeg, MB')>
-  ```
-  - It takes the first candidate as `{name, lat: location.y, lon: location.x, match}`, and throws "not found" when there is none.
-  - While a lookup runs the button shows "…". A failure shows `alert('Could not find: '+t)`.
-- **Jobs picker (L135–137):**
-  - It lists **every** mapped job in raw `JOBS` order, ignoring chips and search, with no grouping.
-  - Each row: coloured ●, `#jobNumber`, street, (city) when not Winnipeg, and the permit in grey.
-  - A click adds **one** stop and closes the picker. Duplicates are allowed.
-- **Optimize (`#opt`, L175):**
-  - It needs at least 2 stops, otherwise it shows "Add at least 2 stops".
-  - It runs `seq = optimize(stops, fxs, fxe, rt)` and then `showResult(seq, rt)`.
-  - The optimized order is **not written back** to `stops`.
-
-**TSP implementation (L140–154):**
-- `hav(a,b)`: great-circle km, R = 6371.
-- `plen(p, rt)`: the sum of `hav` over consecutive stops, plus the closing leg to `p[0]` when `rt`.
-- `perms(a, n)`: a recursive Heap's-algorithm generator (n iterations of recurse then swap, `j = n%2 ? 0 : i`). It mutates `a` and yields `a.slice()`. Verified to produce exactly n! distinct permutations for n = 1..8.
-- `nn(start, pool)`: greedy nearest neighbour. Ties go to the first element (strict `<`). It ignores any fixed end and returns `[start, ...pool ordered]`.
-- `localOpt(route, lo, hi, rt)`: repeats until a pass finds no improvement, accepting the first improvement and continuing (threshold `1e-9`). It recomputes the full `plen` for each candidate. Each pass runs:
-  - **2-opt:** i from lo to hi−1, k from i+1 to hi, reverse `best[i..k]`.
-  - **Or-opt:** chunk sizes 1, 2 and 3, i from `lo` while `i+seg-1 <= hi`. It removes the chunk and reinserts it at every j from `lo` to `hi-seg+1`, keeping its direction.
-- `optimize(st, fxs, fxe, rt)`:
-  1. If there are fewer than 3 stops, return a copy.
-  2. `first = fxs ? st[0] : null`.
-  3. `last = (fxe && !rt) ? st[st.length-1] : null`. **A fixed end is silently ignored when Return-to-start is on**, and the UI gives no sign of it.
-  4. `free` is every stop except first and last (by object identity), and `wrap(p)` returns `[first?] + p + [last?]`.
-  5. **Branch A (exact):** runs when `free.length <= 8 && (first || last || rt || free.length <= 7)`. It brute-forces all permutations. 8 free stops with a fixed start takes about 180 ms in Node.
-  6. **Branch B (L151): dead code**, because Branch A already covers `free.length <= 7`.
-  7. **Heuristic** (9 or more free stops, or exactly 8 with nothing fixed and no round trip):
-     - **Seed pass:** with a fixed start, nearest-neighbour runs once from `first`. Otherwise it runs from every free stop. Each result is wrapped and passed through `localOpt(lo = first ? 1 : 0, hi = len-1-(last ? 1 : 0))`, and the best is kept.
-     - **300 "random restarts"** (L154) using a biased shuffle `sort(()=>Math.random()-.5)`, then `nn`, then `localOpt`. **They are useless**: nearest-neighbour doesn't depend on pool order apart from ties (300 shuffles gave 1 distinct tour), and they are very slow. They run synchronously on the main thread with **no spinner**, so the UI freezes.
-
-  | Case | Seed pass only | Full `optimize` | Result |
-  |---|---|---|---|
-  | n=15, fixed start | 12 ms | ~2 s | identical |
-  | n=20, fixed start | 28 ms | 6–12 s | identical |
-  | n=25, fixed start | 116 ms | ~30 s | identical |
-  | n=40, fixed start | — | ~35 s | — |
-  | n=40, nothing fixed | — | ~68 s | — |
-
-  These are desktop Node timings; a phone is slower.
-
-  Other oddities:
-  - The or-opt `j` loop bound `rest.length-(hi+1-rest.length>0?0:0)` is a no-op; `j <= hi-seg+1` is the effective bound, and it is correct.
-  - Or-opt builds candidates from a stale `rest` after an improvement. That is harmless, because every candidate is still a valid permutation.
-  - The exact threshold is inconsistent: 8 free stops with nothing fixed goes to the heuristic.
-  - Round trips without a fixed start check all n rotations. That is wasteful but correct.
-  - With `rt` on, a shop added at the end is a free stop, so the route can visit the shop twice.
-
-**`showResult(seq, rt, name)` (L157–174):**
-- **Legs:** `km = hav×1.39` and `min = km/40×60`, rounded to 0.1 min and 0.01 km. When `rt`, it adds a return leg to `seq[0]`. Totals add the rounded values.
-- **Header:** `~{round(tm)} min · ~{tk.toFixed(1)} km · {n} stops[ · round trip]`, with the caption "~ haversine×1.39 @ 40 km/h · no live traffic".
-- **Google Maps links:**
-  - `gm(pts)` builds `https://www.google.com/maps/dir/` plus `lat,lon` segments joined with `/` (the path form).
-  - `pts = rt ? seq+[seq[0]] : seq`.
-  - The full link is **always** shown, even when it is over Google's waypoint limit.
-  - When `pts.length > 10` it adds Part 1 `pts[0..mid]` and Part 2 `pts[mid..]`, with `mid = floor(len/2)`, so the midpoint is shared. With only a 2-way split, each part stays at 10 points or fewer only up to 19 points.
-- **Labels:** `startShop = !!seq[0].shop`, and `lbl(i) = startShop ? (i===0 ? 'S' : String(i)) : String(i+1)`. This matches the numbering rule. A shop anywhere other than the start gets a number.
-- **Pins:**
-  - `i===0` is green `#16a34a`, the last stop (when not a round trip) is red `#dc2626`, and the rest are blue `#0369a1`.
-  - They are divIcons, 28×28, anchored at 14,14, with popup `<b>{lbl}</b> {name}`.
-- **Polyline:** straight lines, `#0369a1`, weight 3, opacity .75, `dashArray '8,6'`. The map fits with 30 px padding.
-- **Map leak:** every call creates a **new `L.map('pmap')` without `.remove()`ing the old one**, leaking one map per optimize.
-- **`#plist`:** one `.row` per stop with a pin number, and `+~{min} min · ~{km} km` after the first. A click calls `pmap.setView(…,15)`. With `rt`, it adds a red "Return to {seq[0].name}" row labelled `lbl(0)`.
-
-**Saved routes:**
-- `#saveR` runs `prompt('Name this route:', name || today)`, unshifts `{name, when: ISO, seq, rt}`, and writes `localStorage['ej_routes'] = JSON.stringify(all.slice(0,50))`.
-- `renderSaved` (L177–180): each card shows the name and `"{n} stops · {when.toLocaleString()}"`.
-  - A click copies `seq` into `stops` and calls `showResult(r.seq, r.rt, r.name)` **without re-optimizing**.
-  - A "delete" `.ib` button (with `stopPropagation`) removes the entry.
-- **Robustness bug:** `JSON.parse(localStorage…)` has no try/catch. Startup runs `renderStops(); renderSaved(); loadAll();` (L183), so corrupt or blocked storage means **`loadAll()` and the service worker registration never run, and the app stays blank**.
-
-**Map tiles (`baseTiles`, L82–84, used by both maps):**
-- **Base:** Esri `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `maxZoom 19`, `maxNativeZoom 16`, attribution "Tiles © Esri". The container gets the CSS filter **`brightness(0.9) contrast(1.2)`** (L83, in a try/catch).
-- **Labels:** `.../Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, same zoom options, no filter.
-- **Visual bug:** Leaflet's `.leaflet-top` and `.leaflet-bottom` share `z-index:1000` with the sticky `#top`, so on mobile the zoom controls can draw over the header while scrolling.
-
-**Service worker (`sw.js`, cache `ej-v1`):**
-- `install` calls `skipWaiting()` and `activate` calls `clients.claim()`. **Old caches are never cleaned.**
-- Fetch: GET only, **network-first**. A successful (`r.ok`) **same-origin** response is cloned into `ej-v1`. On a network failure it falls back to `caches.match(e.request)`. Cross-origin requests (unpkg Leaflet, Esri, ArcGIS, GitHub) are never cached.
-- Registered at L184 with `navigator.serviceWorker.register('sw.js')`, errors swallowed.
-- Oddities:
-  - Every load stores **new** entries for `jobs.json?t=…`, `meta.json?t=…` and `routes/index.json?t=…`, so the cache grows without limit.
-  - Offline, a fresh `?t=` never matches, so data never loads (the fix is `ignoreSearch:true`).
-  - Leaflet isn't cached, so offline `L` is undefined.
-  - **In practice, offline mode doesn't work.** The service worker mainly makes the app installable, and new deploys show up immediately online.
-
-**Manifest and icons:**
-- Manifest: `name` and `short_name` "Eckstein Jobs"; `description` "All open Eckstein Repair jobs, route maps, and a route planner."; `start_url` `./index.html`; `scope` `./`; `display` `standalone`; `orientation` `any`; `background_color` `#f4f5f7`; `theme_color` `#0f172a`.
-- Icons:
-  - `icons/icon-192.png` (192×192 RGB, purpose `any`).
-  - `icons/icon-512.png` (512×512 RGB, purpose `any`, and the same file again as `maskable`).
-  - The artwork is a white "EJ" on a blue (about `#0369a1`) rounded square, on a dark navy (about `#0f172a`) background, with no transparency.
-
-**Other frontend issues:**
-- **No HTML escaping anywhere.** Job fields, typed stop names and saved-route names go into `innerHTML` or popups raw. The risk is low, but a stray `<` or `&` breaks the markup.
-- **The geocoder regex `/(mb|manitoba|winnipeg)/i` has no word boundaries.** "Pembina Hwy", "Lombard Ave", "Kimberly Ave" and "Chambers St" all match `mb`, so ", Winnipeg, MB" is not appended to them. Out-of-town addresses without MB get ", Winnipeg, MB" wrongly.
-- **The geocoder `searchExtent` has a southern edge of 49.2°N.** Altona (49.107, −97.558) is outside it, while Carman and Portage la Prairie are inside. Typed Altona or other southern addresses fail or mis-match.
+**(n) Manifest and icons**
+- `manifest.json`: `name`/`short_name` "Eckstein Jobs"; `description` "All open Eckstein Repair jobs with stages, route maps, and a route planner."; `start_url` `./index.html`; `scope` `./`; `display` `standalone`; `background_color` and `theme_color` `#EFEFEF` (were `#f4f5f7` / `#0f172a`).
+- Icons: 192 `any`, 512 `any`, and a separate `icon-maskable-512.png` for `maskable`; the 180 px icon is referenced only by the `apple-touch-icon` link. Artwork: a white map pin with a route glyph on a blue-to-indigo gradient, on an isometric tile grid (replaces the white "EJ" on blue). All opaque RGB.
+- **iOS reads the status-bar style, theme colour and icon only at install time:** after R-1, Riley must **delete and re-add the Home Screen icon**.
 
 ### 4.4 Route publishing: `publish_routes.py`
 
@@ -644,7 +509,7 @@ Run it with `python C:/Users/Riley/eckstein-jobs/publish_routes.py`. It is stdli
    - `RESP = "@media(max-width:760px){#wrap{flex-direction:column}#map{flex:none;height:52vh}#side{width:100%!important;flex:1;min-height:0;border-left:0;border-top:1px solid #d0d4db}}"`
    - `make_responsive`: if `RESP` is already in the HTML, it leaves the file alone. Otherwise it runs `html.replace(ANCHOR, ANCHOR+RESP, 1)`.
    - **This is an exact string match that fails silently.** Any change to the anchor (a `;` before `}`, spaces, `height:100%`, reordered rules, renamed ids, or different minification) means the page publishes without the patch and shows a 450 px sidebar on phones. A slightly *different* embedded media query gets a second one appended, which is harmless.
-   - Today all 65 desktop `Route_*.html` files contain the anchor and all 63 repo copies contain RESP. 70 of the 86 `_route_*.py`/`_map_*.py` builders embed the exact RESP string themselves; 71 `_*.py` files contain ANCHOR (those 70 plus `_multiclient_map.py`).
+   - Today all 65 desktop `Route_*.html` files contain the anchor and all 65 repo copies contain RESP (re-checked 2026-09-26). 70 of the 86 `_route_*.py`/`_map_*.py` builders embed the exact RESP string themselves; 71 `_*.py` files contain ANCHOR (those 70 plus `_multiclient_map.py`).
    - **Any reskin of the builder template must keep that exact anchor, or `ANCHOR`/`RESP` must be updated to match.**
 3. **`routes/index.json`.**
    - It is rebuilt from the **repo's** `routes/Route_*.html`, not the desktop folder. There is no delete sync.
@@ -664,6 +529,7 @@ Run it with `python C:/Users/Riley/eckstein-jobs/publish_routes.py`. It is stdli
 - `git log -- routes/` shows only `5ffea76`. **No "Publish routes" commit has ever been made.**
 - `routes/index.json` has **63 entries**. The newest is `Route_David_Measurements.html` (Sep 15, 2026 06:39 AM) and the oldest is `Route_14Sites_Map.html` (May 03).
 - Two desktop routes are unpublished: `Route_Setup_ShopToEmily.html` (Sep 21, "Setup Route - Shop to Emily & McDermot") and `Route_Princess_Cuts.html` (Sep 24, "Route from Princess & William").
+- **Update 2026-09-25:** both were published in `bce1803` (the first "Publish routes" commit, after the git-identity fix); `routes/index.json` has 65 entries.
 
 ### 4.5 Desktop route builders (on Riley's laptop, not in the repo)
 
@@ -720,12 +586,12 @@ Run it with `python C:/Users/Riley/eckstein-jobs/publish_routes.py`. It is stdli
 
 ### 4.6 Geocoding: server (TomTom) vs browser (Esri) vs desktop
 
-| | Server sync (`sync_jobs.py`) | Browser planner (`index.html`) | Desktop builders |
+| | Server sync (`sync_jobs.py`) | Browser planner (`js/app.js` L733–741) | Desktop builders |
 |---|---|---|---|
 | Provider | TomTom Search `…/search/2/geocode/{quote(key)}.json?key=<TOMTOM_KEY>&limit=1&countrySet=CA` | Esri ArcGIS `findAddressCandidates`, no key | TomTom (hardcoded key) or hand-set coordinates |
 | Key location | GitHub secret `TOMTOM_KEY` | none (keeps the public repo keyless) | literal in 31 scripts plus the playbook |
 | Cache | `data/geocode_cache.json` (312 entries), key `"<street>, <city>, MB, Canada"` → `[lat, lon]` | none | `…/Jobs/Routes/geocode_cache.json` (296 entries) |
-| Guard | `MB_BOX = (48.9, 50.9, -99.8, -95.3)`: outside the box counts as a failure | `searchExtent=-98.6,49.2,-95.8,50.7` (misses Altona) | none |
+| Guard | `MB_BOX = (48.9, 50.9, -99.8, -95.3)`: outside the box counts as a failure | `searchExtent=-98.6,49.0,-95.8,50.7` (Altona inside); regex `\b(mb\|manitoba\|winnipeg)\b` decides whether ", Winnipeg, MB" is appended; the matched address (`Match_addr`) is shown under the stop | none |
 
 Server failure handling. None of these is cached, so each is retried, and billed again where an API call happens, on every run:
 
@@ -775,7 +641,7 @@ Snapshot 2026-09-25: 53 records (Winnipeg plus Altona, Portage la Prairie and Ca
 | `lat`, `lon` | float or null | Coordinates |
 | `ok` | bool | Mapped |
 
-There is **no `stage` field yet** (see §11, and "Stage data" below for the canonical definition).
+`jobs.json` has **no `stage` field, by design**: the app adds `x.stage` at load from the state repo (`js/app.js` L627 and `mergeStages` L598; see "Stage data" below).
 
 ### `data/meta.json` (generated)
 
@@ -810,35 +676,61 @@ The desktop copy `…/Claude Code/_pending_manual.json` holds the same entry, bu
 
 ### Stage data (R-1): canonical definition (use these exact keys everywhere)
 
-| Order | Key | Label (Riley's wording) | Colour (placeholder until Riley answers Q5) |
-|---|---|---|---|
-| 0 | `ready` | Ready to start | `#94a3b8` |
-| 1 | `excavation` | Excavation | `#a16207` |
-| 2 | `base` | Base | `#ea580c` |
-| 3 | `prep` | Prep | `#ca8a04` |
-| 4 | `inspected` | Passed inspection | `#0284c7` |
-| 5 | `poured` | Poured | `#15803d` |
+| Order | Key | Label (Riley's wording) | Short label | Light (`tokens.css` L33–38) | Dark (L135–140) |
+|---|---|---|---|---|---|
+| 1 | `ready` | Ready to start | Ready | rgb(97 85 245) | rgb(109 124 255) |
+| 2 | `excavation` | Excavation | Excav. | rgb(172 127 94) | rgb(183 138 102) |
+| 3 | `base` | Base | Base | rgb(255 141 40) | rgb(255 146 48) |
+| 4 | `prep` | Prep | Prep | rgb(255 204 0), **black** glyph | rgb(255 214 0), black glyph |
+| 5 | `inspected` | Passed inspection | Passed | rgb(203 48 224) | rgb(219 52 242) |
+| 6 | `poured` | Poured | Poured | rgb(52 199 89) | rgb(48 209 88) |
 
-- **Store shape** (the same for every backend): `{"version":1,"stages":{"<jobNumber>":{"stage":"<key>","at":"<ISO-8601 UTC>","by":"<device label>"}}}`. Only non-default entries are stored. A missing or unknown entry means `ready`.
-- **The frontend is authoritative and does the merge** in `loadAll()`: `x.stage = (S.stages[x.jobNumber]||{}).stage || 'ready'`. That way a change shows at once. For stages, this replaces the older "have `sync_jobs.py` merge it in" pattern (Rule 8, ADR-08). `sync_jobs.py` may *read* the store and copy `stage` into `jobs.json` for convenience, but the UI must not rely on that.
-- **The sync bot must never write the stage store.** `sync.yml` pushes after `git rebase -X theirs` (L68), which would silently overwrite a stage change made between checkout and push. Orphan cleanup (job numbers no longer in `jobs.json`) is done by the app's writer or by hand, never by `sync_jobs.py`.
-- **Where the code goes:**
-  - `index.html` (ADR-14: one file, no build step) holds `STAGES`, the filter mode, the slider and the stage route.
-  - **Decided 2026-09-25:** the store is `stages.json` at the root of a **separate public repo, `Claude69420/eckstein-jobs-state`** (branch `main`), not in this repo. The edit key can only touch that repo, so a leaked setup link can move stages but cannot change the app. Stage writes also never trigger this site's Pages builds and never collide with the sync bot. See §11 "Decided design".
-  - If `index.html` is split into `app.js` and `app.css`, add them to §2 and bump `sw.js`.
-- **Pending jobs:** when a pending 9000+ job is replaced by its real Jobber job (§7.6), move its stage entry to the new jobNumber in the same change.
+- **Colours:** Riley never answered Q5, so these are Claude's defaults (iOS system colours, brief §2.5). Change them in `css/tokens.css` only; JS refers only to `var(--stage-N)`. Prep's black ink is hard-coded in `js/app.js` L70 (`stageVars`) and `js/ui.js` L343 and L362 (`StageSlider`): change those too if Prep's colour ever changes. The digit 1–6 is shown on stage pins and chips.
+- **Store shape** (the same for every backend): `{"version":1,"stages":{"<jobNumber>":{"stage":"<key>","at":"<ISO-8601 UTC>","by":"<device label>"}}}`. Only non-`ready` entries are stored. A missing or unknown entry means `ready`.
+- **The frontend is authoritative and does the merge** (`js/app.js` L627 and `mergeStages` L598: `x.stage = normStage(STAGEMAP[x.jobNumber])`), so a change shows at once. For stages, this replaces the older "have `sync_jobs.py` merge it in" pattern (Rule 8, ADR-08).
+- **The sync bot must never write the stage store.** `sync.yml` pushes after `git rebase -X theirs` (L68), which would silently overwrite a stage change made between checkout and push. **Orphan cleanup** (job numbers no longer in `jobs.json`) is **not implemented** in the app: orphans are harmless and are removed by hand only (§7.14), never by `sync_jobs.py`.
+- **Where the code goes:** `STAGES` (key, label, short) in `js/stages.js` L23–30; the slider is `js/ui.js` `StageSlider` (L334–417); filter, pins, moves and the stage route in `js/app.js`; colours in `css/tokens.css`. The store is `stages.json` at the root of the separate public repo `Claude69420/eckstein-jobs-state` (branch `main`), ADR-20.
+
+**Stage store API** (`Stages.createStore(env?)`, `js/stages.js` L226–760; `env` injects fetch/storage/timers for the tests):
+- **Modes** (`mode()`, L269–272):
+  - `github`: key saved and accepted; read/write through the contents API.
+  - `readonly`: no key on a non-local host; reads the raw CDN with `?t=`.
+  - `local`: no key and the hostname is `localhost`, `127.0.0.1`, `[::1]` or `::1`; uses `localStorage['ej_stages']` in the same file shape.
+  - `invalid`: the key got 401, a non-rate-limit 403, or a 404 on PUT; behaves read-only and falls back to the raw read. It resets on reload until the next rejection.
+  - A saved key always wins over local mode, **even on localhost**.
+- **Public API:** getters `mode`, `writable`, `lastError`, `pending`; `hasKey()`, `status()`; `peek()` (synchronous: cached last good map plus unsaved changes, used for the first paint); `load()` (map of non-ready entries, never rejects); `set(jobNumber, key, {label})` (optimistic, resolves `{status:'saved'|'queued'}`, rejects `Error{code: readonly|auth|conflict|http}`); `flush()`, `onChange(fn)`, `onStatus(fn)`, `start()`, `stop()`; `setKey(input)` → `{ok}` or `{ok:false, reason}`; `removeKey()`, `getKeyForShare()`, `deviceLabel()`, `setDeviceLabel()`. Module exports: `STAGES`, `stageIndex`, `normalize`, `createStore`, `API_URL`, `RAW_URL`, `_util`.
+- **Constants (L45–56):** `BATCH_MS` 3000 (moves within 3 s become one commit); `POLL_GITHUB_MS` 60000 and `POLL_READONLY_MS` 300000, only while the page is visible, plus an immediate poll on `visibilitychange` to visible and on `online`; `MAX_ATTEMPTS` 3 with 400/800 ms backoff on 409, 422 and 5xx (re-GET, re-apply this device's changes, last write per job wins); `REQUEST_TIMEOUT_MS` 20000. API headers: `Authorization: Bearer`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28` (content is base64-decoded; the sha comes from the same GET).
+- **Write-ahead / offline queue:** `localStorage['ej_stage_queue']` = `{version:1, changes:{jn:{stage,at,by,label}}}`. It replays on `online`, `visibilitychange` and the next poll. Going to the background or `pagehide` saves an open batch at once.
+- **Last-good cache:** `localStorage['ej_stages_cache']` = `{version, at, map}` (public stage data only, never the key), written after every good read, save and `setKey`. It seeds the map on a cold start (`peek()`), so an offline start shows the last known stages. A device that has never loaded stages shows every job as Ready ("Offline — stages not loaded yet").
+- **Damaged-file guard** (`isDamaged`, L156–161; `MSG.damaged`): non-empty text that is not `{"stages":{...}}` (a hand-edit typo) is never written over. Reads keep the last known map with the status "stages.json in eckstein-jobs-state is damaged … saving is paused until it is fixed", and saves are rejected (code `http`), so the file is never overwritten. Fix: §7.14.
+- **Write-access errors on save:** a PUT answered 404 (key can read but not write) → code `auth`, mode `invalid`, status "This key can read but not write eckstein-jobs-state — it needs Contents: Read and write". 401/403 → code `auth`, "Edit key rejected — Settings → Stages". A rate-limit 403/429 → code `http`, "GitHub is busy (rate limit) — try again in a few minutes".
+- **Commit messages:** one job `stage: #684 <street or title, max 80 chars> -> base`; several `stages: #684 -> base, #699 -> prep` (up to 30 listed, then "+N more"). All commits are authored as the key owner, `Claude69420`.
+- **File format:** 2-space JSON plus a trailing newline; numeric job keys ascending; unknown top-level fields preserved; `at` is ISO UTC without milliseconds; `by` is the device label (default "iPhone app" in standalone, "PC" on Windows, otherwise "browser"; max 40 chars); moving to `ready` deletes the entry; job keys must match `^[0-9A-Za-z-]{1,32}$`. Entries with unknown stage keys are dropped on read, so the next save removes them from the file.
+- **Pending jobs:** when a pending 9000+ job is replaced by its real Jobber job (§7.6), move its stage entry to the new jobNumber in the state repo's `stages.json` (in the app: after the sync, set the real job's stage; the old 9000+ entry becomes a harmless orphan, removable by hand. Or rename the key by hand, §7.14).
 
 ### `routes/index.json` (generated by `publish_routes.py`)
-`[{"file": "Route_X.html", "title": "<title text>", "date": "Sep 15, 2026 06:39 AM"}, ...]`, newest first. It has 63 entries.
+`[{"file": "Route_X.html", "title": "<title text>", "date": "Sep 15, 2026 06:39 AM"}, ...]`, newest first. It has 65 entries (2026-09-26).
 
 ### Browser-side state
 
-| Key or store | Where | Shape | Notes |
-|---|---|---|---|
-| `localStorage['ej_routes']` | per device and browser | `[{name, when (ISO), seq: [{name, lat, lon, shop?}], rt}]` newest first, cap 50 | Saved planner routes. No sync. Unguarded `JSON.parse`. |
-| Cache Storage `ej-v1` | per device | same-origin GET responses keyed by full URL (including `?t=`) | Grows without limit and is never cleaned |
+Every read and write is wrapped in try/catch; the app works (with defaults) when storage is blocked.
 
-There are no other localStorage keys today. **Any new key must be wrapped in try/catch.**
+| Key or store | Contents |
+|---|---|
+| `ej_routes` | Saved planner routes: `[{name (≤120 chars), when (ISO), seq: [{name, lat, lon, shop?, jobNumber?, match?}], rt}]`, newest first, cap 50. No sync. |
+| `ej_mode` | Filter mode, `client` or `stage` |
+| `ej_vis_client`, `ej_vis_stage` | Arrays of selected chip keys per mode (empty = All) |
+| `ej_theme`, `ej_glass` | Appearance (`auto`/`light`/`dark`, `liquid`/`tinted`/`solid`), read by the boot script |
+| `ej_gh_token` | The stage edit key, per device. **Secret** (Rule 1) |
+| `ej_stages` | Local mode only (localhost preview), same shape as `stages.json` |
+| `ej_stage_queue` | Unsaved stage changes (write-ahead / offline queue) |
+| `ej_stages_cache` | Last good stage map `{version, at, map}`, public data only; seeds an offline cold start |
+| `ej_device` | Device name for `by`, max 40 chars |
+| Cache Storage `ej-v2` | Same-origin GET responses keyed by origin + path (no query), plus the 2 pinned unpkg Leaflet files. `ej-v1` is deleted on activate. |
+
+- The Home Screen app's storage is separate from Safari's (WebKit bug 181849): keys, routes and preferences do not carry between them.
+- `navigator.storage.persist()` is requested after a key is saved.
+- **Any new key must be wrapped in try/catch** and added to this table.
 
 ---
 
@@ -853,6 +745,7 @@ There are no other localStorage keys today. **Any new key must be wrapped in try
 | `JOBBER_REFRESH_TOKEN` | GitHub Actions secret | sync step | **2026-09-17 16:44:43** | 32 chars. Rotation is OFF, so it is stable. |
 | `TOMTOM_KEY` | GitHub Actions secret, plus a plaintext copy in `ROUTING_PLAYBOOK.md` (line 15) and 31 desktop scripts | server geocoding and desktop builders | 2026-09-16 03:11:14 | Never copy into the repo |
 | `GH_PAT` | **not set** | workflow step "Persist rotated refresh token" | — | Only needed if Jobber ever rotates the token |
+| Stage edit key (fine-grained PAT, suggested name "Eckstein stages", owner `Claude69420`) | Each device's `localStorage['ej_gh_token']` (iPhone app, PC browser, crew devices) and Riley's password manager | `Authorization` header to `api.github.com` only (read/write `stages.json`); scope **only `eckstein-jobs-state`, Contents: Read and write** | Riley supplies the date (not created yet as of 2026-09-26) | Expiry ≤ 1 year: log the **date**, never the value. Recipe F |
 | Desktop Jobber app credentials | `%USERPROFILE%\.config\eckstein_jobber\credentials.json` (client_id, client_secret, redirect_uri) | desktop MCP and local-mode sync | — | Outside OneDrive on purpose |
 | Desktop Jobber tokens | Windows Credential Manager via keyring: service `eckstein_jobber`, user `token` (JSON: access_token, refresh_token, expires_at) | desktop MCP and local-mode sync | auto-refreshes about hourly | Never read |
 | Sync-app refresh token file | `%USERPROFILE%\.config\eckstein_jobs_sync\refresh_token.txt` | written by `get_refresh_token.py` | 2026-09-15 22:05 CDT (file mtime) | Temporary. Delete it right after pasting (recipe A step 5). Claude never reads it. **It still exists as of 2026-09-25** (32 bytes, never deleted) and likely holds the live token; see §0 "Current state" and §10. |
@@ -937,6 +830,13 @@ Claude declined to extract or relay the desktop token during setup, and must kee
 - The next local call opens browser consent on `localhost:8080`. Riley approves, and the new token is saved to keyring automatically.
 - Make sure nothing else is holding port 8080.
 
+**F. Create, rotate or share the stage edit key** (build spec §3). Claude never sees or types the value.
+1. Riley, logged in as `Claude69420`: github.com → Settings → Developer settings → Fine-grained tokens → Generate. Name "Eckstein stages", expiry 1 year, Repository access **Only select repositories → `eckstein-jobs-state`**, Permissions → Repository → **Contents: Read and write**. Copy it into his password manager.
+2. On each device (iPhone: inside the installed Home Screen app, not Safari): Settings → Stages → paste → Save. Save checks the key with an authenticated GET. Saving again replaces the key. A GET cannot prove write access (the repo is public), so the **first move** confirms it; if it fails, see §8 "Edit key rejected".
+3. Crew: Settings → Stages → **Share edit access** (share sheet, or clipboard on the PC). The text holds the app link, the key and the iPhone/PC steps; send it privately.
+4. Rotate: create a new key, re-paste it on every device, revoke the old one on GitHub, log the date in the CHANGELOG.
+5. Remove from a device: Settings → Stages → Remove key (that device becomes read-only).
+
 ---
 
 ## 7. Operations runbook
@@ -972,9 +872,9 @@ Claude declined to extract or relay the desktop token during setup, and must kee
 
 ### 7.2 Force a sync
 - **Riley, on his phone:**
-  1. Tap **Sync** in the app header. It opens the Actions page, which needs a GitHub login as `Claude69420`.
+  1. Open the Jobs sheet (tap the accessory bar or a tab) and tap **Sync** next to the status line, or ⚙ → Data → **Sync from Jobber now**. On the PC the same "Sync" link is always in the panel. It opens the Actions page, which needs a GitHub login as `Claude69420`.
   2. Tap **Run workflow** → branch `main` → **Run workflow**.
-  3. Wait 1–2 minutes and tap ↻.
+  3. Wait 1–2 minutes and tap ↻ (top-right capsule; reloads data and stages in place, not the page).
   4. **Never tap "Re-run jobs" on an old run.**
 - **Riley, in PowerShell:** `gh workflow run sync.yml -R Claude69420/eckstein-jobs`
 - **Claude:** see §7.1 step 1.
@@ -1021,7 +921,7 @@ What to expect:
 - It writes only `data/`, so commit and push as shown above.
 
 ### 7.5a Build a new route map (desktop)
-1. Read `ROUTING_PLAYBOOK.md` for the rules. Never print its TomTom key. Its heading "HTML map format (Leaflet + OSM…)" is stale: tiles are Esri Light Gray (ADR-06).
+1. Read `ROUTING_PLAYBOOK.md` for the rules. Never print its TomTom key. Tiles are Esri Light Gray (ADR-06; the playbook heading was fixed on 2026-09-25).
 2. Confirm with Riley:
    - the start (the shop or a site);
    - a fixed end or an open end, and whether to return to the shop;
@@ -1034,7 +934,7 @@ What to expect:
    - needs geocoding: `_route_princess_cuts.py`. It contains a TomTom key literal: keep it local, and never print it or copy it into the repo.
    - Never use `_build_route_map.py`, `_multiclient_map.py` or `_route2_finalize.py` (raw OSM tiles, §4.5).
 5. Write `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes/Route_<Name>.html` with a meaningful `<title>`, and keep the exact ANCHOR. Run it with any Python and print ASCII only.
-6. Publish from `main` (§7.5 and Rule 13). This also publishes every other unpublished desktop `Route_*.html` (today `Route_Setup_ShopToEmily.html` and `Route_Princess_Cuts.html`), so tell Riley.
+6. Publish from `main` (§7.5 and Rule 13). This also publishes every other unpublished desktop `Route_*.html` (none as of 2026-09-26: all 65 are published), so tell Riley if there are any.
 7. Verify that live `routes/index.json` lists the new file.
 
 **Do not use the April `new-jobs-route` skill** (`C:/Users/Riley/.claude/skills/new-jobs-route/`), even when its trigger phrases match ("build the next route", "new jobs route"). It reads obsolete spreadsheets and the April route registry. Use this recipe instead.
@@ -1063,7 +963,7 @@ What to expect:
 1. `git -C C:/Users/Riley/eckstein-jobs pull --rebase`
 2. Edit `data/pending_manual.json`:
    - **Add:** `{"jobNumber":9002,"client":"<exact companyName for colour, e.g. Crown Pipeline Ltd.>","street":"<street or 'A St & B Ave'>","city":"Winnipeg","title":"PENDING - <short> (permit TBD, not in Jobber yet)"}`. Use the next unused 9000+ number.
-   - **Remove:** delete the entry once the real job exists in Jobber, or the job **shows twice**. If the pending job has a stage entry (§5 "Stage data"), move it to the new jobNumber in the same change.
+   - **Remove:** delete the entry once the real job exists in Jobber, or the job **shows twice**. If the pending job has a stage entry (§5 "Stage data"), move it to the new jobNumber in `Claude69420/eckstein-jobs-state` `stages.json` (§7.14), or set the real job's stage in the app after the sync.
 3. Commit ("pending: add 9002 …" or "pending: remove 9001 (now Jobber #NNN)") with a CHANGELOG entry, then `git -C C:/Users/Riley/eckstein-jobs pull --rebase`, then push.
 4. Trigger a sync (§7.2). The frontend reads `jobs.json`, not the pending file, so the change only shows after a sync. Check that `meta.json` shows it mapped (the dashed purple PENDING pin).
 5. The desktop copy `…/Claude Code/_pending_manual.json` only matters for the legacy map. Keep it in step only if Riley still uses that map.
@@ -1085,20 +985,20 @@ What to expect:
 - **Key:** PascalCase, with no spaces or punctuation (for example `Acme`).
 - **Colour:**
   - Must not already be used by a client (blue, red, green, purple, teal or amber).
-  - Must not clash with the stage palette (§5 "Stage data"), the unscheduled border `#b45309`, the pending border `#7c3aed`, or route pins.
+  - Must not clash with the stage palette (`css/tokens.css` L33–38 light, L135–140 dark; §5 "Stage data"), the unscheduled ring `#b45309`, the pending ring `#7c3aed`, or the route blue `--route`.
   - White chip text must stay readable (contrast of at least 3:1).
-  - Suggested next colours: pink `#db2777`, then indigo `#4f46e5`, then lime `#65a30d`.
+  - Suggested next colours: pink `#db2777`, then slate `#475569`. **Avoid** indigo `#4f46e5` (too close to Ready, rgb(97 85 245)) and lime `#65a30d` (too close to Poured green).
 - **Verify:** after the sync, `data/meta.json` `by_client` shows `"Acme": N`. If Acme's jobs still count under `Other`, the companyName did not match exactly. A client with 0 active jobs shows no chip, which is expected.
-- **Line numbers** below are as of `8b2e72f`. Locate the lines with **Claude only, in Git Bash:** `grep -n "const COL\|const LABEL\|const keys" /c/Users/Riley/eckstein-jobs/index.html` (**Riley, in PowerShell:** `Select-String -Path C:\Users\Riley\eckstein-jobs\index.html -Pattern 'const (COL|LABEL|keys)'`), and update this recipe and Rule 12 when R-1 moves client keys into a mode descriptor.
+- **Line numbers** below are as of the R-1 squash commit. Locate the lines with **Claude only, in Git Bash:** `grep -n "var CLIENT_KEYS\|var COL\|var LABEL\|var SHORT" /c/Users/Riley/eckstein-jobs/js/app.js` (**Riley, in PowerShell:** `Select-String -Path C:\Users\Riley\eckstein-jobs\js\app.js -Pattern 'var (CLIENT_KEYS|COL|LABEL|SHORT) '`).
 
 **Steps:**
 1. Get the **exact** Jobber `companyName` (from `jobs.json` `client`, or the Jobber MCP; see step 0).
 2. `sync_jobs.py`: add `"<exact companyName>": "<Key>"` to `CLIENT_KEYS` (around lines 36–42).
-3. `index.html`:
-   - L78 `COL`: add `<Key>:'#hex'`, a colour distinct from blue, red, green, purple, teal and amber.
-   - L79 `LABEL`: add `<Key>:'<Display name>'`.
-   - L100 `keys`: add `'<Key>'` before `'Other'`. **Without this, the jobs vanish.**
-   - Optionally add a `--<key>` CSS token at L14.
+3. `js/app.js` (the "ONE place" block, L9–20; no CSS token needed):
+   - L13 `CLIENT_KEYS`: add `'<Key>'` before `'Other'` (it sets chip and group order). Without it, the jobs show under Other / Residential.
+   - L14 `COL`: add `<Key>: '#hex'`, a colour distinct from blue, red, green, purple, teal and amber.
+   - L15 `LABEL`: add `<Key>: '<Display name>'`.
+   - L16 `SHORT`: add `<Key>: '<short badge name>'` (list-row pill in Stage mode).
 4. Optional: add it to `_map_all_outstanding.py` and the playbook's colour list, both private and desktop-side.
 5. Preview locally (§7.12), then commit with a CHANGELOG entry, pull `--rebase`, and push.
 6. Trigger a sync so `clientKey` is regenerated, and check the app.
@@ -1115,7 +1015,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - GitHub cron starts about 5 minutes late and can be dropped under load. Public-repo crons are auto-disabled after 60 days without repo activity; bot commits should count as activity.
 
 ### 7.11 Make the site private later (outline: Cloudflare Pages plus Cloudflare Access)
-1. **Export first.** Saved planner routes live in each device's `localStorage` (`ej_routes`) and won't carry over to a new origin.
+1. **Export first.** Saved planner routes live in each device's `localStorage` (`ej_routes`) and won't carry over to a new origin. Neither will the stage edit key (`ej_gh_token`): every device re-pastes it at the new URL (§6 F). Stage data itself stays in the state repo.
 2. Create a Cloudflare account. In **Workers & Pages → Create → Pages → Connect to Git**, pick `Claude69420/eckstein-jobs` on branch `main`, with no build command and output directory `/`. The result is `https://<project>.pages.dev`.
 3. **Zero Trust → Access → Applications → Add → Self-hosted.** Set the domain to `<project>.pages.dev` (and preview subdomains). The policy is **Allow** for emails in an allowlist (Riley plus crew), using the One-time PIN login. Set a long session duration (for example 1 month), because iOS standalone PWAs re-prompt.
 4. Verify the gated site works on the phone, and reinstall it on the home screen from the new URL.
@@ -1147,19 +1047,23 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - After the move, see the §8 row "(After Cloudflare Access only) 'failed to load data' while the app was left open".
 
 ### 7.12 Preview or test a frontend change locally, then deploy
-1. Start the preview: from the Claude Code folder run `preview_start` with name `eckstein-jobs`, which runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`. Then open <http://localhost:8765/>.
-   - Test at phone width too.
+1. Run both Node tests first: `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 pass) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (38/38).
+2. Start the preview: from the Claude Code folder run `preview_start` with name `eckstein-jobs`, which runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`. Then open <http://localhost:8765/>.
+   - No key means **local mode**: the slider is writable, stages stay on this machine, and Settings → Stages shows "Saved on this device only (local preview)".
+   - To test read-only mode, open the preview through the PC's LAN IP: any non-local hostname reads the real raw file.
+   - **Never paste a real key in the preview:** a key saved on localhost writes to the real state repo.
    - The service worker registers on localhost as well. Use a hard reload, or clear site data if it gets stale.
-2. If `sw.js` changes, bump the cache name (for example `ej-v2`) and add old-cache cleanup in `activate`.
-3. Commit the change **together with its CHANGELOG entry**. Commit directly on `main` only for a single, complete change. For multi-step work, follow Rule 13 (feature branch). Commit first, then pull, then push (a plain `pull --rebase` refuses to run with uncommitted edits; Rule 10). These paths work in both Git Bash and PowerShell:
+3. Check at 375×812 and at 1440×900, in Light and Dark and in Liquid/Tinted/Solid, with zero console errors. Refraction check on the PC in Chrome/Edge: `html` has the class `lg-refract` (gate in §4.3m).
+4. Service worker: old-cache cleanup already exists. Bump `C` (to `ej-v3`) only when `sw.js`, its `SHELL` list or its `CDN` URLs change, and keep `SHELL` in step with new files.
+5. Commit the change **together with its CHANGELOG entry**. Commit directly on `main` only for a single, complete change. For multi-step work, follow Rule 13 (feature branch). Commit first, then pull, then push (a plain `pull --rebase` refuses to run with uncommitted edits; Rule 10). These paths work in both Git Bash and PowerShell (list the paths you changed; the R-1 set was `index.html css js vendor tests icons docs sw.js manifest.json .gitattributes APP_MASTER.md`):
    ```bash
-   git -C C:/Users/Riley/eckstein-jobs add index.html APP_MASTER.md
+   git -C C:/Users/Riley/eckstein-jobs add js/app.js APP_MASTER.md
    git -C C:/Users/Riley/eckstein-jobs commit -m "app: what changed"
    git -C C:/Users/Riley/eckstein-jobs pull --rebase
    git -C C:/Users/Riley/eckstein-jobs push
    ```
-4. Wait about 31–106 s (typically 35–47 s) for the Pages build, then verify <https://claude69420.github.io/eckstein-jobs/?t=1>. The CDN `max-age=600` can delay changes by up to about 10 minutes.
-5. Backfill the commit hash in the CHANGELOG on the next commit.
+6. Wait about 31–106 s (typically 35–47 s) for the Pages build, then verify <https://claude69420.github.io/eckstein-jobs/?t=1>. The CDN `max-age=600` can delay changes by up to about 10 minutes. On the phone, new **code** shows after closing and relaunching the app.
+7. Backfill the commit hash in the CHANGELOG on the next commit.
 
 ### 7.13 Triage a failed sync ("the sync failed", "got a 401")
 - **There is no nightly run.** Scheduled runs are at 12:00 and 17:00 UTC: 7:00 AM and noon CDT, or 6:00 and 11:00 AM CST. "Last night" or "this morning" means the 12:00 UTC run.
@@ -1177,6 +1081,28 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
    - Run `gh workflow run sync.yml -R Claude69420/eckstein-jobs` and watch the run.
    - Confirm `refresh len 32`, `done: … 0 failed` and `Pushed.`
    - Add an INC entry to the CHANGELOG: date, cause, secret *name*, and the failed and fixing run ids. Then update §0.
+
+### 7.14 Fix, move or restore a stage by hand (state repo)
+- **Prefer the app** (any device with a key). By hand only for a damaged file, orphan cleanup, a pending-job rename, or a bulk restore.
+- By hand (these paths work in both shells):
+  ```powershell
+  git -C C:/Users/Riley/eckstein-jobs-state pull
+  ```
+  Edit `C:/Users/Riley/eckstein-jobs-state/stages.json`, keeping the exact shape (§5 "Stage data"; valid JSON, 2-space indent, `"stages":{...}` present), then:
+  ```powershell
+  git -C C:/Users/Riley/eckstein-jobs-state commit -am "stages: hand fix (what and why)"
+  git -C C:/Users/Riley/eckstein-jobs-state push
+  ```
+- **Damaged file** ("stages.json … is damaged"): fix the JSON by hand as above, or revert the bad commit there (`git -C C:/Users/Riley/eckstein-jobs-state revert HASH`, replacing `HASH`; find it with `git -C C:/Users/Riley/eckstein-jobs-state log --oneline -10`). Saving resumes on the next read.
+- **Undo a mistaken move or restore history:** the state repo's commit log is the audit trail; `git revert` the stage commit there, or copy an older `stages.json` back.
+- Devices with a key see the change within about 60 s (immediately on return to the foreground); devices without one within about 10 minutes (CDN 5 min + 5-min poll).
+
+### 7.15 Roll back R-1
+1. `git -C C:/Users/Riley/eckstein-jobs switch main` and `git -C C:/Users/Riley/eckstein-jobs pull --rebase`.
+2. `git -C C:/Users/Riley/eckstein-jobs revert HASH`, replacing `HASH` with the R-1 squash hash from §12 (one commit; restores the pre-R-1 app).
+3. `git -C C:/Users/Riley/eckstein-jobs push`, then verify <https://claude69420.github.io/eckstein-jobs/?t=1>.
+
+After a rollback: stage data stays in the state repo, untouched (a later re-ship picks it up); the status-bar style and icon revert, so Riley re-adds the Home Screen icon again; the old `sw.js` (`ej-v1`) never deletes `ej-v2`, which is harmless. Log it in the CHANGELOG.
 
 ---
 
@@ -1202,23 +1128,25 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 | Job shows an **UNMAPPED** tag, `meta.failed` is non-empty, or the log has `FAILED: #n` | Blank or unparseable street, `geocode NONE`, `OUTSIDE MB (mis-snap)`, or no TomTom key | Street override (§7.7) or a manual cache entry, then sync. The run itself stays green. |
 | Pin in the wrong place **inside Manitoba** | A bad geocode cached forever | Edit or delete that key in `data/geocode_cache.json` (and the desktop cache), or add an override, then sync. |
 | Geocode lands in the **wrong province** (Oakbank→Ontario, Steinbach→Alberta, 38 Penrose→Moncton NB; Hillbrook/Highcliff/Allard from a bad bias) | TomTom mis-snap of duplicate or rural names | The server has the MB box guard. For desktop builders, bound the search by hand (`&lat=&lon=&radius=`), read back `freeformAddress` and the postal code, and pin manually. |
-| Job missing from the app even though it is in `jobs.json` | Its `clientKey` isn't in `keys` (L100), so `vis` is undefined | §7.8. |
+| Job missing from the app even though it is in `jobs.json` | An active chip selection or search text; both are remembered across reloads (`ej_mode`, `ej_vis_*`; the search shows as a “…” chip in the accessory) | Tap "All" and clear the search (tap the search chip). Unknown clients now show under Other / Residential. |
 | Same job shows twice (PENDING plus real) | The pending entry wasn't removed after the job was ticketed in Jobber | §7.6 remove, then sync. |
-| App shows old data | The CDN caches for 10 minutes; the app never auto-reloads; or the sync hasn't run yet | Check `data/meta.json` `updated_utc` on the live site and tap ↻. If a run is missing, check Actions. The service worker is network-first, so it only serves cached data when offline. If data is stuck for a long time, clear the site's website data or reinstall the home-screen app. |
-| "failed to load data" | `jobs.json` or `meta.json` is 404 or corrupt; the device is offline (offline mode doesn't work); **or Leaflet (unpkg) failed to load**, because `renderJobs` runs inside `loadAll`'s try (L93–96) | Open `/data/jobs.json` on the live site. Check the last bot commit and the Pages build. |
-| App completely blank (the status never changes from "loading…") | Corrupt or blocked `localStorage['ej_routes']` throws before `loadAll()` | Clear the site data on the phone (Safari: Settings → Safari → Advanced → Website Data). Longer term, wrap it in try/catch (§10). |
+| App shows old data | The CDN caches for 10 minutes; job data does not auto-refresh on resume (only stages poll); or the sync hasn't run yet | Check `data/meta.json` `updated_utc` on the live site and tap ↻ (re-fetches data and stages in place). If a run is missing, check Actions. |
+| App shows old **code** after a deploy | Network-first service worker plus the Pages CDN (`max-age=600`) | Close and relaunch the app; allow up to ~10 minutes. If stuck, clear the site's website data or reinstall the Home Screen app. |
+| "failed to load data" / toast "Couldn’t load job data" | `jobs.json` is 404 or corrupt, or the device is offline with nothing cached yet | Open `/data/jobs.json` on the live site. Check the last bot commit and the Pages build. Offline, the last good copy is served. |
+| Status briefly shows "map library failed to load — check the connection and reload", no map | Leaflet (unpkg) unreachable on a first start, or an SRI mismatch (the Leaflet URL changed without its hash) | Retry online (Leaflet is cached after the first online start). Lists, stages and Settings still work. For SRI: §4.3l rule. |
+| App completely blank or frozen | A JS error in `js/*.js` (the old corrupt-`ej_routes` blank screen is fixed: storage is guarded) | Reproduce in the Browser pane and read the console (step 4 below). |
 | (After Cloudflare Access only, §7.11) "failed to load data" while the app was left open | The Access session expired, so `fetch('data/jobs.json')` is redirected cross-origin to the Access login and fails | Tap ↻; a full reload shows the login. Use a long session duration. |
 
 #### Map is blank grey: decision tree
-1. **Which map?** The Jobs tab (`#jmap`), the Plan tab (`#pmap`), or a published route page (`routes/Route_*.html`, a separate page with its own Leaflet setup)?
-2. **Read the status text under the title (`#upd`):**
-   - Stuck on "loading…": a script error before `loadAll()`, usually corrupt `ej_routes` localStorage (see "App completely blank").
-   - "failed to load data": the data fetch failed, **or Leaflet failed to load**. `renderJobs()` runs inside `loadAll()`'s try, so `ReferenceError: L is not defined` (unpkg blocked or offline) also lands here.
+1. **Which map?** The app has one map, `#jmap` (Plan results draw on it too; `#pmap` is retired). Or is it a published route page (`routes/Route_*.html`, a separate page with its own Leaflet setup)?
+2. **Read the status text (`#upd` in the sheet header, or Settings → Data):**
+   - "map library failed to load …" (briefly, before data loads): Leaflet did not load (see the row above).
+   - "failed to load data": the data fetch failed.
    - "N/N mapped · updated …": the data loaded. Go to step 3.
 3. **Are the coloured dots visible on the grey?**
-   - **Dots but no tiles:** tiles are blocked or Esri is down. From Git Bash (Claude only): `curl -s -o /dev/null -w "%{http_code}\n" "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/10/347/235"` (a downtown Winnipeg tile; expect 200). On the phone, check content blockers, VPN and Low Data Mode.
-   - **No dots and no tiles:** the map has no view. `L.map('jmap')` is created without `setView` (L98) and fits only once, when the first render has mapped markers (L110, `jmap._fitted`). Zero markers on that render (the search box restored with text, every job unmapped, or a filter hiding everything) leaves it grey. Clear the search, toggle a chip, or tap ↻. Code fix: give the map an initial `setView([49.8951,-97.1384],11)`.
-   - **Grey in part of the map, or the wrong size:** the container was sized while hidden or while the layout was changing. Call `invalidateSize()` after tab switches (L89 does this after 50 ms) and after header or layout changes (the reskin, L24).
+   - **Dots but no tiles:** tiles are blocked or Esri is down. From Git Bash (Claude only): `curl -s -o /dev/null -w "%{http_code}\n" "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/10/347/235"` (a downtown Winnipeg tile; expect 200; dark theme uses `World_Dark_Gray_Base`). On the phone, check content blockers, VPN and Low Data Mode.
+   - **No dots:** the map always starts at `setView([49.8951,-97.1384],11)`, so a grey map with no dots means a filter or search hides every job (tap "All", clear the search), every job is unmapped, or you are in the Plan view with a result shown (job pins are hidden there).
+   - **Grey in part of the map, or the wrong size:** `invalidateSize()` runs in `window.onLayout` (app.js L923) on every iPhone/desktop layout switch; resize the window or reload.
 4. **Reproduce from the desktop:** open <https://claude69420.github.io/eckstein-jobs/> in Claude's browser pane (`preview_start` with that `url`), then read the console errors and failed network requests.
 
 | Symptom | Cause | Fix |
@@ -1226,29 +1154,48 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 | Map grey or blank, with **"Access blocked / tile usage policy" (403)** | Raw `tile.openstreetmap.org` blocks `file://` and unidentified use (09-14) | Use Esri Light Gray Canvas (current). Never use OSM tiles. |
 | Map tiles with **"API KEY REQUIRED"** watermarks | Keyless CARTO (09-14/15) | Use Esri. Never use keyless CARTO. |
 | CARTO tiles never load | Host typo `basemap` vs `basemaps` | Moot: use Esri. |
-| Map looks topographic or busy | Esri `World_Street_Map` was tried and rejected | Esri Light Gray Base plus Reference, with base filter `brightness(0.9) contrast(1.2)`. |
+| Map looks topographic or busy | Esri `World_Street_Map` was tried and rejected | Esri Light Gray (or Dark Gray) Base plus Reference; the app no longer uses a CSS filter (desktop builders still do). |
 | Tiles look soft past zoom 16 | `maxNativeZoom 16` upscales tiles | Expected. |
-| `L is not defined`, empty maps | unpkg unreachable, or offline (Leaflet isn't cached) | Retry online. Consider self-hosting Leaflet (§10). |
+| `L is not defined`, empty maps | **Fixed in R-1:** Leaflet is cached cache-first by `sw.js` after the first online start, and the app runs without it (`HAS_MAP` false) | See the "map library failed to load" row above. |
 | **404 "There isn't a GitHub Pages site here"** right after enabling Pages or the first push | The first Pages deployment takes a few minutes | Wait 1–10 minutes. Check Settings → Pages shows the source `main` at `/` and a successful build. |
 | A Pages build shows **errored** ("Page build failed") | Superseded by a newer push seconds later (for example `8b2e72f` at 09-24 01:44) | Harmless if the next build is `built`. |
 | Route missing from the Routes tab | The file isn't named `Route_*.html`; the publish step was skipped; the push failed; or the CDN is caching | Rename and run `publish_routes.py`. Check `git log -- routes/`. |
 | Route page shows side-by-side panes on a phone | The builder's CSS no longer matches `ANCHOR` exactly, so the patch was silently skipped | Restore the exact anchor, or update `ANCHOR`/`RESP`, then republish. |
 | A deleted route comes back | Its desktop source still exists, so publish re-copies it | Rename the desktop file first (§7.5). |
-| Route opened from the app has no way back (iOS) | Standalone PWA with a same-window link | Relaunch the app. A fix is on the roadmap. |
+| Route opened from the app has no way back (iOS) | **Fixed in R-1:** in the Home Screen app, route cards open with `target=_blank` (a viewer with a Done button) | If it recurs, relaunch the app. |
 | `publish_routes.py` traceback at `git pull --rebase` or `push` | Network trouble, a conflict, or a local change | Resolve, then re-run. The files are already written to `routes/`. |
+| `publish_routes.py` fails with `CalledProcessError: ['git', 'commit', …] returned non-zero exit status 128` (added 2026-09-25) | The clone has no git identity | Run `git -C C:/Users/Riley/eckstein-jobs config user.name "Riley"` and `git -C C:/Users/Riley/eckstein-jobs config user.email` followed by Riley's usual commit email in quotes, then re-run the publish (files already written are picked up). |
 | **Claude's `git push` is blocked by the auto-mode safety classifier** (flagged as "data exfiltration" to a public repo; this happened on the first push, 09-15) | Harness safety policy, not a git error | **Don't work around it.** Ask Riley to run `git -C C:/Users/Riley/eckstein-jobs push` in PowerShell. |
 | Riley's command fails: "The token '&&' is not a valid statement separator", or `/c/...` path not found | Bash syntax given to PowerShell 5.1 | Re-issue it PowerShell-safe: one command per line, `git -C C:/Users/Riley/eckstein-jobs …`. |
-| Planner: a typed address isn't found or lands in the wrong place (Altona and other southern towns; streets containing "mb") | `searchExtent` south edge is 49.2; the regex has no word boundaries | Type the town plus ", MB" explicitly, or add the stop from the jobs list. Fix listed in §10 and §11. |
-| Planner freezes for seconds to a minute with 15+ stops | 300 useless restarts run synchronously | Wait. The fix (remove restarts, or use a Web Worker) is a prerequisite for stage routing. |
-| Google Maps "Part" links have more than 10 stops (20+ points) | Only a 2-way split | Split manually. Fix: chunk into ≤10-point parts. |
+| Planner: a typed address isn't found or lands in the wrong place | **Mostly fixed in R-1** (extent south edge 49.0 covers Altona; regex has word boundaries; the matched address shows under the stop) | Check the matched address under the stop; type the town plus ", MB", or add the stop from the jobs list. |
+| Planner freezes with 15+ stops | **Fixed in R-1** (`js/tsp.js`: 60 stops in well under 0.3 s) | — |
+| Google Maps "Part" links have more than 10 points | **Fixed in R-1** (`TSP.gmapsParts`: parts of ≤10 points with overlapping endpoints) | — |
 | Local sync opens a browser consent page, or fails binding port 8080 | Desktop token expired or unrefreshable; 8080 in use | Complete the consent; stop whatever holds 8080. |
 | Local sync prints `!! no TOMTOM_KEY; cannot geocode` | The env var isn't set locally | Riley sets the key with the Read-Host line in §7.4, or use the cloud run. |
-| Map zoom controls draw over the header while scrolling on mobile | z-index 1000 clash | Known cosmetic bug. Fix it in the reskin. |
+| Map zoom controls draw over the header while scrolling on mobile | **Fixed in R-1** (no header; `#jmap` is its own stacking context; Leaflet zoom control off) | — |
+
+#### Stages, edit key and Liquid Glass (R-1)
+Most of these are toasts or the Settings → Stages status line.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Edit key rejected — Settings → Stages" | 401 (typo, expired, revoked) or a 403 that is not a rate limit (repo not selected, or no Contents: write) | Riley checks or recreates the key (§6 F) and re-pastes it. |
+| Save said "Key saved…" but the first move says "Edit key rejected", or Settings says "This key can read but not write eckstein-jobs-state — it needs Contents: Read and write" | The repo is public, so any key passes the validation GET; the first PUT gets 403 (fine-grained key without Contents: write) or 404 (key that cannot write the repo) | Grant **Contents: Read and write** on `eckstein-jobs-state` (or create a new key, §6 F) and re-paste it. |
+| "This key can't see stages.json in eckstein-jobs-state (404)…" on Save | Repo or file renamed or deleted, or the key cannot see the repo | Restore `stages.json` on `main`; check the key's repository access. |
+| "That doesn't look like a GitHub key." | Format check: 10–255 printable characters after stripping whitespace | Copy the key again in full. |
+| "Couldn't save the key on this device (storage blocked)" | Private browsing or blocked storage | Use a normal window or the installed app. |
+| "stages.json in eckstein-jobs-state is damaged (not valid stage JSON) — saving is paused until it is fixed" | A hand edit broke the file (not `{"stages":{...}}`) | Every device keeps showing the last known stages. Fix the JSON by hand in the state repo, or revert the bad commit there (§7.14). |
+| "GitHub is busy (rate limit) — try again in a few minutes" | 403/429 with `x-ratelimit-remaining: 0`, `retry-after`, or a "rate limit" message | Wait. Each device with a key polls 60×/h against 5,000/h per key; rapid writes can hit secondary limits. |
+| "Couldn't save — stages changed on another device…" / "Couldn’t save (changed elsewhere) — try again" | 3 consecutive 409/422 | Retry the move. |
+| "Offline — stage changes will save…" / "Saved offline — will sync" / Settings "N changes waiting to sync" | Changes queued in `ej_stage_queue` | They replay when back online (or on the next poll or foreground). |
+| "Offline — stages not loaded yet (every job shows as Ready)" | First start on this device while offline: no `ej_stages_cache` yet | Go online once; later offline starts show the last known stages. |
+| Another device doesn't show a move | Devices without a key: up to about 10 min (raw CDN `max-age=300` plus the 300 s poll). With a key: about 60 s, immediately when the app returns to the foreground | Wait, or add a key. |
+| Slider locked, "Stages are read-only on this device." | No key, or the key was rejected | Tap "Settings → Stages" on the note, paste the key (§6 F). |
+| Old status-bar style or old icon on iPhone | iOS keeps install-time metadata | Delete and re-add the Home Screen icon (note saved planner routes first). |
+| No refraction on the PC | The gate needs all of: Chromium brand in `userAgentData`, hover + fine pointer, width ≥900, not `prefers-contrast: more`, not `prefers-reduced-transparency`, Glass = Liquid, `Hyalite.supported()` | None needed: frosted glass is the expected fallback on Safari, Firefox and iPhone. |
+| Preview (localhost) writes to the real state repo | A key is saved in localhost's storage (a key always wins over local mode) | Settings → Stages → Remove key. |
 
 ---
-
-
-**Added 2026-09-25:** `publish_routes.py` fails with `CalledProcessError: ['git', 'commit', …] returned non-zero exit status 128` → the clone has no git identity → run `git -C C:/Users/Riley/eckstein-jobs config user.name "Riley"` and `git -C C:/Users/Riley/eckstein-jobs config user.email "<Riley's usual commit email>"`, then re-run the publish (files already written are picked up).
 
 ## 9. Design decisions (ADR-style)
 
@@ -1258,7 +1205,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
   - Upgrade path: Cloudflare Pages plus Access (§7.11).
 - **ADR-02 Headless refresh through a GitHub Actions cron calling Jobber GraphQL directly.**
   - No Claude and no Max-plan usage.
-  - Runs at 7 AM and noon CDT, as Riley asked, plus manual dispatch (the Sync button).
+  - Runs at 7 AM and noon CDT, as Riley asked, plus manual dispatch (the app's Sync link).
 - **ADR-03 A dedicated Jobber app "Eckstein Jobs Sync".**
   - Read-only (Clients and Jobs), least privilege.
   - Rotation OFF, so the stored token stays stable.
@@ -1273,6 +1220,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - **ADR-06 Tiles: Esri World Light Gray Canvas (Base plus Reference), with the base dimmed by `brightness(0.9) contrast(1.2)` and `maxNativeZoom 16`.**
   - Chosen after OSM returned 403 and CARTO showed a typo and then "API KEY REQUIRED" watermarks, and after World_Street_Map looked too topographic.
   - Applied to the app and to the desktop builders in use at the time (reported then as "all 68"). Today 71 of 86 `_route_*`/`_map_*` builders use Esri; 3 older builders (`_build_route_map.py`, `_multiclient_map.py`, `_route2_finalize.py`) still use raw OSM tiles (§4.5).
+  - **Amended by R-1 (app only; desktop builders unchanged):** a dark theme uses Esri `World_Dark_Gray_Base` plus `_Reference`; the `brightness(0.9) contrast(1.2)` filter is removed (the `--canvas` colours `#EFEFEF`/`#474749` match the tiles and drive `theme-color`); reference labels sit in pane `labels` (z 450) above route lines.
 - **ADR-07 `sync_jobs.py` is stdlib-only.** No pip step, so the workflow is fast (about 12 s) and has no dependency drift.
 - **ADR-08 `jobs.json` is rebuilt from scratch every run.**
   - The output is always a faithful mirror of Jobber's active jobs.
@@ -1288,14 +1236,51 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
   - Re-runs and overlapping runs can't fail the push (INC-2).
   - `concurrency` queues runs instead of cancelling them.
 - **ADR-13 `publish_routes.py` runs `pull --rebase --autostash` before committing.** Local route publishes never collide with bot commits (`fd9a073`).
-- **ADR-14 The frontend is one vanilla `index.html` with Leaflet from a CDN and no build step.**
-  - Trivial to deploy and edit.
-  - PWA via `manifest.json` and a network-first service worker, so installs work and new deploys appear immediately.
+- **ADR-14 The frontend is vanilla, static, with no build step.**
+  - Trivial to deploy and edit. PWA via `manifest.json` and a network-first service worker, so installs work and new deploys appear on the next launch.
+  - **Amended by R-1:** multi-file static: `index.html`, 3 CSS files, 4 JS files and vendored hyalite. The scripts are plain ES2017 sharing globals (`TSP`, `Stages`, `UI`, `window.*` hooks): no modules, no bundler, no npm. `tsp.js` and `stages.js` also load in Node (`module.exports` guard) for the dependency-free tests. Leaflet 1.9.4 from pinned unpkg with SRI. Deploy is still push-to-Pages.
 - **ADR-15 Estimate and numbering conventions are shared across the desktop and the app planner.**
   - 1.39 × haversine, at 40 or 70 km/h, always with `~`.
   - Shop = `S` and the first site = #1.
-  - Google Maps coordinate URLs, with Part 1 and Part 2 when there are more than 10 stops.
+  - Google Maps coordinate URLs. **Amended by R-1:** the app splits them into parts of ≤10 points each with overlapping endpoints (`TSP.gmapsParts`), not Part 1/2; the caption adds "(70 km/h rural legs)" when a leg is rural (ADR-21).
 - **ADR-16 Commands for Riley are PowerShell; Claude's tooling is Git Bash.** This follows the incident where bash syntax failed in Riley's terminal.
+- **ADR-17 Glass on the navigation layer only** (R-1).
+  - Glass surfaces: the control capsule, accessory, tab bar, sheets/panel, map card, route menu and toast. Content (pins, rows, chips, slider, planner) uses flat fills. Never glass on glass.
+  - `-webkit-backdrop-filter` and `backdrop-filter` always carry identical **literal** values, never `var()`; the only exception is the unprefixed line under `.lg-refract`, which consumes `--hyalite`.
+  - No backdrop-root properties on any ancestor of a `.glass` element (isolation, contain, content-visibility, filter, transform, opacity<1, mask, clip-path, mix-blend-mode, will-change, backdrop-filter). Every glass element is a direct child of `<body>`.
+  - No Leaflet popups or tooltips: their inline opacity breaks the glass.
+  - Liquid/Tinted/Solid modes; a large iPhone sheet goes opaque; Increase Contrast makes glass opaque. Source: `css/glass.css` L33–42 and `css/components.css` L1–4.
+- **ADR-18 Desktop-only refraction** (R-1). Vendored hyalite v0.5.0, unmodified, lazy-loaded behind the gate (§4.3m); it watches only `.lens-panel` (blur 12) and `.lens-ctl` (blur 3). The iPhone gets frosted CSS glass only: WebKit accepts but does not render `backdrop-filter:url()`, and the pending WebKit fix would not help over a panned map (brief §1.6).
+- **ADR-19 One map for jobs and planner** (R-1). `#pmap` is retired. Plan results draw in `routeLayer` on `#jmap`; job pins are hidden while the Plan view shows a result. Fixes the old one-map-per-optimize leak.
+- **ADR-20 Stages live in a separate public GitHub state repo** (decided 2026-09-25, amended by research; R-1).
+  - `Claude69420/eckstein-jobs-state`, `stages.json` on `main`, through the contents API with a per-device fine-grained key scoped to that repo only (Contents: Read and write). The key cannot change the app; stage writes never trigger this site's Pages builds and never collide with the sync bot.
+  - No key in any URL or setup link: an iOS Home Screen app does not share storage with Safari (WebKit bug 181849). Crew get the key through "Share edit access" and paste it inside the installed app.
+  - Devices without a key read the raw CDN copy, read-only. Local mode (`ej_stages`) only on localhost.
+  - Writes: optimistic UI, 3 s batching into one commit, sha-merge retry on 409/422 (≤3), write-ahead queue for offline, damaged-file guard. The state repo's commit log is the audit trail. Stages are not written back to Jobber.
+- **ADR-21 Optimizer in `js/tsp.js`** (R-1).
+  - Exact Held-Karp for ≤8 free stops. Otherwise nearest-neighbour seed, 2-opt, or-opt (segments of 1–3, both directions), double-bridge kicks and 4 restarts, all from a seeded mulberry32 PRNG, so the result is deterministic. Replaces the 300 random restarts.
+  - About 30–100 ms for 60 stops and about 70–80 ms for 100 on the PC (`tests/tsp.test.js`; varies per run).
+  - Rural legs: road km > 15 **and** at least one end outside the Winnipeg box (49.71–50.00 N, −97.36 to −96.94 E) use 70 km/h, otherwise 40 km/h. Stricter than the build spec's plain "legs > 15 km".
+- **ADR-22 Filter and stage-control UX** (R-1; spec defaults, Riley may change).
+  - "Solo, then add" chips; one mode at a time (Client **or** Stage, never combined); the "Route N" button uses the current selection plus search.
+  - Any stage is routable in 2 taps: the Route split button's chevron opens a menu of all 6 stages; each list group header has its own "Route".
+  - Desktop: panel on the left; Settings in the capsule; tabs Jobs · Routes · Plan.
+  - Stage control: the detail-sheet slider plus the desktop hover card. No inline slider in the list row; a row tap opens the detail slider.
+- **ADR-23 Ship R-1 as ONE squash commit** (build spec §1.7). Amends the brief's two-merge plan and §11's old "reskin and stages ship as separate merges". Rollback is a single revert (§7.15).
+
+### Third-party code
+Settings → About points here (brief §1.5).
+
+| Component | Source and pin | Licence and how it is used |
+|---|---|---|
+| hyalite v0.5.0 | <https://github.com/VII-Cae/hyalite--liquid-glass> @ `b9f27192a7256bf5295bf027b582b86864f9b59d` (2026-09-11). `vendor/hyalite.js` 51,559 B, sha256 base64 `W9bgoiNDjtup/m/Q6ljco7usmk8/pvKWlkdPOgUPKew=` (hex `5bd6e0a223438edba9fe6fd0ea58dca3bbac9a4f3fa6f29696474f3a050f29ec`) | MIT © 2026 VII-Cae (VII). Unmodified; verbatim `vendor/hyalite.LICENSE`; `.gitattributes` `vendor/* -text`. Never pass `edge: 0`. Needs `img-src data:` if a CSP is ever added. |
+| sohumsuthar/liquid-glass | `css/liquid-glass-core.css` @ `fb0e2dd` (2026-08-28) | MIT © 2026 Sohum Suthar. Adapted into `css/glass.css`; full notice and modification list in its header (L1–31). |
+| rdev/liquid-glass-react | — | MIT © 2025 MAX ROVENSKY. Ideas only, no code copied. Add the notice if code is ever copied. |
+| Leaflet 1.9.4 | unpkg with the two SRI hashes in §2 | BSD-2-Clause. |
+| Esri Canvas tiles and ArcGIS geocoder | Keyless | Esri terms of use and attribution (`ESRI_ATTR`, `js/app.js` L128). The legacy Canvas services are "no longer updated" and could be deactivated without notice. Contingency (Riley's decision): ArcGIS static basemap tiles with a referrer-restricted token Riley creates. |
+
+- Verify the hyalite hash: **Claude only, in Git Bash:** `openssl dgst -sha256 -binary /c/Users/Riley/eckstein-jobs/vendor/hyalite.js | openssl base64 -A`. **Riley, in PowerShell:** `Get-FileHash C:\Users\Riley\eckstein-jobs\vendor\hyalite.js -Algorithm SHA256` (prints the hex form).
+- Upgrade hyalite: replace the file and LICENSE byte-for-byte from the new pinned commit, then update the commit, size and hashes here (and the About notice if the version changes).
 
 ---
 
@@ -1332,41 +1317,36 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - There is no delete sync, and publish re-copies desktop sources.
 - `ANCHOR` is an exact-match string that fails silently.
 - A failure mid-script leaves files uncommitted.
-- **No "Publish routes" commit has been made since setup.** Two routes are pending.
-- Builders have no shared module (copy-and-edit drift). 3 older builders still use raw OSM tiles (§4.5). The playbook is stale: it says the cache has "~225" entries, its colour list is missing NoLimits, its "update all jobs" section is superseded (and L99 still presents a local run as normal), and its "HTML map format" heading still says "Leaflet + OSM".
+- `publish_routes.py` needs a git identity in the clone (fixed locally 2026-09-25; §8 row "exit status 128" if the clone is re-created).
+- Builders have no shared module (copy-and-edit drift). 3 older builders still use raw OSM tiles (§4.5). The playbook is partly stale: it says the cache has "~225" entries and its client colour list is missing NoLimits. (Its "update all jobs" section is marked SUPERSEDED, its local run is labelled "Fallback only", and its "HTML map format" heading says Esri; those were fixed on 2026-09-25.)
 
-**Frontend** (`index.html`, `sw.js`)
-- **Planner performance:** the 300 useless random restarts (L154) freeze the UI for 2–68 s with 15–40 stops, with no spinner. This **blocks** one-click stage routing.
-- Planner correctness and UX:
-  - Branch B (L151) is dead code, and the or-opt bound is a no-op.
-  - Fixed end is silently ignored when Return-to-start is on.
-  - A round trip can visit the shop twice.
-  - The shuffle is biased.
-  - The exact-search threshold is inconsistent at 8 free stops.
-- Planner leaks: `pmap` is never `.remove()`d (one map per optimize).
-- Google Maps links:
-  - Only a 2-way split, so parts exceed 10 points at 20+ points.
-  - The full link is shown even when it is over the limit.
-- Planner stop model: stops lose `jobNumber`, client and colour. The picker ignores filters and search, adds one stop per open, and allows duplicates.
-- Planner geocoder:
-  - The typed geocoder's matched address is discarded (the user can't confirm it).
-  - The regex `/(mb|manitoba|winnipeg)/i` has no word boundaries.
-  - `searchExtent` excludes Altona (south edge 49.2).
-- **No HTML escaping anywhere.**
-- **Unguarded `localStorage` JSON.parse** can blank the whole app. Saved routes are **per device** (`ej_routes`, cap 50, no sync, lost if site data is cleared or the origin changes).
-- Service worker:
-  - The `ej-v1` cache grows without limit (`?t=` keys) and old caches are never cleaned.
-  - **Offline doesn't work:** there is no `ignoreSearch`, and Leaflet isn't cached.
-  - Leaflet loads from unpkg with no SRI.
-- Data loading: `r.ok` is never checked. There is no auto-refresh on resume, only ↻, and the tab choice isn't remembered.
-- Jobs view:
-  - `renderJobs` rebuilds every marker and row on every keystroke or chip click.
-  - Chip counts ignore search.
-  - Search skips the client name, `status` and `streetRaw`. Jobber `status` (late/upcoming) is never shown.
-  - An unknown `clientKey` silently hides jobs.
-- Layout: the 92 px header height is hard-coded (L24), and there is a z-index 1000 clash between the header and the Leaflet controls.
-- iOS standalone: route pages open in the same window with no back button.
-- Theming: only 7 CSS tokens (5 unused), dozens of hard-coded colours, and no dark mode. There is no 180 px apple-touch-icon, and the icons are opaque RGB.
+**Frontend** (`index.html`, `css/`, `js/`, `sw.js`)
+- **Fixed by R-1** (details in git history `48af459:APP_MASTER.md` §10): the 300-restart planner freeze, dead Branch B, fixed end ignored with Return-to-start (the checkbox is now disabled), biased shuffle, exact-threshold inconsistency, `pmap` leak, 2-way Google Maps split, picker ignoring filters (now multi-select; duplicates still allowed), discarded geocoder match, geocoder regex and extent, no HTML escaping, unguarded localStorage, `ej-v1` growth, offline not working, Leaflet uncached and without SRI, unchecked `r.ok`, unknown `clientKey` hiding jobs, 92 px header, z-index clash, iOS route pages without a back button, 7 tokens and no dark mode, no 180 px icon.
+- **Still true:**
+  - Chip counts ignore the search box (by design); the route-menu counts count routable (mapped, Winnipeg-first) jobs, so they can differ from chip counts (by design).
+  - Search skips `status` and `streetRaw`; Jobber `status` (late/upcoming) is never shown.
+  - The view (tab) is not remembered (mode and filter are).
+  - Job data does not auto-refresh on resume; only stages poll.
+  - A round trip can still visit a manually added end-shop twice.
+  - Saved routes are **per device** (`ej_routes`, cap 50, no sync, lost if site data is cleared or the origin changes).
+  - Icons are opaque RGB (fine for iOS).
+  - Without Leaflet, the "map library failed to load" status is replaced by the data status once jobs load (cosmetic).
+- **New with R-1:**
+  - **The iPhone cannot refract.** Refraction is desktop Chromium only; Safari, Firefox and the iPhone get frosted glass. `corner-shape: squircle` needs Chromium 139+.
+  - Read-only lag: up to about 10 min on devices without a key; about 60 s with one.
+  - Offline cold start shows the last known stages (`ej_stages_cache`), but a device that has never loaded stages shows every job as Ready. Moves made offline are queued.
+  - Unknown stage keys and invalid job keys in `stages.json` are dropped on read, so the next save removes them. A file that is not stage JSON at all is protected by the damaged-file guard (saving pauses; §7.14).
+  - Orphan entries (jobs that left Jobber) are never cleaned automatically.
+  - All state-repo commits are authored as the key owner (`Claude69420`). The `by` field is the only device identity, and it is public.
+  - The key sits in `localStorage`, so XSS would expose it (mitigated: every job string goes through `esc()` or `textContent`). It is also readable from that device's console through `window.EJ.store.getKeyForShare()`.
+  - Deleting the Home Screen icon (needed for the status-bar change) likely deletes that app's storage: saved planner routes, the key, the device name, preferences and queued stage changes (brief §8; not verified).
+  - The stage route's out-of-town exclusion uses the `city` field, while the rural-speed rule uses the coordinate box. Suburbs whose `city` is not "Winnipeg" (for example West St. Paul) are excluded by default even though they are near.
+  - A moved job stays in a filtered view until the next render (by design; counts update at once).
+  - On iPhone the Sync link is visible only inside the open sheet (also in Settings → Data).
+  - On iPhone in Stage mode the chips wrap onto 2 rows without per-chip counts (counts are in the aria-label, the route menu and the group headers); untested on a real iPhone SE width.
+  - Client chips use "solo, then add" (spec default); the old app hid one client per tap.
+  - The state repo has 4 throwaway contract-test commits from 2026-09-26 (§12). Harmless; leave them.
+  - Esri legacy Canvas tiles may be deactivated without notice (§9 "Third-party code").
 
 ---
 
@@ -1374,18 +1354,18 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 
 ### R-1: Job stages, stage filter, stage routing, stage slider, and "Liquid Glass" reskin
 
-**Status: Design in progress (2026-09-25).** Answers received and storage decided (below). No app code has changed yet. Update this block as work proceeds (decisions made, files touched, what's half-done, what's next).
+**Status: SHIPPING 2026-09-26** as ONE squash commit of `r1-stages` onto `main` (hash: see the §12 R-1 entry). Built, tested, browser-accepted and reviewed. Riley decided on 2026-09-26 (R-2 Q7) to ship now. Remaining: his steps and his iPhone acceptance of the look.
 
 **Work log** (newest first; update after every step)
-- Last updated: 2026-09-25 late (brief + reconciled build spec saved; ready to launch the build; no app code yet)
-- Branch: none yet (planned `r1-stages`, Rule 13) · pushed to origin: no · merged to main: no
-- Answers from Riley: **recorded 2026-09-25**, see "Answers from Riley" below
-- Decisions: stage keys and store shape in §5 "Stage data"; storage = separate state repo + scoped key + setup link ("Decided design" below); PC is first-class for Liquid Glass (full SVG refraction on Chromium, frosted fallback on Safari)
-- Done: master doc + pointers (2026-09-25); Liquid Glass research workflow launched (repos, technique, WebKit support, Apple HIG -> design brief)
-- Half-done: nothing. Design brief saved as `docs/liquid-glass-brief.md` (critic-corrected; material from sohumsuthar/liquid-glass MIT, desktop refraction via vendored hyalite v0.5.0 MIT, Chromium only). **`docs/r1-build-spec.md` reconciles the brief with Riley's answers and OVERRIDES it** (GitHubStageStore on the state repo; no key in URLs because an iOS Home Screen app does not share storage with Safari, so crew get a "Share edit access" message and paste the key inside the installed app; defaults for the brief's open calls; PC first-class; one squash merge).
-- Uncommitted files: none after the docs commit
-- **Next step (resume here):** launch the R-1 build workflow exactly as `docs/r1-build-spec.md` §2 describes (branch `r1-stages`; parallel build agents for `js/tsp.js`, `js/stages.js`, UI; one browser-verification agent; review lenses; fix loop), then commit, update APP_MASTER, squash-merge, verify live, and give Riley the §3 steps. Earlier steps: (1) ~~save the design brief~~ DONE; (2) ~~create the empty state repo~~ DONE 2026-09-25 (`Claude69420/eckstein-jobs-state`, local clone `C:/Users/Riley/eckstein-jobs-state`); (3) build R-1 on branch `r1-stages`; (4) verify at 375x812 and desktop width, light + dark; (5) give Riley the key-creation steps (he creates the key himself)
-- Blocked on: nothing for the build. Riley must create the fine-grained key before stage **writes** work on his devices
+- Last updated: 2026-09-26 (APP_MASTER updated for the ship)
+- Branch: **`r1-stages`** (from `main` @ `48af459` + bot data), local WIP commits `be33936` (build) and `7b5449d` (review fixes, sw plain network-first, damaged-file guard). Pushed to origin: no (local only). Ships as **one squash commit** (`git merge --squash r1-stages`, ADR-23); both WIP commits are squashed. Squash-merged / pushed: record here and in §12 once done.
+- Uncommitted: only this `APP_MASTER.md` ship update. It rides in the squash commit; commit it on `r1-stages` first, because `git switch main` refuses to overwrite a modified file that differs on `main`.
+- **Next (resume here):** (1) squash-merge, commit with the §12 entry, `pull --rebase`, push; (2) verify live: `https://claude69420.github.io/eckstein-jobs/?t=1` loads, Cache Storage shows `ej-v2` (no `ej-v1`), stages read-only without a key, zero console errors; backfill the hash in §12; (3) give Riley his steps (§0 "Open Riley steps"; §6 recipe F); (4) out-of-repo pointers: already updated 2026-09-26 (§0 "Where the other context lives"), only re-check them; (5) record Riley's iPhone OK below; then (6) start R-2 (`docs/r2-plan.md`).
+- **2026-09-26 verification and review:** workflow `wf_b6eb06d9-c72`: browser acceptance at 375×812 and 1440×900, light and dark, local stage mode on localhost, plus 5 review lenses (correctness, iOS Safari, security, requirements fidelity, performance). Together they found 48 issues (10 major, 38 minor); a separate APP_MASTER doc-gap lens listed the edits for this file. 2 fix rounds fixed all majors and most minors; re-verification found 0 critical/major. The main session then removed the `sw.js` slow-network timer and made the Route chevron hit area 44×44. Remaining minors (accepted): route-menu counts can differ from chip counts by design (the menu counts routable jobs); 2-row stage chips untested on a real iPhone SE width; client chips use "solo, then add" (spec default; the old app hid one client per tap).
+- **2026-09-26 build:** workflow `wf_05a16edb-bb9` (4 parallel agents: `js/tsp.js` + test, `js/stages.js` + test, UI shell/CSS/app, assets: hyalite/icons/sw/manifest). Tests now: `node tests/tsp.test.js` 15 passed; `node tests/stages.test.js` 38/38. The stages agent ran a live contract test against a throwaway file in the state repo (4 commits, `stages.json` untouched; §12).
+- **2026-09-25:** master doc + pointers; answers recorded; storage decided; state repo created (`007f3b0`); design brief + build spec saved (`48af459`).
+- Decisions: §9 ADR-17 to ADR-23; storage ADR-20; design detail in `docs/r1-build-spec.md` (overrides `docs/liquid-glass-brief.md`).
+- Blocked on: nothing. Stage **writes** on Riley's devices need the edit key he creates (§6 F).
 
 **Riley's request, 2026-09-25 (verbatim):**
 > "I have been using the web app this week. Very helpful. I would like to add the ability to track each job through its different stages. Ready to start, excavation, base, Prep, Passed inspection, Poured. I would like the ability to filter by either client like how we have it, or to choose to filter by stage. I would also like the ability to one click route map from the shop all jobs in a given stage. In order to move jobs between stages, I should be able to click or hover on the dot on the map or click on the job in the sidebar list and there's a slider that moves through the different stages that I can click into a given stage. I would like you to also reskin and re theme this app to have app liquid glass theme and to fit into what looks like an Apple esque Very smooth very sleek UI. I believe there is a Github repository for Liquid Glass you might want to use online for the styling and visuals."
@@ -1397,16 +1377,16 @@ He also asked that:
 
 **Answers from Riley (2026-09-25, via the question panel):**
 - **Where stages are saved:** "GitHub + one-time key (Recommended)". Stages live in a GitHub repo file; every move is a timestamped commit; syncs across devices; Riley creates one GitHub key.
-- **Who can move stages:** "Anyone with the link". Interpreted as: anyone Riley sends the **setup link** to can edit. The key is **never** embedded in the public site code (GitHub secret scanning would revoke it, and anyone could then edit). People with only the plain site link see stages read-only.
+- **Who can move stages:** "Anyone with the link". Interpreted as: anyone Riley sends the **setup link** to can edit (amended 2026-09-25: there is no setup link and no key in any URL; crew get the key through Settings → Stages → "Share edit access", ADR-20). The key is **never** embedded in the public site code (GitHub secret scanning would revoke it, and anyone could then edit). People with only the plain site link see stages read-only.
 - **Default stage for new jobs:** "Ready to start". Poured jobs stay visible until the job is closed in Jobber, then drop off automatically (they leave `jobs.json`).
 - **Phone:** "iPhone". Then, in a follow-up message: *"Note that I also wanted to render nicely on my PC and have the liquid glass look on my PC in the web."* So **PC (Chrome/Edge on Windows) is a first-class target** with the full Liquid Glass look.
 - Not asked; Claude defaults (change if Riley objects): stage route starts at the shop, open end, with a "return to shop" toggle; includes pending 9000+ jobs; out-of-town jobs (city not Winnipeg) are listed separately and excluded by default with a toggle; Stage mode colours dots by stage and shows the client as a small badge; desktop shows a hover preview and a click opens the stage control; stages are **not** written back to Jobber; the published desktop route maps keep their current look.
 
-**Decided design (2026-09-25):**
+**Decided design (2026-09-25) — SUPERSEDED — historical; do not act on** (current: §9 ADR-20 and §5 "Stage data"):
 - **State repo:** `Claude69420/eckstein-jobs-state` (public, no Pages), file `stages.json` on `main`, shape per §5 "Stage data". Separate from the app repo so the edit key cannot modify the app, stage writes do not trigger Pages builds, and the sync bot never touches it.
 - **Edit key:** a fine-grained personal access token that **Riley** creates on the `Claude69420` account: Repository access = only `eckstein-jobs-state`; Permissions = Contents: Read and write; expiry 1 year or less (log the expiry date, never the value). Stored per device in localStorage (key `ej_gh_token`, inside try/catch). Claude never sees or types the value.
 - **Sharing edit access (amended 2026-09-25 after research):** no setup link and no key in any URL. An iOS Home Screen app does not share storage with Safari (WebKit bug 181849), so a link opened from Messages could never hand the key to the installed app. Instead Settings → Stages has a masked "Paste edit key" field and a **"Share edit access"** button that sends (share sheet / clipboard) the app link, the key and install steps; the recipient pastes the key inside the installed app. See `docs/r1-build-spec.md` §1.2.
-- **Reads:** devices with a key use the GitHub API (`GET https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`, `Accept: application/vnd.github.raw+json`), which is fresh, and poll every ~60 s while the app is visible. Devices without a key read `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (read-only; CDN up to ~5 min stale; no API rate limit).
+- **Reads:** devices with a key use the GitHub API (`GET https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`, `Accept: application/vnd.github.raw+json` as first planned; the code uses `application/vnd.github+json` and decodes the base64 content, §5), which is fresh, and poll every ~60 s while the app is visible. Devices without a key read `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (read-only; CDN up to ~5 min stale; no API rate limit).
 - **Writes:** optimistic UI, then `PUT` with `sha`. On 409/422, re-GET, re-apply this device's pending change on top (last write per job wins) and retry up to 3 times; on failure roll back and show an error. Batch changes made within ~3 s into one commit, message like `stage: #684 SW Corner Ellice & Kennedy -> base`.
 - **History/undo:** the state repo's commit log is the audit trail; any stage can be restored from it.
 
@@ -1414,134 +1394,58 @@ He also asked that:
 1. **Stages:** Ready to start → Excavation → Base → Prep → Passed inspection → Poured, per job, keyed by `jobNumber` (pending 9000+ jobs included).
 2. **Filter mode:** a toggle between **Client** (current chips) and **Stage** (chips per stage). The map colours and list groups follow the chosen mode.
 3. **One-click stage route:** from the shop through every mapped job in a stage, using the numbering rule (shop `S`, then #1..n) and the standard estimates.
-4. **Stage control:** a segmented "slider" with 6 tappable stops in the map popup (tap on the phone, hover or click on desktop) and inline in the sidebar row.
+4. **Stage control:** a 6-stop stage slider in the job **detail sheet** (opened by tapping a pin or a list row) and, on desktop, in the **hover card** over a pin. (Originally "in the map popup and inline in the sidebar row"; popups were dropped because they break the glass, ADR-17/ADR-22.)
 5. **Reskin:** an Apple-like "Liquid Glass" look (translucent blurred surfaces, soft depth, smooth motion). Riley thinks there is a GitHub repo for it.
    - **Identify and vet it before using it.** Check the licence, the size, and whether it works on **iOS Safari**. Riley's app is an iOS home-screen PWA, and SVG-displacement "refraction" effects commonly work in Chromium only.
    - Fall back to pure CSS `backdrop-filter` / `-webkit-backdrop-filter` glass.
 
-**Key open design question: where stage data lives.** The site is static, with no backend.
+**SUPERSEDED — historical; do not act on (removed at ship):** the pre-build planning blocks — the storage options table ((a) localStorage, (b) GitHub repo file [chosen, as a separate repo], (c) Cloudflare Worker + KV behind Access, (d) Jobber custom field), "If option (b) is chosen, implementation rules" (it pointed at the **wrong repo**, `eckstein-jobs/data/stages.json`), the `index.html`-line "Implementation notes", "Open questions for Riley", "If the answers are not recorded here" and "Safe to build before the answers". They are in git at `48af459:APP_MASTER.md` §11 and are superseded by `docs/r1-build-spec.md`, §5 "Stage data" and §9 ADR-17 to ADR-23.
 
-| Option | Shared across devices and crew | Private | Cost and complexity | Notes |
-|---|---|---|---|---|
-| (a) Browser `localStorage` only | No | Yes (per device) | Trivial | Lost on clearing data or changing device. Not visible to crew. |
-| **(b) CHOSEN 2026-09-25, as a separate state repo (see "Decided design")**: repo file `data/stages.json` written from the app via the GitHub API with a **per-device fine-grained token** (contents:write on this repo only), stored in that device's localStorage and entered once by Riley | Yes | **No: public repo** | Free. Versioned history (every change is a commit). | The token lives in the browser, so scope it tightly and let it expire. The bot never writes this file, so its `-X theirs` rebase is unaffected. The frontend merges at load (§5 "Stage data"); `sync_jobs.py` may copy `stage` into `jobs.json` only as a convenience. |
-| (c) Cloudflare Worker plus KV behind Cloudflare Access | Yes | **Yes** | Free tier. Adds infrastructure and a Cloudflare account. | Pairs naturally with moving the site to Cloudflare Pages plus Access (§7.11). No secret in the page. |
-| (d) Jobber custom field, written through a small server | Yes (also visible in Jobber) | Yes | Needs write scopes: a re-consent of the sync app or a new app, plus a server, since the browser can't hold a secret | **Must not borrow the desktop "Eckstein AI" app.** Re-consent is Riley's step. |
+**Account and secret steps are Riley's.** He creates the fine-grained key (§6 recipe F) and types it into the app himself. Claude only guides and never sees or enters the value.
 
-**If option (b) is chosen, implementation rules:**
-- **Read** stages from the GitHub API, not the Pages URL: `GET https://api.github.com/repos/Claude69420/eckstein-jobs/contents/data/stages.json?ref=main`, with headers `Authorization: Bearer <device token>` and `Accept: application/vnd.github.raw+json`.
-  - The Pages copy lags each save by the Pages build (about 31–106 s, typically 35–47 s), plus up to 10 minutes of CDN cache (`max-age=600`), so a just-saved stage would look reverted after ↻.
-  - Unauthenticated API reads are capped at 60 per hour per IP. Devices without a token fall back to the Pages copy, read-only.
-- **Write** with `PUT` to the same URL, sending `message`, base64 `content`, the current `sha` and `branch: main`.
-  - On 409 or 422 (the sha changed), re-GET, re-apply the pending change, and retry up to 3 times.
-  - If it still fails, roll back the optimistic UI and show an error.
-- **Debounce:** batch the changes made within about 5 s into one commit (message `stages: #699 -> base, …`). Every commit to `main` starts a Pages build, and Pages has a soft limit of about 10 builds per hour.
-- **Local git:** stage commits land on `main`, so always commit, then `pull --rebase`, then push (Rule 10). The bot's rebase is unaffected, because the bot never touches `data/stages.json`.
-- **Token:** a fine-grained PAT owned by `Claude69420`, limited to the `eckstein-jobs` repository, with Contents: Read and write and an expiry of 1 year or less.
-  - It is stored only in that device's localStorage (key `ej_gh_token`, inside try/catch).
-  - Riley creates it and enters it himself.
-  - Log the expiry date (not the value) in the CHANGELOG.
+**Acceptance checklist** (ticked 2026-09-26 unless noted; "browser" = workflow `wf_b6eb06d9-c72` acceptance in the local preview, local stage mode)
+- [x] Move a job to Base from the desktop hover card and from the detail sheet (list row or pin): the pin and row update in place without closing the card or sheet (browser). Shared backend: batching, 409 merge-retry, offline queue and rollback covered by `tests/stages.test.js` (38/38) and the live contract test. **Second real device:** after Riley's key.
+- [x] Client/Stage toggle: chips, pin colours and list groups follow the mode; the mode and selection are remembered after reload (browser).
+- [x] Stage route from the shop, `S` then #1..n, `~` min and km, "no live traffic"; every Google Maps part ≤10 points; 60 stops well under 300 ms, no freeze (`tests/tsp.test.js` 15 passed; browser).
+- [x] Pending 9000+ jobs show their stage; unknown or missing stages show as Ready to start (`tests/stages.test.js`; browser).
+- [x] Reskin checked at 375×812 and 1440×900, light and dark (browser). **[ ] Riley confirmed it on his iPhone PWA** (open until he does).
+- [x] `sw.js` at `ej-v2` with old-cache cleanup; CHANGELOG entry for the ship; §2, §4.3, §5, §7.8, §7.12, §8, §9, §10 updated to the new structure and line numbers.
 
-**Implementation notes** (from the frontend analysis; line numbers are `index.html` @ `8b2e72f`):
-- **Data:**
-  - Define `STAGES = [{key, label, colour}]` next to `COL`, `LABEL` and `SHOP` (L78–80), using the exact keys, labels and colours in §5 "Stage data".
-  - In `loadAll()` (L94–96), after `JOBS = j`, fetch the stage store and merge: `JOBS.forEach(x => x.stage = (S.stages[x.jobNumber]||{}).stage || 'ready')`. Treat unknown or missing values as the first stage.
-  - Orphaned entries (jobs that have left Jobber's active list) are cleaned up by the app's writer or by hand, **never by `sync_jobs.py`** (§5).
-- **Filter mode:**
-  - Generalise `renderJobs` into a mode descriptor, `{keys, colorOf, labelOf, keyOf}`, with a separate `vis` map per mode. The places to change are `keys`/`vis` (L100), chips (L102), the predicate (L104), marker colour (L107), group headers (L112), and dot and badge colours (L114).
-  - Add a segmented control before `#chips` (L62), and remember the mode in localStorage (inside try/catch).
-  - Consider letting search match client, stage and status.
-- **Stage route:**
-  - `stops = [{...SHOP}, ...JOBS.filter(x => x.ok && x.stage === k).map(x => ({name, lat, lon, jobNumber}))]`.
-  - Switch to the Plan tab (`document.querySelector('#tabs button[data-v=plan]').click()`), then `showResult(optimize(stops, true, false, rt), rt, stageLabel)`.
-  - **Prerequisites:**
-    - delete the 300-restart loop (L154), or move `optimize` to a Web Worker and show a spinner;
-    - chunk Google Maps links into ≤10-point parts with overlapping endpoints;
-    - add `jobNumber` to stops;
-    - call `pmap.remove()` before re-creating the map.
-  - **Rural legs:** the planner uses 40 km/h for every leg (L157), which breaks Rule 6's 70–80 km/h rural convention for Altona (~100 km), Carman and Portage la Prairie jobs. Until Riley answers Q4, either:
-    - exclude jobs outside Winnipeg from one-click stage routes by default and list them separately under the result; **or**
-    - apply 70 km/h to legs over 15 km.
-    Either way, keep `~` and "no live traffic". Record which one was used in the Work log.
-  - Show the stop count before building. Ask for confirmation above ~25 stops. On day one every job is `ready`, so that route would hold every mapped job (~53, 6+ Google Maps parts).
-- **Stage slider:**
-  - Build the popup as a DOM element, either `bindPopup(el)` or wiring it up on `popupopen`.
-  - Click or tap is the primary trigger, since phones have no hover.
-  - On desktop, open on `mouseover` but do **not** close on `mouseout` (a popup that closes on `mouseout` vanishes as the pointer moves into it). Close on a map click or when another marker opens, so the pointer can reach the slider.
-  - In the row (L115), expand the control inline and stop the tap from also panning.
-  - **Update in place** (`m.setIcon`, patch the row) rather than calling `renderJobs()`, which would close the popup. Keep `jmap._fitted`.
-  - Use optimistic UI with rollback on a save error.
-  - Until Q3 is answered, Poured jobs stay visible, and the Stage filter can hide them.
-- **Reskin:**
-  - Tokenise every hard-coded colour (§4.3) into `:root` and add a dark-mode block.
-  - Update the colours set in JS: `COL` (L78), popup (L108), tags (L114), picker bullet (L136), pins (L167, L170, L173), polyline (L169). Handle the tile filter (L83), possibly with Esri Dark Gray for dark mode.
-  - Glass surfaces: `#top`, `#tabs` (as a segmented control), `.chips`, `.side`, `.card`, `.res`, the Leaflet popup wrapper and tip, and the zoom controls.
-  - Keep the blur modest over the moving map on phones.
-  - Replace the hard-coded 92 px header height (L24) and fix the z-index clash. Keep `env(safe-area-inset-*)`.
-  - Update `<meta theme-color>` (L4), the manifest `theme_color` and `background_color`, and the icons (add a 180 px apple-touch-icon).
-  - Bump `sw.js` to `ej-v2` with old-cache cleanup.
-  - The desktop route-builder template is out of scope unless Riley asks. If it is restyled, keep publish's `ANCHOR`.
-  - **Library constraints:**
-    - ADR-14 (no build step) rules out React or Vue component packages installed via npm.
-    - Use a Liquid Glass repo only if it is plain CSS or vanilla JS, MIT or Apache licensed, and either loaded from a pinned CDN URL with SRI or vendored into the repo.
-    - It must degrade gracefully on iOS Safari, because WebKit ignores SVG `backdrop-filter: url(#…)` refraction.
-    - Otherwise, build the glass effect directly: `backdrop-filter: blur(20px) saturate(180%)` together with `-webkit-backdrop-filter`, semi-transparent fills, a 1 px inner highlight border and soft shadows.
-    - Record the repo URL, its licence and the decision in the Work log.
-  - **Keep every DOM id listed in §4.3 stable.** The stage route and the tab switching code use them.
-  - **Icons:** generate 180, 192, 512 and maskable PNGs with Pillow. It is available in `C:/Users/Riley/OneDrive/Documents/Agents/.venv/Scripts/python.exe` and in the system Python (both Pillow 12.2.0). Add `<link rel="apple-touch-icon" sizes="180x180">`.
-  - **Acceptance:**
-    - Claude checks the local preview at 375×812 and at desktop width, in light and dark.
-    - **Riley verifies on his iPhone home-screen PWA**, which Claude cannot test. Record his OK in the Work log before marking the reskin done.
-    - Rollback is `git revert` of the merge commit.
-  - **Order:** reskin and stages ship as separate merges to `main`, so either can be reverted alone.
-- **Cheap fixes to make alongside:**
-  - try/catch around localStorage (L174, L177, L180);
-  - `ignoreSearch:true` in the service worker;
-  - `\b` in the geocoder regex and a `searchExtent` south edge of about 49.0;
-  - show `Match_addr`;
-  - an `escapeHtml` helper;
-  - a multi-select picker that respects filters and stores `jobNumber`;
-  - delete Branch B (L151);
-  - disable the fixed-end checkbox when Return-to-start is ticked.
+When Riley confirms on his iPhone, mark R-1 **done** here and in §0.
 
-**Open questions for Riley** (sent 2026-09-25; the answers that matter are recorded above under "Answers from Riley", and Claude's defaults cover the rest):
-1. Storage: should stages be **shared** (crew or partners see and move them) or only on Riley's phone? Must they be **private** (not on the public internet)? This picks the option in the table above.
-2. Who can move stages: only Riley, or crew too? Is change history (who and when) needed?
-3. Default stage for new jobs is "Ready to start"? What happens after **Poured**: keep it visible, hide it by default, or drop it once Jobber closes the job?
-4. Stage route: always start at the shop? Return to the shop, or end at the last job? Include PENDING (9000+) jobs? Should it also respect the current client filter?
-5. Colours in Stage mode: colour the dots by stage (and show the client some other way, such as a ring or badge)?
-6. Should the slider open on **hover** on desktop and on tap on the phone (confirm)?
-7. Should stages be written back into Jobber (custom field or note)?
-8. Liquid Glass: which GitHub repo did he mean? Light only, or automatic dark mode? Should the app icon be redesigned? Keep the light-gray map tiles?
-9. Should the published desktop route maps get the same new look?
-10. Should the site go private (Cloudflare Access) as part of this, given that stage writes add sensitivity?
+### R-2: Setup stage, before/after-work items (lane closure, street cut, asphalt, pavers, cuts & cleanup), route editing, pricing
 
-**If the answers are not recorded here:**
-- Do not choose a storage backend, create tokens or accounts, or change repo visibility.
-- Ask Riley. If a transcript-search tool is available, you may first recover his answers from the earlier session, then record them here (and in the Work log) with the date.
+**Status: planning, answers received (2026-09-26).** Plan: `docs/r2-plan.md` (updated with the answers). Build starts after R-1 ships (Q7). R-1 continues independently.
 
-**Safe to build before the answers** (do it on the R-1 branch, Rule 13):
-1. The planner prerequisites: delete the L154 restart loop, call `pmap.remove()`, split Google Maps links into parts of 10 points or fewer, and put `jobNumber` on stops.
-2. The "Cheap fixes" list.
-3. `STAGES`, the Client/Stage filter toggle, the slider and the one-click stage route. They all call a small adapter, `StageStore = {load(): Promise<map>, set(jobNumber, key): Promise}`. Its first implementation uses the localStorage key `ej_stages` (inside try/catch). The chosen backend later replaces only the adapter.
-4. The reskin.
+**Riley's request, 2026-09-26 (verbatim):**
+> "After each site is poured, there are a couple additional stages that not every job moves through but we will need to track and route map them. Asphalt and paving stones need to be done, as well as cuts and cleanup. Asphalt needs to be done before cuts and cleanup if its a road cut, but can be done after if its just isolations so its not always linear progression but always after concrete is poured. As well paving stones can be done after cuts and cleanup if theyre just blockout etc but need to be done first if its a full paving stone section of sidewalk or something. I think the best way for this is if there is a checkbox for asphalt and paving stones available during the previous stages that when poured puts them on a separate list that can be mapped (asphalt of pavers). I just dont want things to become too cluttered adding more stuff. Importantly, often sites get invoiced after the concrete is poured before asphalt, paving stones and cleanup are complete, so if the asphalt/pavers checkbox is set to positive then even when the jobs are marked complete in jobber they need to remain on this list until both asphalt, paving stones, and cleanup are all complete.
+>
+> THinking more, some sites need street cuts before we can excavate so you could add a street cut checkbox as well and these could be routed separately. And a lane closure checkbox so we can see if we need to book it in advance of setup and excavation. These two could be substages of Ready to start and if they are checked off as required, they must be checked off as completed. Maybe a slider for each with N/A, Required, Completed (for cuts) or N/A, Required, Booked (for lane closures, and a date wheel for start and end of booked lane closure) or something would be clean, that way if none required then it moves into next stage and if completed then it moves into next stage, only Required holds it back. These jobs could be allowed to move to setup stage without the cuts, but lane closure would hold them in back keeping them in the setup stage (oh yeah, I also want to add a setup stage between start and excavation. Cuts would hold up moving to excavation.  I like the toggle switch/slider option and this should be used for the apshalt/pavers options as well in the later stages as mentioned above.
+>
+> I would also like option to route setup and cleanup together as its the same crew. As well for routing, it should do all jobs in the respective stage by default but I should be able to deselect individual jobs if I want them skipped for the given route, or add custom stops if needed. Once route is calculated I should be able to drag the stops around like in apple maps if I want to manually reorder, and there can be a button for reoptimize.
+>
+> Additionally, when available the prices from the job from Jobber should also be displayed, as well as the total value of jobs in each stage. There needs to be a universal toggle switch for this Show/Hide Pricing so that i can view everything with or without.
+>
+> This is a lot of new information and there are probably a couple ways to structure these. Please provide feedback on my ideas and a plan of how you will implement them. [...] please please please ask me any questions for clarification, i want this to be done right the first time. and provide feedback if you think there is a better way of doing things. And ask specifically about our workflow/process/order of ops if something doesnt make sense. This needs to be super clear and bulletproof, and I dont want additional clutter more than necessary"
 
-**Account and secret steps are Riley's.** He creates a fine-grained PAT (option b) or a Cloudflare account (option c), and types any token into the app himself. Claude only guides and never sees or enters the value.
+**Facts checked 2026-09-26:** Jobber's Job type exposes `total`, `uninvoicedTotal` and `lineItems { name description quantity unitPrice totalPrice }` (seen in the desktop MCP server's `GetJob` query). The sync currently fetches only `status: active` jobs, so jobs closed for invoicing drop out of `jobs.json`.
 
-**Acceptance checklist** (tick in the Work log with the date and how it was verified):
-- [ ] Move job #N to Base from the map popup and from the list row. The dot and row update without the popup closing. After ↻ the stage persists on the same device, and on a second device if the backend is shared.
-- [ ] Client/Stage toggle: chips, dot colours and list groups follow the mode. The choice is remembered after reload.
-- [ ] "Route this stage" builds from the shop, labelled `S` then #1..n, with `~` min and km and "no live traffic". Every Google Maps part has 10 points or fewer. With 25 stops the UI does not freeze.
-- [ ] Pending 9000+ jobs show their stage. Unknown or missing stages show as Ready to start.
-- [ ] Reskin checked at 375×812 and at desktop width, in light and dark. Riley confirmed it on his iPhone PWA.
-- [ ] `sw.js` cache bumped with old-cache cleanup. CHANGELOG entries exist for every commit. §4.3, §5 and §7.8 are updated to the new line numbers and structure.
-
-When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
+**Answers from Riley (2026-09-26, question panel; quoted where he typed text):**
+- **Q1 Stage meaning:** "The base crew". A job's stage is the work happening now / next ("Setup" = needs setup, "Passed inspection" = ready to pour). Routing a stage = that crew's list.
+- **Q2 Gates:** "Job stays in ready to start until lane closure is booked (cant progress to setup yet). Street cuts we can still set up, but job is blocked from moving to excavation." So lane closure `Required` blocks Ready → Setup; street cut `Required` blocks Setup → Excavation.
+- **New item (Q2 text):** "there is one more checkbox/toggle that can be added in the ready to start. Assessed. This is if an on site or virtual assessment has been completed. This doesnt need to be a blocker, i just want it tracked so we can route unassessed jobs". Claude's design: 3-way switch `Not yet · Virtual · On site` (default Not yet), shown in Ready to start / Setup, never blocks; "Unassessed" list = Ready/Setup jobs still Not yet.
+- **Q3 Cuts & cleanup:** "Every job needs yes, the cuts are release cuts not a full depth road cut so they are done by the crewmember performing the cleanup, combined with cleanup and different than the pre excavation street cuts". So `Cuts & cleanup` becomes To do automatically at Poured on every job (2-way `To do · Done`), separate from pre-excavation street cuts.
+- **Q4 Price privacy:** "Only my devices". Prices encrypted in the public data; only devices where Riley pastes a separate pricing key decrypt them; crew with the edit key never see prices.
+- **Q5 Price shown:** "Job total". Jobber job `total` in list rows, chip totals and route totals; the job sheet also shows "Uninvoiced $X" when part is billed. (Confirm on a real job whether `total` is pre-tax.)
+- **Q6 Finished but still open in Jobber:** "Keep showing it". A job that is poured with cuts & cleanup Done and asphalt/pavers Done or N/A stays visible (with a "field work done" check) until it leaves Jobber's active list.
+- **Q7 Ship v1:** "Ship v1 now". R-1 ships as soon as its verification passes; R-2 builds on it.
+- **Q8 Auto-flags:** "Yes, from line items". The sync pre-sets Asphalt / Pavers to Required when a job's Jobber line items mention asphalt, or paving stones / pavers (only a boolean hint is published; line-item text and prices stay private). A manual N/A overrides the hint.
+- **Claude's extra safety net (told to Riley 2026-09-26):** a job closed in Jobber stays in the app whenever work has started (stage beyond Ready, or any item Required) and field work is not complete, tagged "Closed in Jobber". A job cancelled mid-way can be cleared from its sheet with "Remove from app".
 
 ### Backlog (not requested yet; suggest only)
 - Add `GH_PAT`, or accept the risk. Decide on the DST cron (§7.10).
-- Publish the 2 pending routes. Consider a periodic geocode-cache union (with Riley's OK).
-- Self-host Leaflet, fix offline mode, add auto-refresh on app resume, and show Jobber `status` (late/upcoming).
+- Consider a periodic geocode-cache union (with Riley's OK).
+- Offline now works for the last-synced data, the last known stages and Leaflet (R-1). Remaining: auto-refresh job data on app resume; show Jobber `status` (late/upcoming); validate write access at key Save (a dry-run check); an optional app-side orphan cleanup; keep `getKeyForShare` off `window.EJ`.
 
 ---
 
@@ -1566,11 +1470,30 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
 
 ---
 
+### 2026-09-26 — R-1: job stages, Client|Stage filter, one-click stage route, stage slider, Liquid Glass reskin (squash of `r1-stages`)
+- **What:**
+  - **Stages** Ready to start → Excavation → Base → Prep → Passed inspection → Poured, stored in the public state repo `Claude69420/eckstein-jobs-state` (`js/stages.js`: github / readonly / local / invalid modes, 3 s batched commits, sha-merge retry, offline write-ahead queue, last-good cache `ej_stages_cache`, damaged-file guard, write-access errors). Settings → Stages: paste/remove the edit key, Share edit access, device name.
+  - **Filter** by Client **or** Stage ("solo, then add" chips, remembered); search covers client and stage; live group counts; search chip.
+  - **One-click shop route:** "Route N" split button, a route menu of all 6 stages, and a Route button per list group; Return-to-shop and Include-out-of-town switches; confirm above 25; its result never overwrites the Plan ("Edit stops" copies it).
+  - **Stage slider** in the detail sheet and the desktop hover card (optimistic, Undo 5 s, rollback on error).
+  - **Planner:** new optimizer `js/tsp.js` (Held-Karp ≤8, heuristic otherwise, deterministic), ≤10-point Google Maps parts, 70 km/h rural legs, results on the single map, `jobNumber`/`match` on stops, multi-select picker, geocoder fixes.
+  - **Liquid Glass reskin:** full-bleed map, glass capsule, accessory, tab bar, iPhone sheets with detents, desktop left panel (PC first-class), light/dark (Esri Dark Gray), Liquid/Tinted/Solid, desktop refraction via vendored hyalite v0.5.0 behind a gate; new icons (incl. 180 px and maskable); status bar `default`; `theme-color` `#EFEFEF`/`#474749`; manifest description and colours.
+  - **Service worker `ej-v2`:** path-keyed, `ignoreSearch` offline fallback, plain network-first, unpkg Leaflet cache-first, GitHub hosts never intercepted, old caches deleted. Leaflet SRI. Guarded localStorage and escaping everywhere.
+- **Why:** Riley's 2026-09-25 request (§11, verbatim) plus "render nicely on my PC … liquid glass look on my PC"; Riley chose to ship on 2026-09-26 (R-2 Q7).
+- **Files:** `index.html`, `css/tokens.css`, `css/glass.css`, `css/components.css`, `js/tsp.js`, `js/stages.js`, `js/ui.js`, `js/app.js`, `vendor/hyalite.js`, `vendor/hyalite.LICENSE`, `sw.js`, `manifest.json`, `icons/icon-180.png`, `icons/icon-192.png`, `icons/icon-512.png`, `icons/icon-maskable-512.png`, `tests/tsp.test.js`, `tests/stages.test.js`, `docs/r2-plan.md`, `.gitattributes`, `APP_MASTER.md`.
+- **Commit:** (this commit; the squash of local WIP `be33936` + `7b5449d`; backfill the hash).
+- **Verified:** `node tests/tsp.test.js` 15 passed; `node tests/stages.test.js` 38/38; browser acceptance at 375×812 and 1440×900, light and dark, local stage mode on localhost; browser acceptance + 5 review lenses found 48 issues (10 major, 38 minor), 2 fix rounds fixed all majors and most minors, re-verification found 0 critical/major; remaining minors: the Route chevron hit area (fixed by the main session to 44×44), route-menu counts can differ from chip counts by design (the menu counts routable jobs), 2-row stage chips untested on a real iPhone SE width, client chips use "solo, then add" (spec default; the old app hid one client per tap); live state-repo contract test (entry below). Live check after push: §11 Work log.
+- **Rollback:** §7.15 (`git revert` of this one commit restores the pre-R-1 app). Stage data stays in the state repo. Riley re-adds the Home Screen icon again.
+- **Riley action:** **Delete and re-add the Home Screen icon.** The status bar changed from `black-translucent` to `default`, `theme-color` is now dynamic (`#EFEFEF`/`#474749`), and the icon is new; iOS reads these only at install. Before deleting it, note any saved planner routes: they live only in that app's storage. Then: create the stage edit key (§6 F; build spec §3.1); paste it on the iPhone (inside the installed app) and on the PC (§3.2); share edit access with crew (§3.3); delete `refresh_token.txt` (§3.4). Then confirm the new look on his iPhone.
+
+### 2026-09-26 — State repo contract test (no change to this repo)
+- **What:** the `js/stages.js` build agent ran a live `gh api` contract test against a throwaway file in `Claude69420/eckstein-jobs-state`: 4 commits titled "(throwaway)", `26b282c` create, `200f39b` update, `20b1cee` same content, `bb6d96d` delete (15:03–15:04 UTC). `stages.json` untouched (still the compact `{"version":1,"stages":{}}`; the first real save rewrites it as 2-space JSON). The local clone `C:/Users/Riley/eckstein-jobs-state` is 4 commits behind origin: pull before any hand edit. **Commit:** none here.
+
 ### 2026-09-25 — R-1 design brief + reconciled build spec (docs only)
 - **What:** Saved the Liquid Glass research output as `docs/liquid-glass-brief.md` and wrote `docs/r1-build-spec.md`, which overrides the brief with Riley's answers (GitHub state-repo storage, no key in URLs, defaults for open calls, PC first-class, single squash merge). Amended §11 "Decided design" (setup link replaced by "Share edit access").
 - **Why:** R-1 needs one build-ready spec that a fresh or post-compaction session can execute without re-deriving decisions.
 - **Files:** `docs/liquid-glass-brief.md` (new), `docs/r1-build-spec.md` (new), `APP_MASTER.md`.
-- **Commit:** (this commit; backfill hash).
+- **Commit:** `48af459`.
 - **Verified:** docs only.
 - **Rollback:** `git revert <hash>`.
 
@@ -1578,7 +1501,7 @@ When every box is ticked, mark R-1 done here and summarise it in the CHANGELOG.
 - **What:** New public repo with `stages.json` = `{"version":1,"stages":{}}` and a README. Local clone at `C:/Users/Riley/eckstein-jobs-state` (repo-local git identity set). No Pages.
 - **Why:** R-1 decided design (§11): stages live in a separate repo so the app's edit key cannot modify the app, and stage writes never trigger Pages builds or collide with the sync bot.
 - **Files:** in the new repo only (`stages.json`, `README.md`). No change to this repo except this entry.
-- **Commit:** state repo initial commit (`Initial empty stage store`); this entry is logged in (this commit).
+- **Commit:** state repo initial commit `79e2829` (`Initial empty stage store`); this entry was logged in `007f3b0`.
 - **Verified:** `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` returns the empty store; repo is public on branch `main`.
 - **Rollback:** `gh repo delete Claude69420/eckstein-jobs-state` (only if R-1 is abandoned; it would erase stage history).
 

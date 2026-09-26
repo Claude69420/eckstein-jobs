@@ -1,185 +1,282 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <title>Eckstein Jobs</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Eckstein Jobs">
+<meta name="theme-color" content="#EFEFEF">
+<meta name="description" content="Eckstein Repair jobs: map, stages, route maps and a route planner.">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-:root{--crown:#2563eb;--harris:#dc2626;--acv:#16a34a;--mytec:#7c3aed;--other:#f59e0b;--ink:#0f172a;--bg:#f4f5f7}
-*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#111}
-#top{position:sticky;top:0;z-index:1000;background:var(--ink);color:#fff;padding:env(safe-area-inset-top) 0 0}
-#top .bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px}
-#top h1{margin:0;font-size:17px}#top .upd{font-size:11px;opacity:.8}
-.tb{background:#334155;color:#fff;border:0;border-radius:5px;padding:5px 9px;font-size:12px;font-weight:700;text-decoration:none;line-height:1}
-#tabs{display:flex;background:#1e293b}#tabs button{flex:1;padding:11px 0;border:0;background:none;color:#cbd5e1;font-size:14px;font-weight:600}
-#tabs button.on{color:#fff;border-bottom:3px solid #38bdf8}
-.view{display:none}.view.on{display:block}
-.mapbox{height:52vh;min-height:280px}
-@media(min-width:900px){.split{display:flex;height:calc(100vh - 92px)}.split .mapbox{flex:1;height:auto;min-height:0}.split .side{width:440px;overflow:auto;border-left:1px solid #d0d4db}}
-.chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:#fff;border-bottom:1px solid #d0d4db}
-.chip{padding:6px 10px;border-radius:5px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;user-select:none}
-.chip.off{opacity:.3}.chip .ct{background:rgba(255,255,255,.3);padding:1px 6px;border-radius:8px;margin-left:4px;font-size:11px}
-.search{padding:8px 12px;background:#fff;border-bottom:1px solid #d0d4db}.search input{width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px}
-.grp{padding:7px 12px;color:#fff;font-size:13px;font-weight:700}
-.row{padding:10px 12px;border-bottom:1px solid #e0e4eb;font-size:13px;display:flex;gap:9px;align-items:flex-start;background:#fff}
-.row:active{background:#eef2ff}.dot{flex:0 0 14px;height:14px;border-radius:7px;margin-top:3px;border:2px solid #fff;box-shadow:0 0 0 1px #999}
-.body{flex:1;line-height:1.35}.jn{color:#6b7280;font-size:11px;font-weight:700}
-.badge{display:inline-block;color:#fff;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:5px;font-weight:700;font-family:Menlo,Consolas,monospace}
-.tag{display:inline-block;font-size:9.5px;padding:1px 5px;border-radius:3px;margin-left:5px;font-weight:700;color:#fff}
-.city{color:#6b7280;font-size:11px}.muted{color:#6b7280;font-size:12px;padding:10px 12px}
-.mk{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5)}
-.mk.uns{border:2px solid #b45309}.mk.pend{border:2px dashed #7c3aed}
-.pin{color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.4);border:2px solid #fff}
-.card{display:block;background:#fff;margin:10px 12px;padding:12px 14px;border-radius:8px;border:1px solid #d0d4db;text-decoration:none;color:#111}
-.card b{font-size:14px}.card .d{color:#6b7280;font-size:11px;margin-top:3px}
-.pane{padding:12px}.pane h2{margin:6px 0 8px;font-size:15px}
-.stops{list-style:none;margin:0;padding:0}.stops li{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #d0d4db;border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:13px}
-.stops li .n{flex:0 0 24px;height:24px;border-radius:12px;background:#334155;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
-.stops li .t{flex:1}.stops li .t small{display:block;color:#6b7280;font-size:11px}
-.ib{border:1px solid #cbd5e1;background:#fff;border-radius:5px;padding:5px 8px;font-size:12px}
-.addrow{display:flex;gap:6px;margin:8px 0}.addrow input{flex:1;padding:9px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px}
-.btn{padding:10px 14px;border:0;border-radius:6px;background:#0369a1;color:#fff;font-weight:700;font-size:14px}
-.btn.alt{background:#475569}.btn.go{background:#16a34a;width:100%;margin-top:8px}.btn.sm{padding:7px 10px;font-size:12px}
-.opts{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;margin:8px 0}
-.res{background:#fff;border:1px solid #d0d4db;border-radius:8px;margin-top:10px;overflow:hidden}
-.res .hd{padding:10px 12px;background:#e0f2fe;font-size:13px}.res .hd b{color:#0369a1}
-.res .btns{padding:8px 12px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #d0d4db}
-.res .btns a,.res .btns button{padding:6px 10px;background:#0369a1;color:#fff;text-decoration:none;border-radius:5px;font-size:12px;border:0}
-.leg{color:#9ca3af;font-size:11px;margin-top:3px}.picker{max-height:220px;overflow:auto;border:1px solid #d0d4db;border-radius:6px;background:#fff}
-.picker div{padding:8px 10px;border-bottom:1px solid #eee;font-size:13px}.picker div:active{background:#eef2ff}
-.saved{margin-top:12px}.saved .card{cursor:pointer}
-</style></head><body>
-<div id="top"><div class="bar"><h1>Eckstein Jobs</h1><div style="display:flex;gap:6px;align-items:center"><div class="upd" id="upd">loading…</div><button class="tb" id="rf" title="Reload the latest synced data">↻</button><a class="tb" href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener" title="Pull fresh from Jobber now: tap 'Run workflow' on the page that opens (~1 min)">Sync</a></div></div>
-<div id="tabs"><button class="on" data-v="jobs">Jobs</button><button data-v="routes">Routes</button><button data-v="plan">Plan a Route</button></div></div>
-
-<div id="v-jobs" class="view on"><div class="split"><div id="jmap" class="mapbox"></div><div class="side">
-<div class="chips" id="chips"></div><div class="search"><input id="q" placeholder="Search address, permit, job #…"></div><div id="jlist"></div></div></div></div>
-
-<div id="v-routes" class="view"><div id="rlist" class="muted">loading…</div></div>
-
-<div id="v-plan" class="view"><div class="pane">
-<h2>Stops</h2><ul class="stops" id="stops"></ul>
-<div class="addrow"><input id="addr" placeholder="Type an address or intersection…"><button class="btn sm" id="addAddr">Add</button></div>
-<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm alt" id="addShop">+ Shop</button><button class="btn sm alt" id="pickJob">+ From jobs list</button><button class="btn sm alt" id="clearStops">Clear</button></div>
-<div id="pickbox" class="picker" style="display:none;margin-top:8px"></div>
-<div class="opts"><label><input type="checkbox" id="fxs" checked> First stop is fixed start</label><label><input type="checkbox" id="fxe"> Last stop is fixed end</label><label><input type="checkbox" id="rt"> Return to start</label></div>
-<button class="btn go" id="opt">Optimize route</button>
-<div id="pres"></div>
-<div class="saved"><h2>Saved routes</h2><div id="savedlist" class="muted">none yet</div></div>
-</div></div>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script>
-const COL={Crown:'#2563eb',Harris:'#dc2626',ACV:'#16a34a',MyTec:'#7c3aed',NoLimits:'#0d9488',Other:'#f59e0b'};
-const LABEL={Crown:'Crown Pipeline',Harris:'Harris Holdings',ACV:'ACV Sewer & Water',MyTec:'MyTec',NoLimits:'No Limits Underground',Other:'Other / Residential'};
-const SHOP={name:'Shop (1279 Loudoun Rd)',lat:49.8401,lon:-97.2546,shop:true};
-const bust=()=> '?t='+Date.now();
-function baseTiles(map){const b=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:16,attribution:'Tiles &copy; Esri'}).addTo(map);
-try{b.getContainer().style.filter='brightness(0.9) contrast(1.2)'}catch(e){}
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:16}).addTo(map);}
+/* Boot: theme (ej_theme = auto|light|dark) and glass (ej_glass = liquid|tinted|solid) before first paint. */
+(function () {
+  var d = document.documentElement, p = { theme: 'auto', glass: '' };
+  try { p.theme = localStorage.getItem('ej_theme') || 'auto'; p.glass = localStorage.getItem('ej_glass') || ''; } catch (e) {}
+  function mm(q) { try { return window.matchMedia(q); } catch (e) { return { matches: false }; } }
+  var dark = mm('(prefers-color-scheme: dark)'), rt = mm('(prefers-reduced-transparency: reduce)');
+  function apply() {
+    var theme = (p.theme === 'light' || p.theme === 'dark') ? p.theme : (dark.matches ? 'dark' : 'light');
+    var userGlass = (p.glass === 'liquid' || p.glass === 'tinted' || p.glass === 'solid');
+    var glass = userGlass ? p.glass : (rt.matches ? 'tinted' : 'liquid');
+    d.setAttribute('data-theme', theme); d.setAttribute('data-glass', glass);
+    if (userGlass) d.setAttribute('data-glass-user', ''); else d.removeAttribute('data-glass-user');
+    var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', theme === 'dark' ? '#474749' : '#EFEFEF');
+    try { window.dispatchEvent(new CustomEvent('uiprefs', { detail: { theme: theme, glass: glass } })); } catch (e) {}
+  }
+  window.getUiPrefs = function () { return { theme: p.theme || 'auto', glass: p.glass || d.getAttribute('data-glass') || 'liquid' }; };   /* effective glass when unset */
+  window.setUiPrefs = function (next) {
+    if (next.theme) { p.theme = next.theme; try { localStorage.setItem('ej_theme', next.theme); } catch (e) {} }
+    if (next.glass) { p.glass = next.glass; try { localStorage.setItem('ej_glass', next.glass); } catch (e) {} }
+    apply();
+  };
+  function watch(q) { if (q.addEventListener) q.addEventListener('change', apply); else if (q.addListener) q.addListener(apply); }
+  watch(dark); watch(rt);
+  var sa = false; try { sa = !!(navigator.standalone || mm('(display-mode: standalone), (display-mode: fullscreen)').matches); } catch (e) {}
+  if (sa) d.classList.add('is-standalone');
+  apply();
+})();
+</script>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/glass.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+<div id="jmap" aria-label="Job map"></div>
 
-// ---------- tabs
-document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.getElementById('v-'+b.dataset.v).classList.add('on');
-if(b.dataset.v==='jobs'&&jmap)setTimeout(()=>jmap.invalidateSize(),50);if(b.dataset.v==='plan'&&pmap)setTimeout(()=>pmap.invalidateSize(),50);});
+<nav class="map-controls glass glass--sm lens-ctl" id="ctl" aria-label="Map controls">
+  <button type="button" class="icon-btn pressable desktop-only" data-act="zoom-in" aria-label="Zoom in" title="Zoom in"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button type="button" class="icon-btn pressable desktop-only" data-act="zoom-out" aria-label="Zoom out" title="Zoom out"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+  <div class="sep desktop-only" aria-hidden="true"></div>
+  <button type="button" class="icon-btn pressable" data-act="locate" aria-label="My location" title="My location"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.5 10.6l7.2 2.1 2.1 7.2z"/></svg></button>
+  <button type="button" class="icon-btn pressable" id="rf" aria-label="Reload latest data" title="Reload the latest synced data"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.8h-4.8"/></svg></button>
+  <button type="button" class="icon-btn pressable" data-act="settings" aria-label="Settings" title="Settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg></button>
+</nav>
 
-// ---------- jobs
-let JOBS=[],jmap=null,jmarkers=[],vis={};
-async function loadAll(){try{
-const [j,m]=await Promise.all([fetch('data/jobs.json'+bust()).then(r=>r.json()),fetch('data/meta.json'+bust()).then(r=>r.json())]);
-JOBS=j;const d=new Date(m.updated_utc);document.getElementById('upd').textContent=`${m.mapped}/${m.total} mapped · updated ${d.toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
-renderJobs();}catch(e){document.getElementById('upd').textContent='failed to load data';console.error(e)}
-try{const r=await fetch('routes/index.json'+bust()).then(r=>r.json());renderRoutes(r)}catch(e){document.getElementById('rlist').textContent='no routes published yet'}}
-function renderJobs(){if(!jmap){jmap=L.map('jmap');baseTiles(jmap)}
-jmarkers.forEach(m=>jmap.removeLayer(m));jmarkers=[];
-const keys=['Crown','Harris','ACV','MyTec','NoLimits','Other'];keys.forEach(k=>{if(!(k in vis))vis[k]=true});
-const chips=document.getElementById('chips');chips.innerHTML='';
-keys.forEach(k=>{const n=JOBS.filter(x=>x.clientKey===k).length;if(!n)return;const c=document.createElement('div');c.className='chip'+(vis[k]?'':' off');c.style.background=COL[k];c.innerHTML=LABEL[k]+'<span class="ct">'+n+'</span>';c.onclick=()=>{vis[k]=!vis[k];renderJobs()};chips.appendChild(c)});
-const q=(document.getElementById('q').value||'').toLowerCase();
-const shown=JOBS.filter(x=>vis[x.clientKey]&&(!q||(x.street+' '+x.permit+' '+x.jobNumber+' '+x.title+' '+x.city).toLowerCase().includes(q)));
-const bounds=[];shown.forEach(x=>{if(!x.ok)return;bounds.push([x.lat,x.lon]);
-const cls='mk'+(x.pending?' pend':x.unscheduled?' uns':'');
-const icon=L.divIcon({html:`<div class="${cls}" style="background:${COL[x.clientKey]}"></div>`,iconSize:[16,16],iconAnchor:[8,8],className:''});
-const pop=`<b>#${x.jobNumber} · ${x.client}</b><br>${x.street}${x.city!=='Winnipeg'?', <i>'+x.city+'</i>':''}${x.permit?'<br><b>Permit:</b> '+x.permit:''}<br><span style="color:#888">${x.title}</span>${x.unscheduled?'<br><b style="color:#b45309">UNSCHEDULED</b>':''}${x.pending?'<br><b style="color:#7c3aed">PENDING – not in Jobber yet</b>':''}<br><a href="https://www.google.com/maps/dir/?api=1&destination=${x.lat},${x.lon}" target="_blank">Navigate</a>`;
-const m=L.marker([x.lat,x.lon],{icon}).addTo(jmap).bindPopup(pop);m._jn=x.jobNumber;jmarkers.push(m)});
-if(bounds.length&&!jmap._fitted){jmap.fitBounds(bounds,{padding:[30,30]});jmap._fitted=true}
-const list=document.getElementById('jlist');list.innerHTML='';
-keys.forEach(k=>{const g=shown.filter(x=>x.clientKey===k);if(!g.length)return;const h=document.createElement('div');h.className='grp';h.style.background=COL[k];h.textContent=`${LABEL[k]} (${g.length})`;list.appendChild(h);
-g.forEach(x=>{const r=document.createElement('div');r.className='row';
-r.innerHTML=`<div class="dot" style="background:${COL[x.clientKey]}"></div><div class="body"><span class="jn">#${x.jobNumber}</span> <b>${x.street||'(no address)'}</b>${x.city!=='Winnipeg'?' <span class="city">– '+x.city+'</span>':''}${x.permit?'<span class="badge" style="background:'+COL[x.clientKey]+'">'+x.permit+'</span>':''}${x.unscheduled?'<span class="tag" style="background:#b45309">UNSCHED</span>':''}${x.pending?'<span class="tag" style="background:#7c3aed">PENDING</span>':''}${x.ok?'':'<span class="tag" style="background:#6b7280">UNMAPPED</span>'}</div>`;
-r.onclick=()=>{if(!x.ok)return;jmap.setView([x.lat,x.lon],16);const m=jmarkers.find(m=>m._jn===x.jobNumber);if(m)m.openPopup();window.scrollTo({top:0,behavior:'smooth'})};list.appendChild(r)})});
-if(!shown.length)list.innerHTML='<div class="muted">no jobs match</div>';}
-document.getElementById('q').oninput=renderJobs;
+<div class="accessory glass" id="accessory">
+  <div class="acc-slot">
+    <div class="filterbar" id="filterbar">
+      <div class="filterbar-row">
+        <div class="seg" id="mode" role="radiogroup" aria-label="Filter by" style="--n:2;--i:0">
+          <button type="button" class="pressable" role="radio" aria-checked="true" data-mode="client">Client</button>
+          <button type="button" class="pressable" role="radio" aria-checked="false" data-mode="stage">Stage</button>
+          <span class="seg-thumb" aria-hidden="true"></span>
+        </div>
+        <span class="count" id="count" role="status">Loading…</span>
+        <div class="split" role="group" aria-label="Route from the shop">
+          <button type="button" class="btn btn--prominent pressable" id="routeSel" disabled title="Route the selected jobs from the shop">Route</button>
+          <button type="button" class="btn btn--prominent pressable split-more" id="routeMore" disabled aria-haspopup="menu" aria-expanded="false" aria-controls="route-menu" aria-label="Route a whole stage from the shop" title="Route every job in one stage from the shop"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+        </div>
+      </div>
+      <div class="chips" id="chips" role="toolbar" aria-label="Filter"></div>
+    </div>
+  </div>
+</div>
 
-// ---------- routes
-function renderRoutes(r){const el=document.getElementById('rlist');el.className='';el.innerHTML='';if(!r.length){el.className='muted';el.textContent='no routes published yet';return}
-r.forEach(x=>{const a=document.createElement('a');a.className='card';a.href='routes/'+x.file;a.innerHTML=`<b>${x.title}</b><div class="d">${x.date}</div>`;el.appendChild(a)})}
+<nav class="tabbar glass glass--sm" id="tabs" role="tablist" aria-label="Views" style="--i:0">
+  <span class="tab-blob" aria-hidden="true"></span>
+  <button type="button" class="tab pressable on" role="tab" aria-selected="true" data-v="jobs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-10.8a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.3"/></svg><span>Jobs</span></button>
+  <button type="button" class="tab pressable" role="tab" aria-selected="false" data-v="routes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/></svg><span>Routes</span></button>
+  <button type="button" class="tab pressable" role="tab" aria-selected="false" data-v="plan"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg><span>Plan</span></button>
+</nav>
 
-// ---------- plan
-let stops=[],pmap=null,pmarkers=[],pline=null;
-function renderStops(){const ul=document.getElementById('stops');ul.innerHTML='';stops.forEach((s,i)=>{const li=document.createElement('li');
-li.innerHTML=`<div class="n">${i+1}</div><div class="t">${s.name}<small>${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}</small></div><button class="ib" data-a="up">▲</button><button class="ib" data-a="dn">▼</button><button class="ib" data-a="x">✕</button>`;
-li.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.a;if(a==='x')stops.splice(i,1);else if(a==='up'&&i>0)[stops[i-1],stops[i]]=[stops[i],stops[i-1]];else if(a==='dn'&&i<stops.length-1)[stops[i+1],stops[i]]=[stops[i],stops[i+1]];renderStops()});ul.appendChild(li)});
-if(!stops.length)ul.innerHTML='<li style="color:#6b7280">no stops yet — add an address, the shop, or pick from the jobs list</li>'}
-async function geocode(text){const u='https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=CAN&searchExtent=-98.6,49.2,-95.8,50.7&outFields=Match_addr&singleLine='+encodeURIComponent(text+(/(mb|manitoba|winnipeg)/i.test(text)?'':', Winnipeg, MB'));
-const r=await fetch(u).then(r=>r.json());const c=(r.candidates||[])[0];if(!c)throw new Error('not found');return {name:text,lat:c.location.y,lon:c.location.x,match:c.attributes&&c.attributes.Match_addr}}
-document.getElementById('addAddr').onclick=async()=>{const t=document.getElementById('addr').value.trim();if(!t)return;const b=document.getElementById('addAddr');b.textContent='…';try{const g=await geocode(t);stops.push({name:t,lat:g.lat,lon:g.lon});document.getElementById('addr').value='';renderStops()}catch(e){alert('Could not find: '+t)}b.textContent='Add'};
-document.getElementById('addr').onkeydown=e=>{if(e.key==='Enter')document.getElementById('addAddr').click()};
-document.getElementById('addShop').onclick=()=>{stops.push({...SHOP});renderStops()};
-document.getElementById('clearStops').onclick=()=>{stops=[];renderStops();document.getElementById('pres').innerHTML=''};
-document.getElementById('pickJob').onclick=()=>{const p=document.getElementById('pickbox');if(p.style.display!=='none'){p.style.display='none';return}p.style.display='block';p.innerHTML='';
-JOBS.filter(x=>x.ok).forEach(x=>{const d=document.createElement('div');d.innerHTML=`<span style="color:${COL[x.clientKey]};font-weight:700">●</span> #${x.jobNumber} ${x.street}${x.city!=='Winnipeg'?' ('+x.city+')':''}${x.permit?' <span style="color:#6b7280">'+x.permit+'</span>':''}`;
-d.onclick=()=>{stops.push({name:x.street+(x.permit?' · '+x.permit:''),lat:x.lat,lon:x.lon});renderStops();p.style.display='none'};p.appendChild(d)})};
+<div class="scrim" id="scrim"></div>
 
-// TSP
-function hav(a,b){const R=6371,r=Math.PI/180,la1=a.lat*r,la2=b.lat*r,dla=(b.lat-a.lat)*r,dlo=(b.lon-a.lon)*r;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
-function plen(p,rt){let s=0;for(let i=0;i<p.length-1;i++)s+=hav(p[i],p[i+1]);if(rt&&p.length>1)s+=hav(p[p.length-1],p[0]);return s}
-function* perms(a,n=a.length){if(n<=1){yield a.slice();return}for(let i=0;i<n;i++){yield* perms(a,n-1);const j=n%2?0:i;[a[n-1],a[j]]=[a[j],a[n-1]]}}
-function nn(start,pool){const r=[start],rem=pool.slice();while(rem.length){const l=r[r.length-1];let bi=0,bd=1e9;rem.forEach((x,i)=>{const d=hav(l,x);if(d<bd){bd=d;bi=i}});r.push(rem.splice(bi,1)[0])}return r}
-function localOpt(route,lo,hi,rt){let best=route,imp=true;while(imp){imp=false;for(let i=lo;i<hi;i++)for(let k=i+1;k<=hi;k++){const c=best.slice(0,i).concat(best.slice(i,k+1).reverse(),best.slice(k+1));if(plen(c,rt)<plen(best,rt)-1e-9){best=c;imp=true}}
-for(const seg of [1,2,3])for(let i=lo;i+seg-1<=hi;i++){const ch=best.slice(i,i+seg),rest=best.slice(0,i).concat(best.slice(i+seg));for(let j=lo;j<=rest.length-(hi+1-rest.length>0?0:0)&&j<=hi-seg+1;j++){const c=rest.slice(0,j).concat(ch,rest.slice(j));if(plen(c,rt)<plen(best,rt)-1e-9){best=c;imp=true}}}}return best}
-function optimize(st,fxs,fxe,rt){if(st.length<3)return st.slice();
-const first=fxs?st[0]:null,last=(fxe&&!rt)?st[st.length-1]:null;
-const free=st.filter(s=>s!==first&&s!==last);
-const wrap=p=>(first?[first]:[]).concat(p,last?[last]:[]);
-if(free.length<=8&&(first||last||rt||free.length<=7)){let best=null,bl=1e18;for(const p of perms(free)){const c=wrap(p);const l=plen(c,rt);if(l<bl){bl=l;best=c.slice()}}return best}
-if(free.length<=7){let best=null,bl=1e18;for(const p of perms(free)){const c=wrap(p),l=plen(c,rt);if(l<bl){bl=l;best=c.slice()}}return best}
-let best=null,bl=1e18;const seeds=first?[first]:free;
-for(const s of seeds){let r=first?nn(first,free):nn(s,free.filter(x=>x!==s));r=wrap(first?r.slice(1):r);const lo=first?1:0,hi=r.length-1-(last?1:0);r=localOpt(r,lo,hi,rt);const l=plen(r,rt);if(l<bl){bl=l;best=r}}
-for(let t=0;t<300;t++){const sh=free.slice().sort(()=>Math.random()-.5);let r=first?nn(first,sh):nn(sh[0],sh.slice(1));r=wrap(first?r.slice(1):r);const lo=first?1:0,hi=r.length-1-(last?1:0);r=localOpt(r,lo,hi,rt);const l=plen(r,rt);if(l<bl){bl=l;best=r}}return best}
+<section class="sheet glass lens-panel" id="sheet" data-view="jobs" data-detent="closed" hidden aria-label="Jobs">
+  <header class="sheet-head">
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="sheet-top">
+      <h2 class="sheet-title">Jobs</h2>
+      <div class="panel-views desktop-only" role="toolbar" aria-label="Views">
+        <button type="button" class="icon-btn pressable" data-v="jobs" aria-label="Jobs" title="Jobs" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-10.8a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.3"/></svg></button>
+        <button type="button" class="icon-btn pressable" data-v="routes" aria-label="Routes" title="Published routes" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
+        <button type="button" class="icon-btn pressable" data-v="plan" aria-label="Plan a route" title="Plan a route" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg></button>
+        <button type="button" class="icon-btn pressable" data-v="settings" aria-label="Settings" title="Settings" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg></button>
+      </div>
+      <button type="button" class="close-btn pressable phone-only" data-act="collapse" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="sheet-sub"><span id="upd">loading…</span> · <a href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener" title="Pull fresh from Jobber now: tap 'Run workflow' on the page that opens (~1 min), then reload">Sync</a></div>
+    <!-- #filterbar lands here in the Jobs view (always on desktop; while the sheet is open on iPhone) -->
+    <input class="search" id="q" type="search" placeholder="Search jobs, clients, permits" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search jobs">
+  </header>
+  <div class="sheet-body">
+    <div class="view on" id="v-jobs"><div class="job-list" id="jlist" role="list"></div></div>
 
-function gm(pts){return 'https://www.google.com/maps/dir/'+pts.map(p=>p.lat+','+p.lon).join('/')}
-function showResult(seq,rt,name){const legs=[];for(let i=0;i<seq.length-1;i++){const km=hav(seq[i],seq[i+1])*1.39;legs.push({min:+(km/40*60).toFixed(1),km:+km.toFixed(2)})}
-if(rt&&seq.length>1){const km=hav(seq[seq.length-1],seq[0])*1.39;legs.push({min:+(km/40*60).toFixed(1),km:+km.toFixed(2)})}
-const tm=legs.reduce((a,l)=>a+l.min,0),tk=legs.reduce((a,l)=>a+l.km,0);
-const pts=rt?seq.concat([seq[0]]):seq;const mid=Math.floor(pts.length/2);
-const startShop=!!seq[0].shop;
-let html=`<div class="res"><div class="hd"><b>~${Math.round(tm)} min</b> · <b>~${tk.toFixed(1)} km</b> · ${seq.length} stops${rt?' · round trip':''}<div class="leg">~ haversine×1.39 @ 40 km/h · no live traffic</div></div><div class="btns"><a href="${gm(pts)}" target="_blank">Google Maps</a>`;
-if(pts.length>10)html+=`<a href="${gm(pts.slice(0,mid+1))}" target="_blank">Part 1</a><a href="${gm(pts.slice(mid))}" target="_blank">Part 2</a>`;
-html+=`<button id="saveR">Save</button></div><div id="pmap" class="mapbox" style="height:44vh"></div><div id="plist"></div></div>`;
-document.getElementById('pres').innerHTML=html;
-pmap=L.map('pmap');baseTiles(pmap);const b=[];const lbl=i=>startShop?(i===0?'S':String(i)):String(i+1);
-seq.forEach((s,i)=>{b.push([s.lat,s.lon]);const bg=i===0?'#16a34a':(i===seq.length-1&&!rt)?'#dc2626':'#0369a1';
-L.marker([s.lat,s.lon],{icon:L.divIcon({html:`<div class="pin" style="background:${bg}">${lbl(i)}</div>`,iconSize:[28,28],iconAnchor:[14,14],className:''})}).addTo(pmap).bindPopup(`<b>${lbl(i)}</b> ${s.name}`)});
-L.polyline(pts.map(s=>[s.lat,s.lon]),{color:'#0369a1',weight:3,opacity:.75,dashArray:'8,6'}).addTo(pmap);pmap.fitBounds(b,{padding:[30,30]});
-const pl=document.getElementById('plist');seq.forEach((s,i)=>{const r=document.createElement('div');r.className='row';const bg=i===0?'#16a34a':(i===seq.length-1&&!rt)?'#dc2626':'#0369a1';
-r.innerHTML=`<div class="n pin" style="background:${bg};width:28px;height:28px;flex:0 0 28px">${lbl(i)}</div><div class="body"><b>${s.name}</b>${i>0?`<div class="leg">+~${legs[i-1].min} min · ~${legs[i-1].km} km</div>`:''}</div>`;
-r.onclick=()=>{pmap.setView([s.lat,s.lon],15)};pl.appendChild(r)});
-if(rt){const r=document.createElement('div');r.className='row';r.innerHTML=`<div class="n pin" style="background:#dc2626;width:28px;height:28px;flex:0 0 28px">${lbl(0)}</div><div class="body"><b>Return to ${seq[0].name}</b><div class="leg">+~${legs[legs.length-1].min} min · ~${legs[legs.length-1].km} km</div></div>`;pl.appendChild(r)}
-document.getElementById('saveR').onclick=()=>{const nm=prompt('Name this route:',name||new Date().toLocaleDateString());if(!nm)return;const all=JSON.parse(localStorage.getItem('ej_routes')||'[]');all.unshift({name:nm,when:new Date().toISOString(),seq,rt});localStorage.setItem('ej_routes',JSON.stringify(all.slice(0,50)));renderSaved()};}
-document.getElementById('opt').onclick=()=>{if(stops.length<2){alert('Add at least 2 stops');return}const fxs=document.getElementById('fxs').checked,fxe=document.getElementById('fxe').checked,rt=document.getElementById('rt').checked;
-const seq=optimize(stops,fxs,fxe,rt);showResult(seq,rt)};
-function renderSaved(){const all=JSON.parse(localStorage.getItem('ej_routes')||'[]');const el=document.getElementById('savedlist');if(!all.length){el.className='muted';el.textContent='none yet';return}el.className='';el.innerHTML='';
-all.forEach((r,i)=>{const c=document.createElement('div');c.className='card';c.innerHTML=`<b>${r.name}</b><div class="d">${r.seq.length} stops · ${new Date(r.when).toLocaleString()}</div>`;
-c.onclick=()=>{stops=r.seq.map(s=>({...s}));renderStops();showResult(r.seq,r.rt,r.name);window.scrollTo({top:0})};
-const del=document.createElement('button');del.className='ib';del.textContent='delete';del.style.marginTop='6px';del.onclick=e=>{e.stopPropagation();all.splice(i,1);localStorage.setItem('ej_routes',JSON.stringify(all));renderSaved()};c.appendChild(del);el.appendChild(c)})}
+    <div class="view" id="v-routes"><div id="rlist" class="muted">loading…</div></div>
 
-document.getElementById('rf').onclick=()=>{document.getElementById('upd').textContent='refreshing…';location.reload()};
-renderStops();renderSaved();loadAll();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-</script></body></html>
+    <div class="view" id="v-plan">
+      <div class="group-title">Stops</div>
+      <ul id="stops"></ul>
+      <div class="field"><input id="addr" type="text" placeholder="Type an address or intersection…" autocomplete="off" enterkeyhint="go" aria-label="Address to add"><button type="button" class="btn pressable" id="addAddr">Add</button></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn--sm pressable" id="addShop">+ Shop</button>
+        <button type="button" class="btn btn--sm pressable" id="pickJob" aria-expanded="false">+ From jobs</button>
+        <button type="button" class="btn btn--sm btn--danger pressable" id="clearStops">Clear</button>
+      </div>
+      <div id="pickbox" hidden></div>
+      <div class="opts">
+        <label class="opt"><span>First stop is fixed start</span><input type="checkbox" class="switch" id="fxs" checked></label>
+        <label class="opt" id="fxeRow"><span>Last stop is fixed end</span><input type="checkbox" class="switch" id="fxe"></label>
+        <label class="opt"><span>Return to start</span><input type="checkbox" class="switch" id="rt"></label>
+      </div>
+      <button type="button" class="btn btn--prominent btn--block pressable" id="opt">Optimize route</button>
+      <div id="pres"></div>
+      <div class="group-title">Saved routes</div>
+      <div id="savedlist" class="muted">none yet</div>
+    </div>
+
+    <div class="view" id="v-settings">
+      <section class="set-group" aria-labelledby="setAppH">
+        <h3 id="setAppH">Appearance</h3>
+        <div class="set-box">
+          <div class="set-row"><span>Theme</span>
+            <div class="seg" id="setTheme" role="radiogroup" aria-label="Theme" style="--n:3;--i:0">
+              <button type="button" class="pressable" role="radio" data-val="auto" aria-checked="true">Auto</button>
+              <button type="button" class="pressable" role="radio" data-val="light" aria-checked="false">Light</button>
+              <button type="button" class="pressable" role="radio" data-val="dark" aria-checked="false">Dark</button>
+              <span class="seg-thumb" aria-hidden="true"></span>
+            </div>
+          </div>
+          <div class="set-row"><span>Glass</span>
+            <div class="seg" id="setGlass" role="radiogroup" aria-label="Glass" style="--n:3;--i:0">
+              <button type="button" class="pressable" role="radio" data-val="liquid" aria-checked="true">Liquid</button>
+              <button type="button" class="pressable" role="radio" data-val="tinted" aria-checked="false">Tinted</button>
+              <button type="button" class="pressable" role="radio" data-val="solid" aria-checked="false">Solid</button>
+              <span class="seg-thumb" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="setStH">
+        <h3 id="setStH">Stages</h3>
+        <div class="set-box">
+          <p class="set-status" id="stStatus">Checking…</p>
+        </div>
+        <div class="set-box">
+          <div class="set-field" style="margin-top:0">
+            <label for="stKey">Edit key</label>
+            <div class="field" style="margin:0"><input id="stKey" type="password" placeholder="Paste edit key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"><button type="button" class="btn pressable" id="stSave">Save</button></div>
+          </div>
+          <p class="set-note">Needs a fine-grained GitHub key with <b>Contents: Read and write</b> on eckstein-jobs-state.</p>
+          <p class="set-note" id="stMsg" role="status"></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn--sm btn--tinted pressable" id="stShare" hidden>Share edit access</button>
+            <button type="button" class="btn btn--sm btn--danger pressable" id="stRemove" hidden>Remove key</button>
+          </div>
+          <p class="set-note">The key stays on this device only. Stage moves are saved as commits in the eckstein-jobs-state repo and sync to every device with a key; devices without one see stages read-only.</p>
+        </div>
+        <div class="set-box">
+          <div class="set-field" style="margin-top:0">
+            <label for="stDevice">This device's name (shown in the stage history)</label>
+            <input id="stDevice" type="text" maxlength="40" autocomplete="off" enterkeyhint="done">
+          </div>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="setDataH">
+        <h3 id="setDataH">Data</h3>
+        <div class="set-box">
+          <p class="set-status" id="setUpd">loading…</p>
+          <div class="btn-row">
+            <a class="btn btn--sm pressable" href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener">Sync from Jobber now</a>
+            <button type="button" class="btn btn--sm pressable" data-act="reload">Reload data</button>
+          </div>
+          <p class="set-note">Sync opens GitHub: tap “Run workflow”, wait about a minute, then reload.</p>
+        </div>
+      </section>
+
+      <section class="set-group" aria-labelledby="setAboutH">
+        <h3 id="setAboutH">About</h3>
+        <div class="set-box">
+          <p class="set-status">Eckstein Jobs · version R-1</p>
+          <ul class="notices">
+            <li>Glass material adapted from sohumsuthar/liquid-glass (MIT, © 2026 Sohum Suthar); full notice in css/glass.css.</li>
+            <li>Desktop refraction: hyalite v0.5.0 (MIT, © 2026 VII-Cae), shipped unmodified in vendor/ with its LICENSE.</li>
+            <li>Leaflet 1.9.4 (BSD-2-Clause, © Volodymyr Agafonkin and contributors).</li>
+            <li>Map tiles © Esri and its data providers; geocoding by Esri ArcGIS.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<section class="sheet glass lens-panel" id="detail" data-detent="closed" hidden aria-label="Job details">
+  <header class="sheet-head">
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="detail-head">
+      <div><h2 class="detail-title" id="dTitle">Job</h2><p class="detail-sub" id="dSub"></p><div class="detail-tags" id="dTags"></div></div>
+      <button type="button" class="close-btn pressable" data-act="close-detail" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+  </header>
+  <div class="sheet-body">
+    <div class="card">
+      <div class="stage" id="dStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Ready to start">
+        <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small>Stage 1 of 6</small></div>
+        <div class="stage-track">
+          <div class="stage-rail"></div><div class="stage-fill"></div>
+          <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
+          <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
+          <div class="stage-thumb"><div class="stage-lens" aria-hidden="true">
+            <div class="stage-rail"></div><div class="stage-fill"></div>
+            <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
+            <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
+          </div></div>
+        </div>
+        <ol class="stage-labels">
+          <li><button type="button" tabindex="-1" data-k="0" style="--k:0">Ready</button></li><li><button type="button" tabindex="-1" data-k="1" style="--k:1">Excav.</button></li>
+          <li><button type="button" tabindex="-1" data-k="2" style="--k:2">Base</button></li><li><button type="button" tabindex="-1" data-k="3" style="--k:3">Prep</button></li>
+          <li><button type="button" tabindex="-1" data-k="4" style="--k:4">Passed</button></li><li><button type="button" tabindex="-1" data-k="5" style="--k:5">Poured</button></li>
+        </ol>
+      </div>
+      <div class="lock-note" id="dLock" hidden><span>Stages are read-only on this device.</span><button type="button" data-act="settings" data-section="stages">Settings → Stages</button></div>
+    </div>
+    <div class="actions">
+      <a class="btn btn--prominent pressable" id="dDir" href="#" target="_blank" rel="noopener"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19v-5a4 4 0 0 1 4-4h10"/><path d="M15 6l4 4-4 4"/></svg>Directions</a>
+      <button type="button" class="btn pressable" id="dAdd">Add to Plan</button>
+      <button type="button" class="btn pressable" id="dCopy">Copy address</button>
+    </div>
+    <div class="card" id="dInfo"></div>
+  </div>
+</section>
+
+<div class="route-menu glass" id="route-menu" role="menu" aria-label="Route a whole stage from the shop" hidden></div>
+
+<div class="map-card glass" id="map-card" role="dialog" aria-label="Job preview">
+  <div class="mc-top"><div style="min-width:0"><div class="mc-title" id="mcTitle"></div><div class="mc-sub" id="mcSub"></div></div></div>
+  <div class="stage stage--compact" id="mcStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Ready to start">
+    <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small>Stage 1 of 6</small></div>
+    <div class="stage-track">
+      <div class="stage-rail"></div><div class="stage-fill"></div>
+      <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
+      <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
+      <div class="stage-thumb"><div class="stage-lens" aria-hidden="true">
+        <div class="stage-rail"></div><div class="stage-fill"></div>
+        <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
+        <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
+      </div></div>
+    </div>
+  </div>
+  <div class="mc-foot">
+    <div class="lock-note" id="mcLock" hidden><span>Stages are read-only on this device.</span><button type="button" data-act="settings" data-section="stages">Settings → Stages</button></div>
+    <button type="button" class="btn btn--sm pressable" id="mcMore">Details</button>
+  </div>
+</div>
+
+<div class="toast glass glass--sm" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="btn pressable" hidden>Undo</button></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="js/tsp.js"></script>
+<script src="js/stages.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
