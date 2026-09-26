@@ -154,7 +154,7 @@ The app is **live and healthy**:
 | State repo | `Claude69420/eckstein-jobs-state` (**PUBLIC**, no Pages, branch `main`, file `stages.json`). Local clone `C:/Users/Riley/eckstein-jobs-state`: **pull before any hand edit** (§7.14). |
 | Stage API | With a key: `https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/stages.json`. Without: `https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/stages.json` (CDN `Cache-Control: max-age=300`). |
 | Stage edit key | Fine-grained PAT on `Claude69420`, "Only select repositories → eckstein-jobs-state", Contents: Read and write, expiry ≤ 1 year. Stored per device in `localStorage['ej_gh_token']` and in Riley's password manager. The value never appears in docs (§6). |
-| Tests | `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 tests) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (38). Node v24, no npm, no dependencies. The same lines work in PowerShell. |
+| Tests | `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 tests) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39). Node v24, no npm, no dependencies. The same lines work in PowerShell. |
 | Desktop route output | `C:/Users/Riley/OneDrive/Documents/Eckstein/Riley/Jobs/Routes` |
 | Desktop builders and playbook | `C:/Users/Riley/OneDrive/Documents/University/Year 5/Claude Code/` (`_route_*.py`, `_map_*.py`, `ROUTING_PLAYBOOK.md`) |
 | Local preview | The `.claude/launch.json` config `eckstein-jobs` in the Claude Code folder runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`, served at <http://localhost:8765/>. On localhost / 127.0.0.1 / [::1] **with no key**, stages run in **local mode** (`localStorage['ej_stages']`, this machine only, never shared). |
@@ -703,6 +703,7 @@ The desktop copy `…/Claude Code/_pending_manual.json` holds the same entry, bu
 - **Write-ahead / offline queue:** `localStorage['ej_stage_queue']` = `{version:1, changes:{jn:{stage,at,by,label}}}`. It replays on `online`, `visibilitychange` and the next poll. Going to the background or `pagehide` saves an open batch at once.
 - **Last-good cache:** `localStorage['ej_stages_cache']` = `{version, at, map}` (public stage data only, never the key), written after every good read, save and `setKey`. It seeds the map on a cold start (`peek()`), so an offline start shows the last known stages. A device that has never loaded stages shows every job as Ready ("Offline — stages not loaded yet").
 - **Damaged-file guard** (`isDamaged`, L156–161; `MSG.damaged`): non-empty text that is not `{"stages":{...}}` (a hand-edit typo) is never written over. Reads keep the last known map with the status "stages.json in eckstein-jobs-state is damaged … saving is paused until it is fixed", and saves are rejected (code `http`), so the file is never overwritten. Fix: §7.14.
+- **Newer-format guard** (added 2026-09-26, `remoteVersion` + `MSG.newer`): this app writes file format `version: 1` only. If `stages.json` has `version` > 1 (written by a newer app, e.g. R-2's v2 with job items), stages still display, but saves are rejected (code `http`) with "Stages were saved by a newer version of the app — close and reopen the app to update, then try again" and **no PUT is made**, so a device still running old code can never strip fields a newer app wrote. R-2 must keep this pattern (bump the supported version, refuse anything newer).
 - **Write-access errors on save:** a PUT answered 404 (key can read but not write) → code `auth`, mode `invalid`, status "This key can read but not write eckstein-jobs-state — it needs Contents: Read and write". 401/403 → code `auth`, "Edit key rejected — Settings → Stages". A rate-limit 403/429 → code `http`, "GitHub is busy (rate limit) — try again in a few minutes".
 - **Commit messages:** one job `stage: #684 <street or title, max 80 chars> -> base`; several `stages: #684 -> base, #699 -> prep` (up to 30 listed, then "+N more"). All commits are authored as the key owner, `Claude69420`.
 - **File format:** 2-space JSON plus a trailing newline; numeric job keys ascending; unknown top-level fields preserved; `at` is ISO UTC without milliseconds; `by` is the device label (default "iPhone app" in standalone, "PC" on Windows, otherwise "browser"; max 40 chars); moving to `ready` deletes the entry; job keys must match `^[0-9A-Za-z-]{1,32}$`. Entries with unknown stage keys are dropped on read, so the next save removes them from the file.
@@ -1047,7 +1048,7 @@ Follow §6 recipe A. Riley runs it; Claude only guides. To confirm afterwards, t
 - After the move, see the §8 row "(After Cloudflare Access only) 'failed to load data' while the app was left open".
 
 ### 7.12 Preview or test a frontend change locally, then deploy
-1. Run both Node tests first: `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 pass) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (38/38).
+1. Run both Node tests first: `node C:/Users/Riley/eckstein-jobs/tests/tsp.test.js` (15 pass) and `node C:/Users/Riley/eckstein-jobs/tests/stages.test.js` (39/39).
 2. Start the preview: from the Claude Code folder run `preview_start` with name `eckstein-jobs`, which runs `python -m http.server 8765 --directory C:/Users/Riley/eckstein-jobs`. Then open <http://localhost:8765/>.
    - No key means **local mode**: the slider is writable, stages stay on this machine, and Settings → Stages shows "Saved on this device only (local preview)".
    - To test read-only mode, open the preview through the PC's LAN IP: any non-local hostname reads the real raw file.
@@ -1184,6 +1185,7 @@ Most of these are toasts or the Settings → Stages status line.
 | "This key can't see stages.json in eckstein-jobs-state (404)…" on Save | Repo or file renamed or deleted, or the key cannot see the repo | Restore `stages.json` on `main`; check the key's repository access. |
 | "That doesn't look like a GitHub key." | Format check: 10–255 printable characters after stripping whitespace | Copy the key again in full. |
 | "Couldn't save the key on this device (storage blocked)" | Private browsing or blocked storage | Use a normal window or the installed app. |
+| "Stages were saved by a newer version of the app — close and reopen the app to update, then try again" | That device still runs older app code and the file is a newer format | Close the app fully (swipe it away) and reopen it; it loads the new code (network-first). |
 | "stages.json in eckstein-jobs-state is damaged (not valid stage JSON) — saving is paused until it is fixed" | A hand edit broke the file (not `{"stages":{...}}`) | Every device keeps showing the last known stages. Fix the JSON by hand in the state repo, or revert the bad commit there (§7.14). |
 | "GitHub is busy (rate limit) — try again in a few minutes" | 403/429 with `x-ratelimit-remaining: 0`, `retry-after`, or a "rate limit" message | Wait. Each device with a key polls 60×/h against 5,000/h per key; rapid writes can hit secondary limits. |
 | "Couldn't save — stages changed on another device…" / "Couldn’t save (changed elsewhere) — try again" | 3 consecutive 409/422 | Retry the move. |
@@ -1470,6 +1472,12 @@ When Riley confirms on his iPhone, mark R-1 **done** here and in §0.
 ```
 
 ---
+
+### 2026-09-26 — Stages: never write over a newer-format stages.json (forward-compat guard before R-2)
+- **What:** `js/stages.js` records the file's `version` on every read (`remoteVersion`) and refuses to save when it is greater than 1 (error `MSG.newer`, code `http`, no PUT; the UI rolls the move back with that message). Stages from a newer file still display. New test in `tests/stages.test.js` (now 39/39).
+- **Why:** R-2 will write `stages.json` v2 (job items). Without this guard, a phone or PC still running R-1 code (cached, or offline-queued moves replayed later) would rewrite the file with only `stage/at/by` and silently strip every item. Shipping the guard now, before anyone has an edit key, closes that window.
+- **Files:** `js/stages.js`, `tests/stages.test.js`, `APP_MASTER.md` (§5 store notes, §8 row).
+- **Commit:** (this commit). **Verified:** `node tests/stages.test.js` 39/39, `node tests/tsp.test.js` 15 passed. **Rollback:** `git revert` this commit (safe while the file is still v1).
 
 ### 2026-09-26 — docs: backfill R-1 hash `005a671`, record the live check
 - **What:** Backfilled `005a671` in §0, §11 and the §12 R-1 entry; recorded the post-push live check in the §11 Work log.

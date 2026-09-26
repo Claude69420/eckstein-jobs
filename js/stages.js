@@ -65,6 +65,7 @@ var Stages = (function () {
     noWrite: 'This key can read but not write eckstein-jobs-state \u2014 it needs Contents: Read and write',
     rateLimited: 'GitHub is busy (rate limit) \u2014 try again in a few minutes',
     storage: 'Couldn\u2019t save on this device (storage blocked)',
+    newer: 'Stages were saved by a newer version of the app \u2014 close and reopen the app to update, then try again',
     damaged: 'stages.json in eckstein-jobs-state is damaged (not valid stage JSON) \u2014 saving is paused until it is fixed'
   };
 
@@ -147,7 +148,8 @@ var Stages = (function () {
         });
       }
     }
-    return { map: map, extras: extras };
+    var version = obj && typeof obj === 'object' && typeof obj.version === 'number' ? obj.version : 1;
+    return { map: map, extras: extras, version: version };
   }
   function parseDocText(text) {
     return sanitizeDoc(parseJSON(String(text || '').replace(/^\ufeff/, '')));
@@ -249,6 +251,7 @@ var Stages = (function () {
     var gen = 0;              // bumps on key change; stale async results are ignored
     var remote = {};          // last known remote map (github / readonly / invalid modes)
     var remoteExtras = {};
+    var remoteVersion = 1;    // file format version last read; this app writes v1 only and never over a newer file
     var lastSync = null;      // ms of the last good read/save (seeded from the cache below)
     var sha = null;          // blob sha of stages.json (null = file missing, when ghLoaded)
     var ghLoaded = false;     // remote + sha are known from the API for the current key
@@ -422,7 +425,7 @@ var Stages = (function () {
         catch (e) { throw codeError('http', 'Couldn\u2019t load stages (bad encoding)', 200); }
         if (isDamaged(text)) throw codeError('http', MSG.damaged, 200); // keep the last known map; block saves
         var parsed = parseDocText(text);
-        return { map: parsed.map, extras: parsed.extras, sha: j.sha };
+        return { map: parsed.map, extras: parsed.extras, sha: j.sha, version: parsed.version };
       });
     }
     /** Unauthenticated read (CDN, up to ~5 min stale; no Authorization header, no preflight). */
@@ -450,7 +453,7 @@ var Stages = (function () {
       var p = m === 'github' ? getRemoteGithub(token) : getRemoteRaw();
       return p.then(function (res) {
         if (g !== gen) return;
-        remote = res.map; remoteExtras = res.extras;
+        remote = res.map; remoteExtras = res.extras; remoteVersion = res.version || 1;
         if (m === 'github') { sha = res.sha; ghLoaded = true; }
         remoteKnown = true; lastSync = now();
         writeCache();
@@ -474,10 +477,11 @@ var Stages = (function () {
         attempt++;
         var ready = (!forceGet && ghLoaded) ? Promise.resolve() : getRemoteGithub(tok).then(function (res) {
           if (g !== gen) throw codeError('stale', 'Key changed');
-          remote = res.map; remoteExtras = res.extras; sha = res.sha; ghLoaded = true; remoteKnown = true; lastSync = now();
+          remote = res.map; remoteExtras = res.extras; remoteVersion = res.version || 1; sha = res.sha; ghLoaded = true; remoteKnown = true; lastSync = now();
           writeCache();
         });
         return ready.then(function () {
+          if (remoteVersion > 1) throw codeError('http', MSG.newer, 200); // never strip fields a newer app wrote
           var merged = applyChanges(remote, changes), real = {};
           Object.keys(changes).forEach(function (jn) {
             if (!sameEntry(has(remote, jn) ? remote[jn] : null, has(merged, jn) ? merged[jn] : null)) real[jn] = changes[jn];
@@ -716,7 +720,7 @@ var Stages = (function () {
             if (res.missing) return { ok: false, reason: 'This key can\u2019t see stages.json in eckstein-jobs-state (404). Check the key\u2019s repository access.' };
             if (!sSet(LS_TOKEN, t)) return { ok: false, reason: 'Couldn\u2019t save the key on this device (storage blocked).' };
             token = t; keyInvalid = false; gen++;
-            remote = res.map; remoteExtras = res.extras; sha = res.sha; ghLoaded = true; remoteKnown = true;
+            remote = res.map; remoteExtras = res.extras; remoteVersion = res.version || 1; sha = res.sha; ghLoaded = true; remoteKnown = true;
             lastSync = now(); writeCache(); clearError();
             try {
               if (nav && nav.storage && typeof nav.storage.persist === 'function') {

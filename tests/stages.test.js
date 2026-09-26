@@ -683,6 +683,19 @@ test('a damaged stages.json (hand-edit typo) is never overwritten: saves reject,
   }
 });
 
+test('a stages.json written by a newer app version (version > 1) is read but never overwritten', async () => {
+  const text = JSON.stringify({ version: 2, stages: { '684': { stage: 'base', at: 'a', by: 'b', asphalt: 'req' } } }, null, 2) + '\n';
+  const s = setup({ key: true, srvOpts: { text } });
+  const map = await s.store.load();
+  assert.strictEqual(map['684'].stage, 'base', 'stages still display');
+  const p = s.store.set(699, 'prep', { label: 'X' });
+  p.catch(() => {});
+  await s.clock.advance(3000);
+  await assert.rejects(p, (e) => e.code === 'http' && /newer version/.test(e.message));
+  assert.strictEqual(puts(s.srv).length, 0, 'no PUT over a newer-format file');
+  assert.strictEqual(s.srv.text, text, 'file untouched (v2 fields kept)');
+});
+
 test('polling: 60 s with a key while visible, paused when hidden, immediate on visible, 300 s read-only, clean stop()', async () => {
   const s = setup({ key: true });
   await s.store.load();
