@@ -1,5 +1,5 @@
-/* ui.js — Eckstein Jobs shell: press glow, views, sheets (iPhone detents / desktop panel), accessory, toast,
- * the 6-stop StageSlider and the desktop refraction gate (hyalite). Plain ES2017 script, no modules.
+/* ui.js — Eckstein Jobs shell: press glow, views, sheets (iPhone detents / desktop panel), accessory, toast, Settings groups,
+ * the 7-stop StageSlider (R-2: gates + lock glyph) and the desktop refraction gate (hyalite). Plain ES2017 script, no modules.
  * app.js (loaded after this file) provides window.fillDetail, window.clearSelection and window.onViewChange.
  * Exposes window.UI.
  */
@@ -42,12 +42,11 @@
 
   /* ---------------- Views ---------------- */
   function placeFilterbar(inSheet) {
-    if (inSheet) {
-      var head = listEl.querySelector('.sheet-head'), q = document.getElementById('q');
-      if (filterbar.parentNode !== head) head.insertBefore(filterbar, q);
-    } else {
-      var slot = acc.querySelector('.acc-slot'); if (filterbar.parentNode !== slot) slot.appendChild(filterbar);
-    }
+    var host = inSheet ? listEl.querySelector('.sheet-head') : acc.querySelector('.acc-slot');
+    if (filterbar.parentNode === host) return;
+    if (inSheet) host.insertBefore(filterbar, document.getElementById('q')); else host.appendChild(filterbar);
+    // R-2: the chips row has a different shape in the accessory (one row) and the sheet (2-row band): app.js re-aims it
+    if (typeof window.onFilterbarMoved === 'function') window.onFilterbarMoved(inSheet);
   }
   // --attr-b is written on the attribution corner itself: a custom property on <html> restyles the whole document.
   function attrB(v) {
@@ -204,10 +203,11 @@
       /* zoom-in / zoom-out / locate / reload are handled in app.js */
     }
   });
-  function openSettings(section) {                          // section 'stages' scrolls to Settings -> Stages
+  function openSettings(section) {                          // section 'stages' / 'pricing' scrolls to that Settings group
     if (DESK.matches) { if (!detailEl.hidden) closeDetail(); showView('settings'); }
     else openList('settings', 'large');
-    var hd = section === 'stages' && document.getElementById('setStH');
+    var hd = { stages: 'setStH', pricing: 'setPrH' }[section];
+    hd = hd && document.getElementById(hd);
     if (!hd) return;
     requestAnimationFrame(function () {                       // scroll the sheet body only (never the page: iOS would pan)
       var body = listEl.querySelector('.sheet-body');
@@ -320,27 +320,75 @@
     var f = undoFn; undoFn = null; toastEl.classList.remove('is-on'); if (f) f();
   });
 
-  /* ---------------- Stage slider: mount once per .stage element, rebind with .set(job) ---------------- */
+  /* ---------------- Stage slider: mount once per .stage element, rebind with .set(job) ----------------
+   * R-2: the stops (ticks, labels, "of N") are generated from Stages.STAGES (7), never hard-coded in the HTML.
+   * opts.gate(job, key) -> {ok, reason, message} (Stages.canMove); blocked stops are dimmed, a lock glyph sits on the
+   * first blocked tick, a drag resists past it (rubber band), and a tap/drag/key onto a blocked stop shakes the thumb,
+   * springs back and calls opts.onBlocked(job, key, result) (app.js: toast + highlight the blocking item row).
+   * Nothing is ever silently ignored. */
   var ST = (window.Stages && window.Stages.STAGES) || [
-    { key: 'ready', label: 'Ready to start', short: 'Ready' }, { key: 'excavation', label: 'Excavation', short: 'Excav.' },
-    { key: 'base', label: 'Base', short: 'Base' }, { key: 'prep', label: 'Prep', short: 'Prep' },
-    { key: 'inspected', label: 'Passed inspection', short: 'Passed' }, { key: 'poured', label: 'Poured', short: 'Poured' }];
+    { key: 'ready', label: 'Ready to start', short: 'Ready' }, { key: 'setup', label: 'Setup', short: 'Setup' },
+    { key: 'excavation', label: 'Excavation', short: 'Excav.' }, { key: 'base', label: 'Base', short: 'Base' },
+    { key: 'prep', label: 'Prep', short: 'Prep' }, { key: 'inspected', label: 'Passed inspection', short: 'Passed' },
+    { key: 'poured', label: 'Poured', short: 'Poured' }];
   var LAST = ST.length - 1;
   function stageIndex(key) {
     if (window.Stages && window.Stages.stageIndex) return window.Stages.stageIndex(key);
     for (var i = 0; i < ST.length; i++) if (ST[i].key === key) return i; return 0;
   }
+  /** Inline style for a stage colour + its glyph ink (tokens --stage-N / --stage-on-N; N = index + 1). */
+  function stageVars(k) { return '--c:var(--stage-' + (k + 1) + ');--on-c:var(--stage-on-' + (k + 1) + ')'; }
 
-  function StageSlider(el, onCommit) {                       // onCommit(job, newKey)
+  function StageSlider(el, onCommit, opts) {                 // onCommit(job, newKey)
+    opts = opts || {};
     var track = el.querySelector('.stage-track'), now = el.querySelector('.stage-now'), job = null, pendingSet = null;
+    var thumb = track.querySelector('.stage-thumb'), lens = thumb.querySelector('.stage-lens'), labels = el.querySelector('.stage-labels');
+    /* Build the stops once from ST (track + the lens clone under the thumb + label buttons). */
+    el.style.setProperty('--n', ST.length);
+    el.setAttribute('aria-valuemin', '1'); el.setAttribute('aria-valuemax', String(ST.length));
+    [track, lens].forEach(function (host) {
+      host.querySelectorAll('.stage-tick').forEach(function (t) { t.parentNode.removeChild(t); });
+      ST.forEach(function (s, k) {
+        var t = document.createElement('i'); t.className = 'stage-tick'; t.setAttribute('data-k', k); t.style.setProperty('--k', k);
+        if (host === track) track.insertBefore(t, thumb); else lens.appendChild(t);
+      });
+    });
+    if (labels) {
+      labels.textContent = '';
+      ST.forEach(function (s, k) {
+        var li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button'; b.tabIndex = -1; b.setAttribute('data-k', k); b.style.setProperty('--k', k); b.textContent = s.short;
+        b.title = s.label; li.appendChild(b); labels.appendChild(li);
+      });
+    }
+    var gates = [], firstBlocked = ST.length;               // gates[k] = gate result; firstBlocked = first locked stop
+    function computeGates() {
+      gates = []; firstBlocked = ST.length;
+      ST.forEach(function (s, k) {
+        var r = { ok: true };
+        if (job && opts.gate) { try { r = opts.gate(job, s.key) || { ok: true }; } catch (e) { r = { ok: true }; } }
+        gates[k] = r; if (!r.ok && k < firstBlocked) firstBlocked = k;
+      });
+      el.querySelectorAll('.stage-tick').forEach(function (t) {
+        var k = +t.dataset.k; t.classList.toggle('is-locked', k >= firstBlocked); t.classList.toggle('is-barrier', k === firstBlocked);
+      });
+      el.querySelectorAll('.stage-labels button').forEach(function (b) {
+        var k = +b.dataset.k, lk = k >= firstBlocked;
+        b.classList.toggle('is-locked', lk);
+        b.title = lk ? ST[k].label + ' (locked: ' + (gates[k].message || 'blocked') + ')' : ST[k].label;
+      });
+      el.classList.toggle('has-lock', firstBlocked < ST.length);
+    }
+    function maxOk() { return Math.max(0, firstBlocked - 1); }
     function measure() { el.style.setProperty('--tw', track.clientWidth + 'px'); }
     if (window.ResizeObserver) new ResizeObserver(measure).observe(track);
     function locked() { return !job || el.getAttribute('aria-disabled') === 'true'; }
-    function paint(k) {
+    var previewK = -1;
+    function paint(k, note) {
       var s = ST[k];
       el.style.setProperty('--c', 'var(--stage-' + (k + 1) + ')');
       el.style.setProperty('--c-real', 'var(--stage-' + (k + 1) + ')');
-      el.style.setProperty('--on-c', k === 3 ? '#000' : '#fff');
+      el.style.setProperty('--on-c', 'var(--stage-on-' + (k + 1) + ')');
       el.setAttribute('aria-valuenow', k + 1); el.setAttribute('aria-valuetext', s.label);
       el.querySelectorAll('.stage-tick').forEach(function (t) { t.classList.toggle('is-done', +t.dataset.k <= k); });
       el.querySelectorAll('.stage-labels button').forEach(function (b) {
@@ -348,20 +396,22 @@
       });
       var dot = now.querySelector('.dot'); dot.textContent = k + 1; dot.removeAttribute('style');
       now.querySelector('.name').textContent = s.label;
-      now.querySelector('small').textContent = 'Stage ' + (k + 1) + ' of ' + ST.length;
+      var sm = now.querySelector('small'); sm.textContent = note || ('Stage ' + (k + 1) + ' of ' + ST.length); sm.classList.toggle('is-lock-note', !!note);
+      sm.title = note || '';
       previewK = -1;
     }
     /* Mouse hover over the track names the stage under the pointer (nothing is saved until a click). */
-    var previewK = -1;
     function preview(k) {
       if (k === previewK) return;
       var cur = stageIndex(job.stage);
       if (k === cur) { paint(cur); return; }
       previewK = k;
       var dot = now.querySelector('.dot');
-      dot.textContent = k + 1; dot.style.background = 'var(--stage-' + (k + 1) + ')'; dot.style.color = k === 3 ? '#000' : '#fff';
+      dot.textContent = k + 1; dot.setAttribute('style', stageVars(k) + ';background:var(--c);color:var(--on-c)');
       now.querySelector('.name').textContent = ST[k].label;
-      now.querySelector('small').textContent = 'Click to move here';
+      var sm = now.querySelector('small'), lk = !!(gates[k] && !gates[k].ok);
+      sm.textContent = lk ? 'Locked · ' + (gates[k].message || '') : 'Click to move here'; sm.classList.toggle('is-lock-note', lk);
+      sm.title = lk ? sm.textContent : '';                   // one line (ellipsis): the full reason is in the tooltip
     }
     track.addEventListener('pointermove', function (e) {
       if (e.pointerType !== 'mouse' || locked() || el.classList.contains('is-dragging')) return;
@@ -372,31 +422,50 @@
       if (previewK >= 0 && job && !el.classList.contains('is-dragging')) paint(stageIndex(job.stage));
     });
     function place(k) { el.style.setProperty('--p', k / LAST); paint(k); }
-    function commit(k) { place(k); if (job && ST[k].key !== job.stage) onCommit(job, ST[k].key); }
+    var shakeT = 0;
+    function refuse(k) {                                       // blocked stop: spring back, shake, tell the app why
+      place(stageIndex(job.stage));
+      el.classList.remove('is-shake'); void thumb.offsetWidth; el.classList.add('is-shake');
+      clearTimeout(shakeT); shakeT = setTimeout(function () { el.classList.remove('is-shake'); }, 520);
+      if (opts.onBlocked) opts.onBlocked(job, ST[k].key, gates[k] || { ok: false });
+    }
+    function commit(k) {
+      if (!job) return;
+      if (ST[k].key !== job.stage && gates[k] && !gates[k].ok) { refuse(k); return; }
+      place(k); if (ST[k].key !== job.stage) onCommit(job, ST[k].key);
+    }
     track.addEventListener('pointerdown', function (e) {
       if (locked() || e.button > 0) return;
       e.preventDefault();
       try { track.setPointerCapture(e.pointerId); } catch (err) {}
       measure(); el.classList.add('is-dragging');
-      var r = track.getBoundingClientRect(), raf = 0, p;
+      var r = track.getBoundingClientRect(), raf = 0, raw, pA = maxOk() / LAST;
       function at(x) { return Math.min(1, Math.max(0, (x - r.left) / r.width)); }
-      function draw() { raf = 0; el.style.setProperty('--p', p); paint(Math.round(p * LAST)); }
-      p = at(e.clientX); draw();
-      function move(ev) { p = at(ev.clientX); if (!raf) raf = requestAnimationFrame(draw); }
+      function draw() {                                        // past the lock the thumb resists (rubber band)
+        raf = 0;
+        var p = raw > pA ? pA + (raw - pA) * 0.18 : raw, want = Math.round(raw * LAST);
+        el.style.setProperty('--p', p);
+        if (want > maxOk()) paint(maxOk(), 'Locked');          // short, one line (never reflows under the finger); the reason
+                                                               // comes with the refusal toast and the flagged item row
+        else paint(want);
+      }
+      raw = at(e.clientX); draw();
+      function move(ev) { raw = at(ev.clientX); if (!raf) raf = requestAnimationFrame(draw); }
       function end(ev) {
         track.removeEventListener('pointermove', move); track.removeEventListener('pointerup', end);
         track.removeEventListener('pointercancel', end);
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
         el.classList.remove('is-dragging');
         if (ev.type === 'pointercancel' || !job) { if (job) place(stageIndex(job.stage)); }
-        else commit(Math.round(p * LAST));
+        else commit(Math.round(raw * LAST));
         if (pendingSet) { var j = pendingSet; pendingSet = null; api.set(j); }
       }
       track.addEventListener('pointermove', move); track.addEventListener('pointerup', end);
       track.addEventListener('pointercancel', end);
     });
-    el.querySelectorAll('.stage-labels button').forEach(function (b) {
-      b.addEventListener('click', function () { if (!locked()) commit(+b.dataset.k); });
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('.stage-labels button'); if (!b || locked()) return;
+      commit(+b.dataset.k);
     });
     el.addEventListener('keydown', function (e) {
       if (locked()) return;
@@ -407,7 +476,7 @@
     var api = {
       set: function (j) {
         if (el.classList.contains('is-dragging')) { pendingSet = j; job = j; return; }
-        job = j; if (j) place(stageIndex(j.stage));
+        job = j; computeGates(); if (j) place(stageIndex(j.stage));
       },
       lock: function (on) { el.setAttribute('aria-disabled', on ? 'true' : 'false'); },
       isDragging: function () { return el.classList.contains('is-dragging'); },
@@ -477,8 +546,10 @@
   window.UI = {
     DESK: DESK, FINE: FINE, showView: showView, openList: openList, openDetail: openDetail, closeDetail: closeDetail,
     isDetailOpen: isDetailOpen, openSettings: openSettings, currentView: currentView, toast: toast,
-    StageSlider: StageSlider, refreshLens: refreshLens, mapPadding: mapPadding, refractGate: refractGate,
+    StageSlider: StageSlider, stageVars: stageVars, refreshLens: refreshLens, mapPadding: mapPadding, refractGate: refractGate,
     collapse: function () { if (!DESK.matches && listSheet.isOpen()) listSheet.close(); },
+    /* R-2 route editor: jump the iPhone list sheet to the large detent (no spring) before a text field takes focus */
+    sheetLarge: function () { if (!DESK.matches && listSheet.isOpen() && listEl.dataset.detent !== 'large') listSheet.snap('large', true); },
     listSheetOpen: function () { return DESK.matches ? !listEl.hidden : listSheet.isOpen(); }
   };
   window.openDetail = openDetail; window.closeDetail = closeDetail; window.toast = toast;

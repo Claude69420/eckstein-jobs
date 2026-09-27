@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "stages": {
+    "102": {"stage": "setup", "assess": "onsite", "lane": {"s": "booked", "from": "2026-10-06", "to": "2026-10-08"}, "cut": "req", "asphalt": "na", "pavers": "req", "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "103": {"stage": "base", "lane": {"s": "req"}, "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "104": {"stage": "base", "assess": "virtual", "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "105": {"assess": "onsite", "cut": "done", "at": "2026-09-19T08:00:00Z", "by": "Crew Phone Zeta"},
+    "106": {"stage": "excavation", "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "107": {"sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "108": {"stage": "prep", "cut": "req", "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "109": {"stage": "setup", "assess": "no", "lane": {"s": "na"}, "cut": "na", "cleanup": "todo", "removed": false, "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "110": {"stage": "setup", "assess": "maybe", "lane": {"s": "booked", "from": "2026-02-30", "to": "2026-10-08"}, "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "111": {"stage": "prep", "assess": "virtual", "sat": "2026-09-22T08:00:00Z", "at": "2026-09-22T08:00:00Z", "by": "Crew Phone Zeta"},
+    "112": {"stage": "base", "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "113": {"stage": "poured", "cleanup": "done", "asphalt": "done", "removed": true, "sat": "2026-09-21T08:00:00Z", "at": "2026-09-21T08:00:00Z", "by": "Crew Phone Zeta"},
+    "115": {"stage": "inspected", "sat": "2026-09-21T08:00:00Z"},
+    "116": {"pavers": "req", "sat": "2026-09-20T10:00:00Z", "at": "2026-09-20T10:00:00Z", "by": "Crew Phone Zeta"},
+    "117": {"assess": "no", "cut": "na"}
+  }
+}

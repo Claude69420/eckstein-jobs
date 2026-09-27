@@ -19,13 +19,19 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
   * Carry-forward: a job that left Jobber's active list is kept (`closed: true`) when its stage entry says
     work has started and field work is not done (keepWhenClosed). Kept jobs are written to
     data/closed_jobs.json, NOT to jobs.json: jobs.json keeps exactly the R-1 membership (active + pending), so
-    the live v1 app is unaffected; only the R-2 beta reads closed_jobs.json (r2-plan §9).
-    Beta channel (r2-plan §9, contract rule 2): the entry per job is the MERGE of two files in the state repo:
-    stages-beta.json (the beta's own v2 file; items only come from here) and stages.json (v1's file, read-only
-    overlay). The v1 stage wins when v1 has a valid stage for the job AND (the beta entry has no `sat`
-    stage-set time OR v1's `at` is newer than `sat`). A 404 on stages-beta.json = no beta entries yet.
-    If either file cannot be read (or looks reset: no entries at all while closed jobs were kept last run /
-    the beta file had entries last run), every such job is kept (never dropped because of a read failure).
+    an R-1 client that never reads closed_jobs.json is unaffected; the R-2 app reads both (r2-plan §9).
+    Single-file mode (DEFAULT since the version 2 promotion, BETA_STATE_FILE = None; r2-plan §9 "Promotion"):
+    only stages.json is read (one v2 file: stage + items per job) and keepWhenClosed evaluates its entries
+    directly. stages-beta.json is never requested. If stages.json cannot be read (a 404 included), or looks
+    reset (no entries at all while closed jobs were kept last run, or while it had entries last run:
+    meta.stage_entries), every such job is kept (never dropped because of a read failure).
+    Dual-file mode (the beta trial; BETA_STATE_FILE = "stages-beta.json", kept switchable for rollback and tests;
+    contract rule 2): the entry per job is the MERGE of two files in the state repo: BETA_STATE_FILE (the beta's
+    own v2 file; items only come from here) and stages.json (v1's file, read-only overlay). The v1 stage wins
+    when v1 has a valid stage for the job AND (the beta entry has no `sat` stage-set time OR v1's `at` is newer
+    than `sat`). A 404 on the beta file = no beta entries yet. If either file cannot be read (or looks reset:
+    no entries at all while closed jobs were kept last run / the beta file had entries last run), every such
+    job is kept.
     Safety net beyond r2-plan §2a: an entry value this sync does not understand keeps the job when it could
     have changed the decision (_UNCLEAR_CAN_KEEP), also for a v1 stage that would have won the merge.
     Previous closed jobs come from the previous closed_jobs.json; `closed: true` records still in a previous
@@ -35,6 +41,12 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
     only jobs that left Jobber since the last good run miss carry-forward).
     Closed-job refreshes (status + totals) share one REFRESH_BUDGET_S time budget and run before any file is
     written, so a slow or throttled Jobber delays jobs.json by at most about that long.
+  * meta.json stage fields: `stages_read` = how stages.json was read ("ok", "fetch failed (...)", a "reset or
+    stale copy?" note, "not read (<file> unreadable)", ...). `stages_beta_read` = the same for the beta file in
+    dual-file mode; in single-file mode always "not read (single-file mode)". `stage_entries` = the last good
+    entry count per stage file this mode reads: {"stages.json": n} in single-file mode (a "stages-beta.json"
+    count left by the beta trial is dropped), {"stages.json": n, "stages-beta.json": m} in dual-file mode. An
+    unreadable or reset-looking file keeps its previous count, so the reset guard stays armed on later runs.
   * Dropped jobs go to closed_archive.json for ARCHIVE_DAYS days (public data only, same fields as
     jobs.json + droppedAt/droppedWhy) and are re-evaluated every run, so fixing a mistaken stages.json
     entry (an accidental "Remove from app" or slide back to Ready, a reset store) brings the job back.
@@ -69,17 +81,20 @@ PRICES_NAME = "prices.json"
 OVERRIDES_NAME = "street_overrides.json"
 PENDING_NAME = "pending_manual.json"
 ARCHIVE_NAME = "closed_archive.json"
-CLOSED_NAME = "closed_jobs.json"   # carried-forward closed jobs (read only by the R-2 beta)
+CLOSED_NAME = "closed_jobs.json"   # carried-forward closed jobs (read by the R-2 app, not by R-1)
 ARCHIVE_DAYS = 60          # dropped closed-job records are kept this long in ARCHIVE_NAME (undo window)
 
 GRAPHQL_URL = "https://api.getjobber.com/api/graphql"
 GRAPHQL_VERSION = "2026-03-10"
 TOKEN_URL = "https://api.getjobber.com/api/oauth/token"
 STATE_RAW_BASE = "https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/"
-STAGES_FILE = "stages.json"            # v1's file (R-1 app); read-only overlay for the beta
-STAGES_BETA_FILE = "stages-beta.json"  # the beta's own v2 file (items + sat); may not exist yet (404 = empty)
+STAGES_FILE = "stages.json"            # THE stage file (v2: stage + items) since the version 2 promotion
+STAGES_BETA_FILE = "stages-beta.json"  # the retired beta trial's own v2 file (items + sat)
 STAGES_RAW_URL = STATE_RAW_BASE + STAGES_FILE
-STAGES_BETA_RAW_URL = STATE_RAW_BASE + STAGES_BETA_FILE
+# The ONE switch for the beta file read (r2-plan §9 "Promotion"). None = single-file mode: carry-forward reads only
+# stages.json (no request to the beta file, no beta reset guard). STAGES_BETA_FILE = dual-file mode (the beta trial:
+# that file is the state, stages.json the read-only v1 overlay); tests set it to exercise the dual path.
+BETA_STATE_FILE: str | None = None
 
 # Manitoba sanity box: anything outside is a mis-snap (Alberta/Ontario/NB seen before).
 MB_BOX = (48.9, 50.9, -99.8, -95.3)  # lat_min, lat_max, lon_min, lon_max
@@ -379,9 +394,17 @@ DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")   # used with fullmatch (ASC
 JOB_KEY_RE = re.compile(r"^[0-9A-Za-z-]{1,32}$")
 LIST_KEYS = ["unassessed", "booklane", "streetcuts", "cleanup", "asphalt", "pavers"]
 
+# JavaScript String.prototype.trim()'s whitespace set (the app and tools/promote_stages.py js_trim use it). Python's
+# str.strip() also strips \x1c-\x1f and \x85, which the app does not: "prep\x1c" must be unknown here too.
+_JS_WS = "\t\n\x0b\x0c\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_JS_TRIM_RE = re.compile(f"^[{_JS_WS}]+|[{_JS_WS}]+$")
+
+def js_trim(s: str) -> str:
+    return _JS_TRIM_RE.sub("", s)
+
 def stage_key(v) -> str | None:
     if not isinstance(v, str): return None
-    k = v if v in STAGE_KEYS else v.strip().lower()
+    k = v if v in STAGE_KEYS else js_trim(v).lower()
     return k if k in STAGE_KEYS else None
 
 def stage_index(v) -> int:
@@ -462,7 +485,7 @@ def clean_job_key(k) -> str:
         if isinstance(k, float) and not math.isfinite(k): return ""
         k = str(k)
     if not isinstance(k, str): return ""
-    k = k.strip()
+    k = js_trim(k)                      # js/stages.js cleanJobKey: jn.trim()
     return k if JOB_KEY_RE.match(k) else ""
 
 def parse_stages_text(text: str | None) -> tuple[dict | None, str]:
@@ -488,8 +511,9 @@ def parse_stages_text(text: str | None) -> tuple[dict | None, str]:
 
 def fetch_stages(url: str = STAGES_RAW_URL, missing_ok: bool = False) -> tuple[dict | None, str]:
     """One stage file from the state repo -> (entries, "ok") or (None, reason). missing_ok: an HTTP 404 means
-    the file does not exist yet -> ({}, "not found (no entries yet)") (stages-beta.json before the first beta
-    write). Any other failure is (None, reason): the caller keeps every closed job."""
+    the file does not exist yet -> ({}, "not found (no entries yet)") (only the beta file in dual-file mode, before
+    the first beta write; a 404 on stages.json is always a failure). Any other failure is (None, reason): the caller
+    keeps every closed job."""
     try:
         text = _http_text(f"{url}?t={int(time.time())}")
     except urllib.error.HTTPError as e:
@@ -627,8 +651,9 @@ def carry_forward(prev_jobs: list, active_numbers: set, pending_numbers: set,
                   overlay: dict | None = None) -> tuple[list[dict], list[tuple[int, str]]]:
     """Previous records of jobs that left Jobber's active list and must stay (closed: true).
     prev_jobs = candidate records, freshest first (previous jobs.json, then previous closed_jobs.json).
-    stage_entries = the state file's entries (stages-beta.json in the beta channel); overlay = v1's
-    stages.json entries, merged per contract rule 2 (None = no overlay: stage_entries are used as they are).
+    stage_entries = the state file's entries (stages.json v2 in single-file mode, the beta file in dual-file mode);
+    overlay = v1's stages.json entries in dual-file mode, merged per contract rule 2 (None = no overlay, the
+    single-file default: stage_entries are evaluated as they are, items included).
     stage_entries None = a stage file unreadable -> keep every candidate (never drop on a read failure).
     archived = records from closed_archive.json (jobs dropped on an earlier run). One comes back as soon as
     its stage entry says keep again (an accidental "Remove from app" or slide back to Ready undone in
@@ -661,6 +686,37 @@ def store_looks_reset(stage_entries: dict | None, prev_jobs: list, active_number
     if stage_entries != {}: return False
     return any(isinstance(r, dict) and r.get("closed") is True and _job_number(r.get("jobNumber")) is not None
                and _job_number(r.get("jobNumber")) not in active_numbers for r in prev_jobs or [])
+
+def stage_files() -> tuple[str, ...]:
+    """The stage files carry-forward reads in the current mode (see BETA_STATE_FILE), stages.json first."""
+    return (STAGES_FILE,) + ((BETA_STATE_FILE,) if BETA_STATE_FILE else ())
+
+def read_stage_files(prev_closed_recs: list, active_numbers: set,
+                     prev_counts: dict) -> tuple[dict | None, dict | None, dict, dict]:
+    """Reads the stage files of the current mode (stage_files()) ->
+    (state entries, overlay entries, {file: entry count} for each file read well, {file: read note}).
+    state None = a needed file is unreadable or looks reset (carry-forward then keeps every candidate).
+    Single-file mode: state = stages.json's entries, overlay None. Dual-file mode: state = the beta file's
+    entries, overlay = stages.json's entries.
+    Reset guards: stages.json with no entries while closed jobs were kept last run (store_looks_reset), and the
+    state file (the one with items) with no entries while it had entries last run (prev_counts)."""
+    files, notes = {}, {}
+    files[STAGES_FILE], notes[STAGES_FILE] = fetch_stages(STAGES_RAW_URL)
+    if BETA_STATE_FILE:
+        files[BETA_STATE_FILE], notes[BETA_STATE_FILE] = fetch_stages(STATE_RAW_BASE + BETA_STATE_FILE,
+                                                                      missing_ok=True)
+    if store_looks_reset(files[STAGES_FILE], prev_closed_recs, active_numbers):
+        files[STAGES_FILE], notes[STAGES_FILE] = None, ("no entries at all, but closed jobs were kept last run "
+                                                        "(reset or stale copy?)")
+    state_name = BETA_STATE_FILE or STAGES_FILE
+    prev_n = prev_counts.get(state_name)
+    if files[state_name] == {} and _finite(prev_n) and prev_n > 0:
+        files[state_name], notes[state_name] = None, (f"no entries at all, but it had {int(prev_n)} last run "
+                                                      "(reset or stale copy?)")
+    counts = {name: len(entries) for name, entries in files.items() if entries is not None}
+    if len(counts) < len(files):
+        return None, None, counts, notes
+    return files[state_name], (files[STAGES_FILE] if BETA_STATE_FILE else None), counts, notes
 
 def load_previous_closed(p: Path) -> tuple[list | None, str | None]:
     """Previous closed_jobs.json -> (records, None). Missing -> ([], None) (first beta-channel run).
@@ -923,6 +979,8 @@ def main(argv: list[str] | None = None) -> int:
     now = datetime.now(timezone.utc)
     closed, archive, notes = [], [], {}
     prev_counts = prev_meta.get("stage_entries") if isinstance(prev_meta.get("stage_entries"), dict) else {}
+    # only the files of the current mode (single-file mode forgets the retired beta file's count)
+    prev_counts = {k: v for k, v in prev_counts.items() if k in stage_files()}
     stage_counts = dict(prev_counts)
     # carry-forward needs both previous files; without one of them the closed-job files are left exactly as they are
     skip_file = JOBS_NAME if prev_jobs is None else CLOSED_NAME if prev_closed is None else None
@@ -939,24 +997,17 @@ def main(argv: list[str] | None = None) -> int:
         migrated = [r for r in prev_jobs if isinstance(r, dict) and r.get("closed") is True]
         cands = [r for r in prev_jobs if isinstance(r, dict) and r.get("closed") is not True] + prev_closed + migrated
         prev_closed_recs = prev_closed + migrated
-        v1, notes[STAGES_FILE] = fetch_stages(STAGES_RAW_URL)
-        beta, notes[STAGES_BETA_FILE] = fetch_stages(STAGES_BETA_RAW_URL, missing_ok=True)
-        if store_looks_reset(v1, prev_closed_recs, active_numbers):
-            v1, notes[STAGES_FILE] = None, "no entries at all, but closed jobs were kept last run (reset or stale copy?)"
-        prev_beta_n = prev_counts.get(STAGES_BETA_FILE)
-        if beta == {} and _finite(prev_beta_n) and prev_beta_n > 0:
-            beta, notes[STAGES_BETA_FILE] = None, (f"no entries at all, but it had {int(prev_beta_n)} last run "
-                                                   "(reset or stale copy?)")
-        for name, entries in ((STAGES_FILE, v1), (STAGES_BETA_FILE, beta)):
-            if entries is None:   # the last good count is carried, so a reset stays suspicious on later runs
+        state, overlay, counts, read_notes = read_stage_files(prev_closed_recs, active_numbers, prev_counts)
+        notes.update(read_notes)
+        for name in stage_files():
+            if name in counts:
+                stage_counts[name] = counts[name]
+            else:   # the last good count is carried, so a reset stays suspicious on later runs
                 print(f"::warning::carry-forward: {name} unreadable ({notes[name]}); keeping every job that left "
                       "Jobber's active list")
-            else:
-                stage_counts[name] = len(entries)
         archived, archive_note = load_archive(prev_path(ARCHIVE_NAME))
         if archive_note: print(f"::warning::carry-forward: {archive_note}")
-        state = None if v1 is None or beta is None else beta
-        closed, dropped = carry_forward(cands, active_numbers, pending_numbers, state, archived, overlay=v1)
+        closed, dropped = carry_forward(cands, active_numbers, pending_numbers, state, archived, overlay=overlay)
         refresh_deadline = _monotonic() + REFRESH_BUDGET_S   # one budget for every refresh (see REFRESH_BUDGET_S)
         for rec in closed:
             why = rec.pop("_why")
@@ -1000,7 +1051,8 @@ def main(argv: list[str] | None = None) -> int:
             "by_client": by_client, "cache_entries": len(cache), "geocode_api_calls": api_calls,
             "closed": len(closed) if closed_ok else prev_meta.get("closed"),
             "stages_read": notes.get(STAGES_FILE, f"not read ({skip_file} unreadable)"),
-            "stages_beta_read": notes.get(STAGES_BETA_FILE, f"not read ({skip_file} unreadable)"),
+            "stages_beta_read": (notes.get(BETA_STATE_FILE, f"not read ({skip_file} unreadable)") if BETA_STATE_FILE
+                                 else "not read (single-file mode)"),
             "stage_entries": stage_counts}
     texts = {CACHE_NAME: json.dumps(cache, indent=2), JOBS_NAME: json.dumps(jobs, indent=1),
              META_NAME: json.dumps(meta, indent=1)}

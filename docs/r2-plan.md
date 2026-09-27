@@ -1,6 +1,7 @@
 # R-2 plan (2026-09-26): Setup stage, job items, route editing, pricing
 
-Status: **answers received 2026-09-26** (recorded in APP_MASTER §11 "R-2"). Build starts after R-1 ships.
+Status: shipped; R-2 is the main app (promoted to the site root on 2026-09-26; §9 "Promotion" below; APP_MASTER §7.17, ADR-30).
+History: answers received 2026-09-26 (recorded in APP_MASTER §11 "R-2"); beta released at `/beta/` the same day, then promoted.
 Builds on R-1 (`docs/r1-build-spec.md`). Riley's request is quoted verbatim in APP_MASTER §11 "R-2".
 This file is the build spec for R-2; amend it (and log the amendment) if anything changes.
 
@@ -116,9 +117,9 @@ Actions run, live check.
 2. Paste it as a new repo secret `PRICE_KEY` (GitHub → eckstein-jobs → Settings → Secrets and variables → Actions).
 3. Paste it into the app on the iPhone and the PC: Settings → Pricing. Keep a copy in the password manager.
 
-## 9. Beta channel: trial R-2 next to v1 (Riley 2026-09-26)
+## 9. Beta channel: trial R-2 next to v1 (Riley 2026-09-26), then the promotion
 Riley: "When complete please dont overwrite v1, would like to trial it in parallel if possible." Stage sync answer:
-**"v1 → beta only"**.
+**"v1 → beta only"**. (The bullets below describe the trial as it ran; the promotion below replaced it.)
 - **URL:** `https://claude69420.github.io/eckstein-jobs/beta/` (folder `beta/` on `main`). Root `/` stays R-1 v1,
   byte-for-byte (no root frontend file changes while the trial runs).
 - **Build:** `beta/` is generated from the `r2` branch's frontend files by `tools/build_beta.py` (copies index.html,
@@ -138,9 +139,54 @@ Riley: "When complete please dont overwrite v1, would like to trial it in parall
 - **Install:** separate Home Screen app "EJ Beta" with a tinted icon; own manifest (`id`/`scope`/`start_url` = `beta/`),
   own service worker (scope `beta/`, caches prefixed `ejb-`, cleanup only of `ejb-` caches). Riley pastes the same edit
   key (and the pricing key) inside the beta app. A small "Beta" label in the header.
-- **Promotion (when Riley approves):** merge files (stage = newest of v1 `at` / beta `sat`; items from beta) into
-  `stages.json` v2; ship the `r2` frontend at the root with default config (`ns` "ej_", `stateFile` "stages.json", no
-  overlay); `beta/` redirects to `/` then is removed. Logged as one change with its own rollback.
+The trial ran from 2026-09-26 (release `6613835`) until Riley approved the promotion the same day: "Looks good please
+push the beta to the final release of version 2 so that the original link will work."
+
+### Promotion (the procedure actually used, 2026-09-26; APP_MASTER §7.17, ADR-30)
+The earlier plan here ("merge the stage files into `stages.json` v2 first, then ship; `beta/` redirects, then is
+removed") was replaced by **deploy first, then convert**: converting first would have made every open R-1 page refuse its
+saves for the whole ship, while an R-2 page that meets the v1 file simply holds its changes on the device.
+1. **Pre-flight (Riley):** close and reopen every app/tab with the edit key (a tab still on R-1 `005a671`, which lacks the
+   newer-format guard, could rewrite a converted file as v1); force-quit EJ Beta with 0 pending changes; the crew open the
+   app online after the deploy.
+2. **Deploy the code (one commit on `main`):** the `r2` root frontend with the default config (no `EJ_CONFIG`: channel
+   main, `ns "ej_"`, `stateFile "stages.json"`, no overlay), every local css/js URL with `?v=r2.0`, `sw.js` cache `ej-v3`
+   (cleans only `ej-` caches); root `manifest.json` + `icons/` unchanged, so the existing Home Screen app loads version 2.
+   The main app copies the beta's per-device keys once on a same-origin browser (`Stages.migrateFromBeta`:
+   `ejb_gh_token`, `ejb_price_key`, `ejb_show_prices`, `ejb_device` into missing `ej_` keys; `ejb_routes` merged into
+   `ej_routes`; marker `ej_migrated_from_beta`; the beta's secret copies removed afterwards). Wording "Assessed before this
+   update"; About "Eckstein Jobs · version R-2". `sync_jobs.py` switches to **single-file mode** (`BETA_STATE_FILE = None`:
+   only `stages.json` is read; `meta.stages_beta_read` "not read (single-file mode)", `stage_entries` `{"stages.json": n}`).
+   Until step 4, R-2 devices hold their moves ("… still in the v1 format … saving is paused (changes wait on this
+   device)"); nothing is lost.
+3. **Dry run:** `python tools/promote_stages.py --api` (fresh, read only). Per job: stage = the beta's merged view (v1 wins
+   when its `at` is newer than the beta `sat`, as the beta showed it), items from `stages-beta.json`, `sat` dropped,
+   serialized exactly like `js/stages.js`. On 2026-09-26: 31 v1 entries + 1 beta entry (#412 assess On site) → 32, 0 dropped; a re-check at
+   2026-09-27 01:18 UTC (raw CDN) found 3 beta entries (#411, #412, #679) → 33, 0 dropped. The fresh run after the
+   pre-flight decides the count.
+4. **Convert and seal:** `python tools/promote_stages.py --write --expect SHA12 --seal-beta` (SHA12 = the first 12+ hex of
+   the dry run's proposal sha256): `stages.json` becomes v2 (sha-guarded; refused if anything changed since the dry run),
+   then `stages-beta.json` is sealed as **version 3** (content kept), so a still-running beta app can no longer save.
+5. **Check:** `python tools/promote_stages.py --check --api` right after, about 10 minutes later and later that day (exit 0
+   = v2; exit 4 = a stale R-1 page wrote it back as v1).
+6. **Repair (only if step 5 fails):** close the stale page, then `python tools/promote_stages.py --repair` (dry run: the
+   newest v2 `stages.json` in the state repo's history + the R-1 moves made since) and `--repair --write --expect SHA12`.
+7. **Sync check:** dispatch the sync; `stages_read` "ok", `stages_beta_read` "not read (single-file mode)",
+   `stage_entries` `{"stages.json": N}` (N = the `WROTE stages.json v2 (N entries)` count).
+8. **Retire `/beta/` (part of the step 2 commit):** `beta/index.html` is a static notice ("EJ Beta is now the main Eckstein Jobs app", button to the
+   main URL; its inline script unregisters the `/beta/` service worker and deletes `ejb-` caches), `beta/sw.js` a retire
+   worker (deletes `ejb-` caches, unregisters itself, reloads open beta pages as the notice); manifest + icons kept;
+   `beta/css`, `beta/js`, `beta/vendor` removed. `tools/build_beta.py` stays for future betas (refuses a retired `beta/`
+   unless `--force`; `--out DIR`). A future beta needs a new state-file name (`stages-beta.json` is sealed).
+9. **Riley's devices:** iPhone Home Screen apps don't share storage: paste the edit key and the pricing key in the main
+   "Eckstein Jobs" app, then delete EJ Beta (its saved routes are not copied). The PC copies them automatically.
+
+**Rollback** (APP_MASTER §7.19): push a code revert first (restores the R-1 root, the generated beta and the dual-file
+sync), then `python tools/promote_stages.py --rollback --api` (dry run, fresh) and `--rollback --write --expect SHA12` (v2 `stages.json`
+→ v1 `stages.json` with the R-1 stages, Setup → Ready, plus a v2 `stages-beta.json` with every entry and its items, `sat` =
+`at`). If only the frontend is reverted, set `sync_jobs.BETA_STATE_FILE = "stages-beta.json"`. Caveats: an R-2 page that
+reloads into R-1 drops its v2-format queue; a rollback made by other means than `--rollback` is not recognised by the
+tool's history checks.
 
 ## 10. Assessed default for existing jobs (Riley 2026-09-26: "Existing jobs = assessed")
 - `Stages.ASSESS_CUTOFF` = the highest non-pending Jobber jobNumber in `data/jobs.json` on the day the beta launches
@@ -150,6 +196,7 @@ Riley: "When complete please dont overwrite v1, would like to trial it in parall
   `no` as before. A stored `virtual`/`onsite` always wins; `prior` is never stored, and neither is `no` (the default), so
   an old job cannot be set back to "Not yet" (the app dims it on every job <= the cutoff, `Stages.priorAssessed`; open
   design call for Riley: un-assessing an old job would need a stored non-default marker).
-- UI: the Assessed row shows no selected segment plus a quiet "Assessed before beta" caption; tapping a segment stores
+- UI: the Assessed row shows no selected segment plus a quiet "Assessed before beta" caption (the main app since the
+  promotion: "Assessed before this update"); tapping a segment stores
   it. The Unassessed list = effective `no` only. Python: `assess` doesn't affect carry-forward; keep vectors valid
   (third argument optional).

@@ -138,8 +138,10 @@ function setup(o) {
   const window = makeTarget();
   const persistCalls = [];
   const navigator = o.navigator || { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140', storage: { persist: () => { persistCalls.push(1); return Promise.resolve(true); } } };
+  // R-1-era tests model the main app on a v1-format file: they opt in to the v1 -> v2 upgrade (allowUpgrade), which
+  // the real app never does (see 'fail closed: never upgrades an existing v1 file').
   const store = Stages.createStore({ fetch: srv.fetch, storage, now: clock.now, hostname: o.hostname !== undefined ? o.hostname : LIVE_HOST,
-    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document, window, navigator });
+    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document, window, navigator, allowUpgrade: o.allowUpgrade !== false });
   return { clock, srv, storage, document, window, navigator, store, persistCalls };
 }
 function track(p) {
@@ -157,16 +159,17 @@ function test(name, fn) { tests.push({ name, fn }); }
 
 /* ======================================= tests ======================================= */
 
-test('STAGES, stageIndex and normalize match the contract', async () => {
+test('STAGES, stageIndex and normalize match the contract (v2: setup at index 1)', async () => {
   assert.deepStrictEqual(Stages.STAGES, [
     { key: 'ready', label: 'Ready to start', short: 'Ready' },
+    { key: 'setup', label: 'Setup', short: 'Setup' },
     { key: 'excavation', label: 'Excavation', short: 'Excav.' },
     { key: 'base', label: 'Base', short: 'Base' },
     { key: 'prep', label: 'Prep', short: 'Prep' },
     { key: 'inspected', label: 'Passed inspection', short: 'Passed' },
     { key: 'poured', label: 'Poured', short: 'Poured' }
   ]);
-  ['ready', 'excavation', 'base', 'prep', 'inspected', 'poured'].forEach((k, i) => assert.strictEqual(Stages.stageIndex(k), i));
+  ['ready', 'setup', 'excavation', 'base', 'prep', 'inspected', 'poured'].forEach((k, i) => assert.strictEqual(Stages.stageIndex(k), i));
   [undefined, null, '', 'bogus', 42, {}].forEach((k) => assert.strictEqual(Stages.stageIndex(k), 0));
   assert.strictEqual(Stages.normalize('prep'), 'prep');
   assert.strictEqual(Stages.normalize('bogus'), 'ready');
@@ -221,7 +224,7 @@ test('local mode only on localhost / 127.0.0.1 / [::1], never on the live site',
   assert.deepStrictEqual(await store.load(), {});
   assert.deepStrictEqual(await store.set(684, 'base'), { status: 'saved' });
   const saved = JSON.parse(storage.getItem('ej_stages'));
-  assert.deepStrictEqual(saved, { version: 1, stages: { '684': { stage: 'base', at: '2026-09-26T15:00:00Z', by: 'PC' } } });
+  assert.deepStrictEqual(saved, { version: 2, stages: { '684': { stage: 'base', at: '2026-09-26T15:00:00Z', by: 'PC' } } });
   assert.strictEqual((await store.load())['684'].stage, 'base');
   await store.set('684', 'ready');
   assert.deepStrictEqual(JSON.parse(storage.getItem('ej_stages')).stages, {});
@@ -259,14 +262,14 @@ test('batching: 3 sets within 3 s -> ONE PUT; message format for many and for on
   await clock.advance(1);
   assert.strictEqual(puts(srv).length, 1, 'exactly one PUT');
   [a, b, c].forEach((x) => assert.deepStrictEqual(x.value, { status: 'saved' }));
-  assert.strictEqual(srv.commits[0].message, 'stages: #684 -> base, #699 -> prep, #701 -> poured');
+  assert.strictEqual(srv.commits[0].message, 'jobs: #684 stage -> base; #699 stage -> prep; #701 stage -> poured');
   const body = JSON.parse(puts(srv)[0].body);
   assert.strictEqual(body.branch, 'main');
   assert.strictEqual(body.sha, 'sha-1');
   assert.strictEqual(body.message, srv.commits[0].message);
   const text = Buffer.from(body.content, 'base64').toString('utf8');
   assert.strictEqual(text, JSON.stringify(JSON.parse(text), null, 2) + '\n', '2-space indent + trailing newline');
-  assert.deepStrictEqual(JSON.parse(text), { version: 1, stages: {
+  assert.deepStrictEqual(JSON.parse(text), { version: 2, stages: {
     '684': { stage: 'base', at: '2026-09-26T15:00:00Z', by: 'PC' },
     '699': { stage: 'prep', at: '2026-09-26T15:00:01Z', by: 'PC' },
     '701': { stage: 'poured', at: '2026-09-26T15:00:02Z', by: 'PC' } } });
@@ -278,7 +281,7 @@ test('batching: 3 sets within 3 s -> ONE PUT; message format for many and for on
   const d = track(store.set(684, 'prep', { label: 'SW Corner Ellice & Kennedy' }));
   await clock.advance(3000);
   assert.deepStrictEqual(d.value, { status: 'saved' });
-  assert.strictEqual(srv.commits[1].message, 'stage: #684 SW Corner Ellice & Kennedy -> prep');
+  assert.strictEqual(srv.commits[1].message, 'job #684 SW Corner Ellice & Kennedy: stage -> prep');
   assert.strictEqual(JSON.parse(puts(srv)[1].body).sha, 'sha-2', 'uses the sha returned by the previous PUT');
   assert.strictEqual(gets(srv).length, 1, 'no extra GET between consecutive saves');
 });
@@ -294,7 +297,7 @@ test('"ready" deletes the entry; unknown keys count as ready; no-op set makes no
   assert.strictEqual(a.state, 'resolved');
   assert.strictEqual(b.state, 'resolved');
   assert.strictEqual(puts(srv).length, 1);
-  assert.strictEqual(srv.commits[0].message, 'stages: #684 -> ready, #699 -> ready');
+  assert.strictEqual(srv.commits[0].message, 'jobs: #684 stage -> ready; #699 stage -> ready');
   assert.deepStrictEqual(Object.keys(srv.stages()), ['700']);
   assert.deepStrictEqual(Object.keys(await store.load()), ['700']);
 });
@@ -424,7 +427,8 @@ test('network failure -> {status:"queued"}, persisted in ej_stage_queue, replaye
   await clock.advance(3000);
   assert.deepStrictEqual(p.value, { status: 'queued' });
   const q = queueOf(storage);
-  assert.strictEqual(q.changes['684'].stage, 'base');
+  assert.strictEqual(q.version, 2);
+  assert.deepStrictEqual(q.changes['684'].fields, { stage: 'base' });
   assert.strictEqual(q.changes['684'].label, 'Main St');
   assert.strictEqual(store.status().pending, 1);
   assert.ok(/Offline/.test(store.lastError));
@@ -436,7 +440,7 @@ test('network failure -> {status:"queued"}, persisted in ej_stage_queue, replaye
   window.dispatch('online');
   await clock.advance(10);
   assert.strictEqual(srv.commits.length, 1);
-  assert.strictEqual(srv.commits[0].message, 'stage: #684 Main St -> base');
+  assert.strictEqual(srv.commits[0].message, 'job #684 Main St: stage -> base');
   assert.strictEqual(queueOf(storage), null);
   assert.strictEqual(store.status().pending, 0);
   assert.strictEqual(store.lastError, null);
@@ -620,7 +624,7 @@ test('UTF-8 round-trip: "Gérard" in device label, commit message and file conte
   const body = JSON.parse(puts(s.srv)[0].body);
   const decoded = Buffer.from(body.content, 'base64').toString('utf8');
   assert.ok(decoded.includes('"by": "Gérard’s iPhone 🚧"'));
-  assert.strictEqual(s.srv.commits[0].message, 'stage: #684 Rue Désautels & Ste-Anne -> base');
+  assert.strictEqual(s.srv.commits[0].message, 'job #684 Rue Désautels & Ste-Anne: stage -> base');
   const viaApi = await setup({ key: true, srv: s.srv }).store.load();
   assert.strictEqual(viaApi['684'].by, 'Gérard’s iPhone 🚧');
   const viaRaw = await setup({ srv: s.srv }).store.load();
@@ -654,7 +658,7 @@ test('robust to missing / empty / malformed stages.json and odd entries; jobNumb
   assert.strictEqual(written.note, 'keep me', 'unknown top-level fields are preserved');
   assert.strictEqual(written.stages['705'].stage, 'inspected');
   assert.deepStrictEqual(Object.keys(written.stages), ['684', '699', '703', '705']);
-  assert.strictEqual(s.srv.commits[0].message, 'stage: #705 -> inspected');
+  assert.strictEqual(s.srv.commits[0].message, 'job #705: stage -> inspected');
 
   const m = setup({ key: true, srvOpts: { exists: false } }); // file missing: empty, first save creates it
   assert.deepStrictEqual(await m.store.load(), {});
@@ -683,17 +687,24 @@ test('a damaged stages.json (hand-edit typo) is never overwritten: saves reject,
   }
 });
 
-test('a stages.json written by a newer app version (version > 1) is read but never overwritten', async () => {
-  const text = JSON.stringify({ version: 2, stages: { '684': { stage: 'base', at: 'a', by: 'b', asphalt: 'req' } } }, null, 2) + '\n';
+test('a stages.json written by a newer app version (version > 2) is read but never overwritten (the change waits)', async () => {
+  const text = JSON.stringify({ version: 3, stages: { '684': { stage: 'base', at: 'a', by: 'b', asphalt: 'req', tarp: 'x' } } }, null, 2) + '\n';
   const s = setup({ key: true, srvOpts: { text } });
   const map = await s.store.load();
   assert.strictEqual(map['684'].stage, 'base', 'stages still display');
-  const p = s.store.set(699, 'prep', { label: 'X' });
-  p.catch(() => {});
+  const p = track(s.store.set(699, 'prep', { label: 'X' }));
   await s.clock.advance(3000);
-  await assert.rejects(p, (e) => e.code === 'http' && /newer version/.test(e.message));
+  assert.deepStrictEqual(p.value, { status: 'queued', reason: 'format' }, 'kept on this device, never dropped');
+  assert.strictEqual(s.store.status().pending, 1);
+  assert.ok(/newer version/.test(s.store.status().lastError), s.store.status().lastError);
+  assert.strictEqual(s.store.peek()['699'].stage, 'prep', 'the move stays on screen');
+  await s.clock.advance(120000);   // polls replay it: still refused, still queued
+  assert.strictEqual(s.store.status().pending, 1);
   assert.strictEqual(puts(s.srv).length, 0, 'no PUT over a newer-format file');
-  assert.strictEqual(s.srv.text, text, 'file untouched (v2 fields kept)');
+  assert.strictEqual(s.srv.text, text, 'file untouched (v3 fields kept)');
+  assert.deepStrictEqual(map['684'], { stage: 'base', asphalt: 'req', at: 'a', by: 'b' }, 'known v2 fields display, unknown dropped');
+  const r = setup({ srvOpts: { text } }); // read-only devices display it too
+  assert.strictEqual((await r.store.load())['684'].asphalt, 'req');
 });
 
 test('polling: 60 s with a key while visible, paused when hidden, immediate on visible, 300 s read-only, clean stop()', async () => {
@@ -771,13 +782,13 @@ test('write-ahead: a change survives the app closing inside the 3 s window', asy
   const s = setup({ key: true });
   await s.store.load();
   track(s.store.set(684, 'base', { label: 'Main St' })); // app killed before the batch timer fires
-  assert.strictEqual(queueOf(s.storage).changes['684'].stage, 'base');
+  assert.deepStrictEqual(queueOf(s.storage).changes['684'].fields, { stage: 'base' });
   const s2 = setup({ key: true, srv: s.srv, storage: s.storage });
   const map = await s2.store.load();
   assert.strictEqual(map['684'].stage, 'base');
   await s2.clock.advance(10);
   assert.strictEqual(s.srv.commits.length, 1);
-  assert.strictEqual(s.srv.commits[0].message, 'stage: #684 Main St -> base');
+  assert.strictEqual(s.srv.commits[0].message, 'job #684 Main St: stage -> base');
   assert.strictEqual(queueOf(s.storage), null);
 });
 
@@ -823,7 +834,7 @@ test('set() before any load() reads the remote first and never skips a real chan
 test('works as a plain browser <script>: global Stages, browser globals as defaults', async () => {
   const vm = require('vm');
   const clock = makeClock();
-  const srv = makeServer({ '684': entry('base') });
+  const srv = makeServer({}, { text: docText({ '684': entry('base') }, { version: 2 }) }); // the real app never upgrades a v1 file
   const win = makeTarget();
   const ctx = Object.assign(win, {
     fetch: srv.fetch, localStorage: makeStorage({ ej_gh_token: KEY }), location: { hostname: LIVE_HOST },
@@ -833,7 +844,7 @@ test('works as a plain browser <script>: global Stages, browser globals as defau
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(SRC, 'utf8'), ctx, { filename: 'stages.js' });
   assert.strictEqual(typeof ctx.Stages, 'object');
-  assert.strictEqual(ctx.Stages.STAGES.length, 6);
+  assert.strictEqual(ctx.Stages.STAGES.length, 7);
   const store = ctx.Stages.createStore();
   assert.strictEqual(store.mode, 'github');
   const map = await store.load();
@@ -912,6 +923,1443 @@ test('remote at/by are one line, bounded and free of bidi overrides', async () =
   assert.ok(!/[‪-‮⁦-⁩‎‏\n]/.test(e.by + e.at));
 });
 
+/* ======================================= R-2 (v2) tests ======================================= */
+function docText2(stages, extra) { return JSON.stringify(Object.assign({ version: 2, stages: stages || {} }, extra || {}), null, 2) + '\n'; }
+const eff = (entry, hints) => Stages.effective(entry, hints);
+const DEFAULT_EFF = { stage: 'ready', assess: 'no', lane: { s: 'na' }, cut: 'na', asphalt: 'na', pavers: 'na', cleanup: 'todo', removed: false };
+
+test('v2: ITEMS and LISTS definitions (keys, labels, values, value labels) and they are frozen', async () => {
+  const I = Stages.ITEMS;
+  assert.deepStrictEqual(I.map((i) => i.key), ['assess', 'lane', 'cut', 'asphalt', 'pavers', 'cleanup']);
+  assert.deepStrictEqual(I.map((i) => i.label), ['Assessed', 'Lane closure', 'Street cut', 'Asphalt', 'Pavers', 'Cuts & cleanup']);
+  const byKey = {};
+  I.forEach((i) => { byKey[i.key] = i; });
+  assert.deepStrictEqual(byKey.assess.values, ['no', 'virtual', 'onsite']);
+  assert.deepStrictEqual(byKey.assess.labels, { no: 'Not yet', virtual: 'Virtual', onsite: 'On site', prior: 'Assessed before beta' });
+  assert.deepStrictEqual(byKey.lane.values, ['na', 'req', 'booked']);
+  assert.deepStrictEqual(byKey.lane.labels, { na: 'N/A', req: 'Required', booked: 'Booked' });
+  for (const k of ['cut', 'asphalt', 'pavers']) {
+    assert.deepStrictEqual(byKey[k].values, ['na', 'req', 'done'], k);
+    assert.deepStrictEqual(byKey[k].labels, { na: 'N/A', req: 'Required', done: 'Done' }, k);
+  }
+  assert.deepStrictEqual(byKey.cleanup.values, ['todo', 'done']);
+  assert.deepStrictEqual(byKey.cleanup.labels, { todo: 'To do', done: 'Done' });
+  assert.deepStrictEqual(I.map((i) => i.def), ['no', 'na', 'na', 'na', 'na', 'todo']);
+  assert.strictEqual(byKey.asphalt.hint, true);
+  assert.strictEqual(byKey.pavers.hint, true);
+  assert.deepStrictEqual(byKey.assess.stages, ['ready', 'setup']);
+  assert.deepStrictEqual(byKey.cleanup.stages, ['poured']);
+  assert.strictEqual(byKey.asphalt.stages.length, 7);
+  assert.deepStrictEqual(Stages.LISTS.map((l) => [l.key, l.label]), [
+    ['unassessed', 'Unassessed'], ['booklane', 'Book lane'], ['streetcuts', 'Street cuts'],
+    ['cleanup', 'Cuts & cleanup'], ['asphalt', 'Asphalt'], ['pavers', 'Pavers']]);
+  Stages.LISTS.forEach((l) => assert.strictEqual(typeof l.predicate, 'function'));
+  assert.ok(Object.isFrozen(I) && Object.isFrozen(I[0]) && Object.isFrozen(I[0].values) && Object.isFrozen(I[0].labels));
+  assert.ok(Object.isFrozen(Stages.LISTS) && Object.isFrozen(Stages.LISTS[0]));
+  assert.strictEqual(Stages.FILE_VERSION, 2);
+});
+
+test('v2: effective() applies defaults, hints, and a stored value (even "na") always beats the hint', async () => {
+  for (const e of [undefined, null, {}, 'bogus', 42, [], { at: 'a', by: 'b' }]) assert.deepStrictEqual(eff(e), DEFAULT_EFF, JSON.stringify(e));
+  assert.deepStrictEqual(eff({ stage: 'base', at: 'a', by: 'b' }), Object.assign({}, DEFAULT_EFF, { stage: 'base' }), 'v1 entry');
+  assert.strictEqual(eff('prep').stage, 'prep', 'v1 shorthand string');
+  // hints
+  assert.strictEqual(eff({}, { asphalt: true }).asphalt, 'req');
+  assert.strictEqual(eff({}, { asphalt: true }).pavers, 'na');
+  assert.strictEqual(eff({}, { pavers: true }).pavers, 'req');
+  assert.strictEqual(eff({}, { asphalt: false, pavers: false }).asphalt, 'na');
+  assert.strictEqual(eff({}, { asphalt: 'yes', pavers: 1 }).asphalt, 'na', 'only boolean true counts');
+  assert.strictEqual(eff({}, { asphalt: 'yes', pavers: 1 }).pavers, 'na');
+  assert.strictEqual(eff({}, null).asphalt, 'na');
+  assert.strictEqual(eff({ asphalt: 'na' }, { asphalt: true }).asphalt, 'na', 'stored na beats hint true');
+  assert.strictEqual(eff({ pavers: 'na' }, { pavers: true }).pavers, 'na');
+  assert.strictEqual(eff({ asphalt: 'done' }, { asphalt: true }).asphalt, 'done');
+  assert.strictEqual(eff({ asphalt: 'req' }, { asphalt: false }).asphalt, 'req', 'stored req without a hint');
+  assert.strictEqual(eff({ asphalt: 'yes' }, { asphalt: true }).asphalt, 'req', 'an unknown stored value is dropped -> hint');
+  // full entry
+  const full = { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
+    asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, at: 'a', by: 'b' };
+  assert.deepStrictEqual(eff(full), { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' },
+    cut: 'req', asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true });
+  const e = eff(full);
+  e.lane.s = 'na';
+  assert.strictEqual(full.lane.s, 'booked', 'effective() returns copies');
+  // unknown values fall back to defaults
+  assert.deepStrictEqual(eff({ stage: 'nope', assess: 'maybe', lane: 'req', cut: 'REQ', cleanup: 'yes', removed: 'true' }), DEFAULT_EFF);
+});
+
+test('v2: canMove gates (lane blocks >= setup, cut blocks >= excavation, backwards always allowed)', async () => {
+  const LANE = { ok: false, reason: 'lane', message: 'Book the lane closure first' };
+  const CUT = { ok: false, reason: 'cut', message: 'Street cut must be done first' };
+  const OK = { ok: true };
+  const lane = { lane: { s: 'req' } };
+  assert.deepStrictEqual(Stages.canMove(lane, 'setup'), LANE);
+  assert.deepStrictEqual(Stages.canMove(lane, 'excavation'), LANE);
+  assert.deepStrictEqual(Stages.canMove(lane, 'poured'), LANE);
+  assert.deepStrictEqual(Stages.canMove(lane, 'ready'), OK);
+  assert.deepStrictEqual(Stages.canMove({ lane: { s: 'booked' } }, 'poured'), OK);
+  assert.deepStrictEqual(Stages.canMove({ lane: { s: 'na' } }, 'setup'), OK);
+  const cut = { cut: 'req' };
+  assert.deepStrictEqual(Stages.canMove(cut, 'setup'), OK, 'street cuts can still set up');
+  assert.deepStrictEqual(Stages.canMove(cut, 'excavation'), CUT);
+  assert.deepStrictEqual(Stages.canMove(Object.assign({ stage: 'setup' }, cut), 'excavation'), CUT);
+  assert.deepStrictEqual(Stages.canMove(Object.assign({ stage: 'setup' }, cut), 'base'), CUT);
+  assert.deepStrictEqual(Stages.canMove({ stage: 'setup', cut: 'done' }, 'excavation'), OK);
+  assert.deepStrictEqual(Stages.canMove({ stage: 'ready', lane: { s: 'req' }, cut: 'req' }, 'excavation'), LANE, 'lane reported first');
+  assert.deepStrictEqual(Stages.canMove({ stage: 'ready', lane: { s: 'booked' }, cut: 'req' }, 'excavation'), CUT);
+  // backwards / staying is always allowed, even with items still Required
+  const late = { stage: 'poured', lane: { s: 'req' }, cut: 'req' };
+  for (const k of ['ready', 'setup', 'excavation', 'base', 'prep', 'inspected', 'poured']) assert.deepStrictEqual(Stages.canMove(late, k), OK, k);
+  // forward from a stage already beyond the gate (item set to Required later) is still gated
+  assert.deepStrictEqual(Stages.canMove({ stage: 'excavation', lane: { s: 'req' } }, 'base'), LANE);
+  assert.deepStrictEqual(Stages.canMove({ stage: 'base', cut: 'req' }, 'prep'), CUT);
+  assert.deepStrictEqual(Stages.canMove({}, 'bogus'), OK, 'unknown target = ready');
+  assert.deepStrictEqual(Stages.canMove(null, 'poured'), OK);
+});
+
+test('v2: canSetItem rules (done only at poured for asphalt/pavers/cleanup; invalid items/values)', async () => {
+  const early = ['ready', 'setup', 'excavation', 'base', 'prep', 'inspected'];
+  for (const item of ['asphalt', 'pavers', 'cleanup']) {
+    for (const st of early) {
+      const r = Stages.canSetItem({ stage: st }, item, 'done');
+      assert.strictEqual(r.ok, false, item + '@' + st);
+      assert.strictEqual(r.reason, 'poured');
+      assert.ok(/once the job is Poured/.test(r.message), r.message);
+    }
+    assert.deepStrictEqual(Stages.canSetItem({ stage: 'poured' }, item, 'done'), { ok: true }, item);
+  }
+  assert.strictEqual(Stages.canSetItem({}, 'asphalt', 'done').message, 'Asphalt can only be marked Done once the job is Poured');
+  assert.strictEqual(Stages.canSetItem({}, 'cleanup', 'done').message, 'Cuts & cleanup can only be marked Done once the job is Poured');
+  for (const st of early.concat(['poured'])) {
+    for (const [item, v] of [['asphalt', 'req'], ['asphalt', 'na'], ['pavers', 'req'], ['pavers', null], ['cleanup', 'todo'],
+      ['assess', 'onsite'], ['lane', 'req'], ['lane', 'booked'], ['cut', 'done'], ['cut', 'req'], ['removed', true], ['removed', false]]) {
+      assert.deepStrictEqual(Stages.canSetItem({ stage: st }, item, v), { ok: true }, item + '=' + v + '@' + st);
+    }
+  }
+  assert.deepStrictEqual(Stages.canSetItem({}, 'lane', { s: 'booked', from: '2026-10-06', to: '2026-10-08' }), { ok: true });
+  const bad = [['lane', { s: 'booked', from: '2026-02-30' }], ['lane', 'yes'], ['asphalt', 'yes'], ['cut', 'booked'],
+    ['cleanup', 'na'], ['assess', 'yes'], ['removed', 'true'], ['bogus', 'req'], ['__proto__', 'req'], ['stage', 'bogus']];
+  for (const [item, v] of bad) {
+    const r = Stages.canSetItem({ stage: 'poured' }, item, v);
+    assert.strictEqual(r.ok, false, item);
+    assert.strictEqual(r.reason, 'invalid', item);
+    assert.strictEqual(typeof r.message, 'string');
+  }
+  assert.deepStrictEqual(Stages.canSetItem({ lane: { s: 'req' } }, 'stage', 'setup'), { ok: false, reason: 'lane', message: 'Book the lane closure first' });
+  assert.deepStrictEqual(Stages.canSetItem({ stage: 'setup' }, 'stage', 'ready'), { ok: true });
+  assert.deepStrictEqual(Stages.canSetItem({}, 'asphalt', 'done', { asphalt: true }).reason, 'poured');
+});
+
+test('v2: fieldWorkDone truth table', async () => {
+  let n = 0;
+  for (const stage of ['ready', 'setup', 'inspected', 'poured']) {
+    for (const cleanup of ['todo', 'done']) {
+      for (const asphalt of ['na', 'req', 'done']) {
+        for (const pavers of ['na', 'req', 'done']) {
+          const e = eff({ stage, cleanup, asphalt, pavers });
+          const want = stage === 'poured' && cleanup === 'done' && asphalt !== 'req' && pavers !== 'req';
+          assert.strictEqual(Stages.fieldWorkDone(e), want, JSON.stringify(e));
+          if (want) n++;
+        }
+      }
+    }
+  }
+  assert.strictEqual(n, 4, 'poured + cleanup done + asphalt/pavers each na|done');
+  assert.strictEqual(Stages.fieldWorkDone(eff({ stage: 'poured', cleanup: 'done' }, { asphalt: true })), false, 'hint makes asphalt Required');
+  assert.strictEqual(Stages.fieldWorkDone(eff({ stage: 'poured', cleanup: 'done', asphalt: 'na' }, { asphalt: true })), true, 'manual N/A beats the hint');
+  assert.strictEqual(Stages.fieldWorkDone(null), false);
+});
+
+test('v2: keepWhenClosed truth table', async () => {
+  let checked = 0;
+  for (const stage of ['ready', 'setup', 'poured']) {
+    for (const ls of ['na', 'req', 'booked']) {
+      for (const cut of ['na', 'req', 'done']) {
+        for (const asphalt of ['na', 'req', 'done']) {
+          for (const pavers of ['na', 'req', 'done']) {
+            for (const cleanup of ['todo', 'done']) {
+              for (const removed of [false, true]) {
+                const e = eff({ stage, lane: { s: ls }, cut, asphalt, pavers, cleanup, removed });
+                const fwd = stage === 'poured' && cleanup === 'done' && asphalt !== 'req' && pavers !== 'req';
+                const started = stage !== 'ready' || asphalt === 'req' || pavers === 'req' || cut === 'req' || ls === 'req' || ls === 'booked';
+                assert.strictEqual(Stages.keepWhenClosed(e), !removed && !fwd && started, JSON.stringify(e));
+                checked++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.strictEqual(checked, 972);
+  const k = (entry, hints) => Stages.keepWhenClosed(eff(entry, hints));
+  assert.strictEqual(k({}), false, 'untouched Ready job leaves with Jobber');
+  assert.strictEqual(k({ assess: 'onsite' }), false, 'assessed only');
+  assert.strictEqual(k({ cut: 'done' }), false, 'street cut done, still Ready');
+  assert.strictEqual(k({ lane: { s: 'booked', from: '2026-10-06' } }), true);
+  assert.strictEqual(k({}, { asphalt: true }), true, 'hint Required');
+  assert.strictEqual(k({ asphalt: 'na' }, { asphalt: true }), false, 'manual N/A beats the hint');
+  assert.strictEqual(k({ stage: 'setup' }), true);
+  assert.strictEqual(k({ stage: 'poured' }), true, 'cleanup still to do');
+  assert.strictEqual(k({ stage: 'poured', cleanup: 'done' }), false, 'field work done');
+  assert.strictEqual(k({ stage: 'poured', cleanup: 'done', pavers: 'req' }), true);
+  assert.strictEqual(k({ stage: 'base', removed: true }), false, 'Remove from app');
+  assert.strictEqual(Stages.keepWhenClosed(null), false);
+});
+
+test('v2: every LISTS predicate', async () => {
+  const P = {};
+  Stages.LISTS.forEach((l) => { P[l.key] = (entry, hints) => l.predicate(eff(entry, hints)); });
+  // unassessed = stage in {ready, setup} AND assess no
+  assert.strictEqual(P.unassessed({}), true);
+  assert.strictEqual(P.unassessed({ stage: 'setup' }), true);
+  assert.strictEqual(P.unassessed({ stage: 'excavation' }), false);
+  assert.strictEqual(P.unassessed({ stage: 'poured' }), false);
+  assert.strictEqual(P.unassessed({ assess: 'virtual' }), false);
+  assert.strictEqual(P.unassessed({ stage: 'setup', assess: 'onsite' }), false);
+  // booklane = lane.s req (any stage)
+  assert.strictEqual(P.booklane({ lane: { s: 'req' } }), true);
+  assert.strictEqual(P.booklane({ stage: 'excavation', lane: { s: 'req' } }), true);
+  assert.strictEqual(P.booklane({ lane: { s: 'booked' } }), false);
+  assert.strictEqual(P.booklane({}), false);
+  // streetcuts = cut req
+  assert.strictEqual(P.streetcuts({ cut: 'req' }), true);
+  assert.strictEqual(P.streetcuts({ stage: 'setup', cut: 'req' }), true);
+  assert.strictEqual(P.streetcuts({ cut: 'done' }), false);
+  assert.strictEqual(P.streetcuts({}), false);
+  // cleanup = poured AND cleanup todo (automatic To do at Poured)
+  assert.strictEqual(P.cleanup({ stage: 'poured' }), true);
+  assert.strictEqual(P.cleanup({ stage: 'poured', cleanup: 'done' }), false);
+  assert.strictEqual(P.cleanup({ stage: 'inspected' }), false);
+  // asphalt / pavers = poured AND req (hint or stored)
+  for (const key of ['asphalt', 'pavers']) {
+    assert.strictEqual(P[key]({ stage: 'poured', [key]: 'req' }), true, key);
+    assert.strictEqual(P[key]({ stage: 'poured' }, { [key]: true }), true, key + ' from the hint');
+    assert.strictEqual(P[key]({ stage: 'poured', [key]: 'na' }, { [key]: true }), false, key + ' manual N/A');
+    assert.strictEqual(P[key]({ stage: 'inspected', [key]: 'req' }), false, key + ' before pour');
+    assert.strictEqual(P[key]({ stage: 'poured', [key]: 'done' }), false, key + ' done');
+    assert.strictEqual(P[key]({ stage: 'poured' }), false, key + ' no hint');
+  }
+  Stages.LISTS.forEach((l) => assert.strictEqual(l.predicate(null), false, l.key + '(null)'));
+});
+
+test('v2: itemShown (early items in Ready/Setup and later while Required; asphalt/pavers always; cleanup at Poured)', async () => {
+  const S = (entry, item, hints) => Stages.itemShown(eff(entry, hints), item);
+  assert.strictEqual(S({}, 'assess'), true);
+  assert.strictEqual(S({ stage: 'base' }, 'assess'), false);
+  assert.strictEqual(S({ stage: 'base' }, 'lane'), false);
+  assert.strictEqual(S({ stage: 'base', lane: { s: 'req' } }, 'lane'), true);
+  assert.strictEqual(S({ stage: 'base', lane: { s: 'booked' } }, 'lane'), false);
+  assert.strictEqual(S({ stage: 'prep', cut: 'req' }, 'cut'), true);
+  assert.strictEqual(S({ stage: 'prep', cut: 'done' }, 'cut'), false);
+  assert.strictEqual(S({ stage: 'prep' }, 'asphalt'), true);
+  assert.strictEqual(S({ stage: 'prep' }, 'cleanup'), false);
+  assert.strictEqual(S({ stage: 'poured' }, 'cleanup'), true);
+  assert.strictEqual(S({}, 'bogus'), false);
+});
+
+test('v2: a v1 stages.json reads as v2; the first save writes version 2 and keeps v1 entries unchanged', async () => {
+  const { store, srv, clock } = setup({ key: true, stages: { '684': entry('base'), '699': entry('prep') } });
+  assert.strictEqual(JSON.parse(srv.text).version, 1);
+  const map = await store.load();
+  assert.deepStrictEqual(map, { '684': entry('base'), '699': entry('prep') });
+  const p = track(store.set(699, { asphalt: 'req' }, { label: 'Other St' }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' });
+  const written = JSON.parse(srv.text);
+  assert.strictEqual(written.version, 2);
+  assert.deepStrictEqual(written.stages['684'], entry('base'), 'untouched v1 entry carried over as-is');
+  assert.deepStrictEqual(written.stages['699'], { stage: 'prep', asphalt: 'req', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.deepStrictEqual(Object.keys(written.stages['699']), ['stage', 'asphalt', 'at', 'by'], 'file key order');
+  assert.strictEqual(srv.commits[0].message, 'job #699 Other St: asphalt -> req');
+});
+
+test('v2: round trip of every field (stored form drops defaults, keeps asphalt/pavers "na")', async () => {
+  const full = { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
+    asphalt: 'req', pavers: 'na', cleanup: 'todo', removed: false, at: '2026-09-25T10:00:00Z', by: 'iPhone app' };
+  const stored = { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
+    asphalt: 'req', pavers: 'na', at: '2026-09-25T10:00:00Z', by: 'iPhone app' };
+  const { store, srv, clock } = setup({ key: true, srvOpts: { text: docText2({ '684': full, '700': { stage: 'poured', cleanup: 'done', removed: true, at: 'x', by: 'y' } }) } });
+  const map = await store.load();
+  assert.deepStrictEqual(map['684'], stored);
+  assert.deepStrictEqual(map['700'], { stage: 'poured', cleanup: 'done', removed: true, at: 'x', by: 'y' });
+  track(store.set(701, 'setup'));
+  await clock.advance(3000);
+  const written = JSON.parse(srv.text);
+  assert.deepStrictEqual(written.stages['684'], stored);
+  assert.deepStrictEqual(Object.keys(written.stages['684']), ['stage', 'assess', 'lane', 'cut', 'asphalt', 'pavers', 'at', 'by']);
+  assert.deepStrictEqual(Object.keys(written.stages['684'].lane), ['s', 'from', 'to']);
+  assert.deepStrictEqual(await setup({ srv }).store.load(), await setup({ key: true, srv }).store.load(), 'raw and API read the same');
+  const again = await setup({ srv }).store.load();
+  assert.deepStrictEqual(again['684'], stored);
+  const U = Stages._util;
+  const doc = U.parseDocText(U.serializeDoc(again, { note: 'x' }));
+  assert.deepStrictEqual(doc.map, again, 'serialize -> parse is the identity on sanitized maps');
+  assert.strictEqual(doc.version, 2);
+  assert.deepStrictEqual(doc.extras, { note: 'x' });
+});
+
+test('v2: set() patches, per-field batching, explicit asphalt "na", null resets, defaults delete the entry', async () => {
+  const { store, srv, clock } = setup({ key: true, stages: { '684': entry('ready') } });
+  await store.load();
+  const a = track(store.set(684, { stage: 'setup', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' } }, { label: 'SW Corner Ellice & Kennedy' }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(a.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[0].message, 'job #684 SW Corner Ellice & Kennedy: stage -> setup, lane -> booked 2026-10-06..2026-10-08');
+  // three sets of one job inside one batch: per-field merge, last write per field wins
+  const b1 = track(store.set(684, { asphalt: 'req' }));
+  const b2 = track(store.set(684, 'base'));
+  const b3 = track(store.set(684, { asphalt: 'done', assess: 'onsite' }));
+  const b4 = track(store.set(699, { pavers: 'na' }));
+  await clock.advance(3000);
+  [b1, b2, b3, b4].forEach((x) => assert.deepStrictEqual(x.value, { status: 'saved' }));
+  assert.strictEqual(puts(srv).length, 2);
+  assert.strictEqual(srv.commits[1].message, 'jobs: #684 stage -> base, assess -> onsite, asphalt -> done; #699 pavers -> na');
+  assert.deepStrictEqual(srv.stages()['684'], { stage: 'base', assess: 'onsite', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' },
+    asphalt: 'done', at: '2026-09-26T15:00:03Z', by: 'PC' });
+  assert.deepStrictEqual(srv.stages()['699'], { pavers: 'na', at: '2026-09-26T15:00:03Z', by: 'PC' }, 'explicit N/A is stored');
+  // no-op: already stored -> no commit; null = follow the hint again
+  assert.deepStrictEqual(await store.set(699, { pavers: 'na' }), { status: 'saved' });
+  const c = track(store.set(699, { pavers: null }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(c.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[2].message, 'job #699: pavers -> auto');
+  assert.ok(!('699' in srv.stages()), 'entry with only defaults is deleted');
+  // setting every field back to its default deletes the entry
+  const d = track(store.set(684, { stage: null, assess: 'no', lane: 'na', cut: null, asphalt: null, cleanup: 'todo', removed: false }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(d.value, { status: 'saved' });
+  assert.deepStrictEqual(srv.stages(), {});
+  assert.strictEqual(srv.commits[3].message, 'job #684: stage -> ready, assess -> no, lane -> na, asphalt -> auto');
+  // dates only kept when booked; cleared date inputs ('' / null) are fine
+  const e = track(store.set(684, { lane: { s: 'req', from: '2026-10-06', to: '' } }));
+  const f = track(store.set(685, { lane: { s: 'booked', from: '', to: null } }));
+  await clock.advance(3000);
+  assert.strictEqual(e.state, 'resolved');
+  assert.strictEqual(f.state, 'resolved');
+  assert.deepStrictEqual(srv.stages()['684'].lane, { s: 'req' });
+  assert.deepStrictEqual(srv.stages()['685'].lane, { s: 'booked' });
+  assert.strictEqual(srv.commits[4].message, 'jobs: #684 lane -> req; #685 lane -> booked');
+});
+
+test('v2: invalid patches reject (code "http") and never reach GitHub', async () => {
+  const { store, srv, clock } = setup({ key: true });
+  await store.load();
+  const bad = [{}, { foo: 1 }, { stage: 'base', label: 'x' }, { asphalt: 'yes' }, { pavers: 'DONE' }, { lane: { s: 'booked', from: '2026-02-30' } },
+    { lane: { s: 'booked', to: '2026-10-8' } }, { lane: { from: '2026-10-06' } }, { lane: ['req'] }, { lane: 'yes' }, { removed: 'true' },
+    { stage: 'bogus' }, { stage: 5 }, { cleanup: 'na' }, { assess: 'yes' }, { cut: 'booked' }, [], null, 42, undefined, true,
+    JSON.parse('{"__proto__":{"stage":"base"}}'), { stage: undefined }];
+  for (const p of bad) {
+    await assert.rejects(store.set(684, p), (e) => e.code === 'http', JSON.stringify(p));
+  }
+  await clock.advance(5000);
+  assert.strictEqual(puts(srv).length, 0);
+  assert.strictEqual(store.status().pending, 0);
+  assert.strictEqual(({}).stage, undefined);
+  const r = setup({});
+  await assert.rejects(r.store.set(684, { asphalt: 'req' }), (e) => e.code === 'readonly', 'read-only devices still reject patches');
+});
+
+test('v2: per-field merge on 409 (other fields keep the remote values; the same field -> this device wins)', async () => {
+  // different fields of one job
+  const a = setup({ key: true, stages: { '684': entry('setup') } });
+  await a.store.load();
+  let first = true;
+  a.srv.hook = (req) => {
+    if (req.method === 'PUT' && first) {
+      first = false;
+      a.srv.commitFile(docText2({ '684': { stage: 'excavation', lane: { s: 'booked', from: '2026-10-06' }, at: 'x', by: 'iPhone app' } }), 'other device');
+    }
+  };
+  const p = track(a.store.set(684, { asphalt: 'req' }, { label: 'Main St' }));
+  await a.clock.advance(5000);
+  assert.deepStrictEqual(p.value, { status: 'saved' });
+  assert.strictEqual(puts(a.srv).length, 2);
+  assert.deepStrictEqual(a.srv.stages()['684'], { stage: 'excavation', lane: { s: 'booked', from: '2026-10-06' }, asphalt: 'req',
+    at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(a.srv.commits[a.srv.commits.length - 1].message, 'job #684 Main St: asphalt -> req');
+
+  // the same field: this device's value wins, the other device's other fields survive
+  const b = setup({ key: true, stages: { '684': entry('setup') } });
+  await b.store.load();
+  first = true;
+  b.srv.hook = (req) => {
+    if (req.method === 'PUT' && first) {
+      first = false;
+      b.srv.commitFile(docText2({ '684': { stage: 'setup', lane: { s: 'booked', from: '2026-10-06' }, cut: 'req', at: 'x', by: 'iPhone app' } }), 'other device');
+    }
+  };
+  const q = track(b.store.set(684, { lane: 'req', stage: 'ready' }));
+  await b.clock.advance(5000);
+  assert.deepStrictEqual(q.value, { status: 'saved' });
+  assert.deepStrictEqual(b.srv.stages()['684'], { lane: { s: 'req' }, cut: 'req', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(b.srv.commits[b.srv.commits.length - 1].message, 'job #684: stage -> ready, lane -> req');
+
+  // the other device already made exactly this change: the retry makes no commit
+  const c = setup({ key: true, stages: { '684': entry('setup') } });
+  await c.store.load();
+  first = true;
+  c.srv.hook = (req) => {
+    if (req.method === 'PUT' && first) { first = false; c.srv.commitFile(docText2({ '684': { stage: 'setup', cut: 'done', at: 'x', by: 'iPhone app' } }), 'other'); }
+  };
+  const r = track(c.store.set(684, { cut: 'done' }));
+  await c.clock.advance(5000);
+  assert.deepStrictEqual(r.value, { status: 'saved' });
+  assert.strictEqual(puts(c.srv).length, 1, 'no second PUT');
+  assert.deepStrictEqual(c.srv.stages()['684'], { stage: 'setup', cut: 'done', at: 'x', by: 'iPhone app' });
+});
+
+test('v2: two devices edit different fields of one job at the same time: both survive', async () => {
+  const A = setup({ key: true, stages: { '684': entry('setup') } });
+  const B = setup({ key: true, srv: A.srv, navigator: { standalone: true, userAgent: 'iPhone' } });
+  await A.store.load();
+  await B.store.load();
+  const pa = track(A.store.set(684, { stage: 'excavation', cut: 'done' }));
+  const pb = track(B.store.set(684, { asphalt: 'req', pavers: 'req' }));
+  await A.clock.advance(3000);
+  assert.deepStrictEqual(pa.value, { status: 'saved' });
+  await B.clock.advance(5000); // B's PUT carries the old sha -> 409 -> re-GET -> merge -> PUT
+  assert.deepStrictEqual(pb.value, { status: 'saved' });
+  assert.deepStrictEqual(A.srv.stages()['684'], { stage: 'excavation', cut: 'done', asphalt: 'req', pavers: 'req',
+    at: '2026-09-26T15:00:00Z', by: 'iPhone app' });
+  assert.strictEqual(A.srv.commits.length, 2);
+  assert.strictEqual(A.srv.commits[1].message, 'job #684: asphalt -> req, pavers -> req');
+  assert.strictEqual((await A.store.load())['684'].asphalt, 'req', 'A sees B\'s fields');
+});
+
+test('v2: queue replay of patches (v2 write-ahead format, per-field merge onto the newer remote)', async () => {
+  const s = setup({ key: true, stages: { '684': entry('setup') } });
+  await s.store.load();
+  s.srv.offline = true;
+  const p1 = track(s.store.set(684, { lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' } }, { label: 'Main St' }));
+  const p2 = track(s.store.set(684, { cut: 'req' }));
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p1.value, { status: 'queued' });
+  assert.deepStrictEqual(p2.value, { status: 'queued' });
+  assert.deepStrictEqual(queueOf(s.storage), { version: 2, changes: { '684': {
+    fields: { lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req' }, at: '2026-09-26T15:00:00Z', by: 'PC', label: 'Main St' } } });
+  assert.deepStrictEqual(s.store.peek()['684'], { stage: 'setup', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
+    at: '2026-09-26T15:00:00Z', by: 'PC' }, 'queued patch shown on top of the remote entry');
+  // meanwhile another device moved the job and flagged asphalt; then the app is reopened online
+  s.srv.offline = false;
+  s.srv.commitFile(docText2({ '684': { stage: 'excavation', asphalt: 'req', at: 'x', by: 'iPhone app' } }), 'other device');
+  const s2 = setup({ key: true, srv: s.srv, storage: s.storage });
+  await s2.store.load();
+  await s2.clock.advance(10);
+  const last = s.srv.commits[s.srv.commits.length - 1];
+  assert.strictEqual(last.message, 'job #684 Main St: lane -> booked 2026-10-06..2026-10-08, cut -> req');
+  assert.deepStrictEqual(s.srv.stages()['684'], { stage: 'excavation', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
+    asphalt: 'req', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(queueOf(s.storage), null);
+
+  // a tampered / partly invalid queue: invalid fields and job keys are skipped, valid ones replay
+  const q = { version: 2, changes: {
+    '684': { fields: { stage: 'base', asphalt: 'yes', lane: { s: 'booked', from: 'bad' }, removed: 'x' }, at: 'a', by: 'PC', label: 'L' },
+    '699': { fields: { bogus: 1 }, at: 'a', by: 'PC' },
+    'bad key!': { fields: { stage: 'base' } },
+    '700': { fields: { pavers: null, cut: 'done' }, at: 'a', by: 'PC', label: '' } } };
+  const t = setup({ key: true, stages: { '700': { stage: 'poured', pavers: 'req', at: 'x', by: 'y' } }, ls: { ej_stage_queue: JSON.stringify(q) } });
+  assert.strictEqual(t.store.status().pending, 2);
+  await t.store.load();
+  await t.clock.advance(10);
+  assert.deepStrictEqual(t.srv.stages(), {
+    '684': { stage: 'base', at: 'a', by: 'PC' },
+    '700': { stage: 'poured', cut: 'done', at: 'a', by: 'PC' } });
+  assert.strictEqual(t.srv.commits[0].message, 'jobs: #684 stage -> base; #700 cut -> done, pavers -> auto');
+});
+
+test('v2: read-only and local modes use the same entries; load()/onChange give stored entries, not effective values', async () => {
+  const r = setup({ srvOpts: { text: docText2({ '684': { stage: 'poured', asphalt: 'na', at: 'a', by: 'b' } }) } });
+  const map = await r.store.load();
+  assert.deepStrictEqual(map, { '684': { stage: 'poured', asphalt: 'na', at: 'a', by: 'b' } }, 'no cleanup/pavers defaults filled in');
+  const l = setup({ hostname: 'localhost' });
+  await l.store.load();
+  assert.deepStrictEqual(await l.store.set(684, { asphalt: 'na', lane: { s: 'booked', to: '2026-10-08' } }), { status: 'saved' });
+  assert.deepStrictEqual(JSON.parse(l.storage.getItem('ej_stages')), { version: 2, stages: {
+    '684': { lane: { s: 'booked', to: '2026-10-08' }, asphalt: 'na', at: '2026-09-26T15:00:00Z', by: 'PC' } } });
+  assert.deepStrictEqual(await l.store.set(684, { asphalt: 'na' }), { status: 'saved' }, 'no-op');
+  await l.store.set(684, { asphalt: null, lane: null });
+  assert.deepStrictEqual(JSON.parse(l.storage.getItem('ej_stages')).stages, {});
+  assert.strictEqual(l.srv.requests.length, 0);
+});
+
+test('v2: sanitization of hostile stages.json input (unknown values, bad dates, long strings, prototype pollution)', async () => {
+  const RLO = String.fromCharCode(0x202e), LS = String.fromCharCode(0x2028);
+  const big = 'x'.repeat(100000);
+  const hostile = '{"version":2,"__proto__":{"polluted":1},"note":"keep","stages":{' +
+    '"684":{"__proto__":{"stage":"poured","s":"req"},"stage":" SETUP ","assess":"onsite",' +
+      '"lane":{"__proto__":{"s":"req"},"s":"booked","from":"2026-02-30","to":"2026-10-08","extra":"x"},' +
+      '"cut":"REQ","asphalt":"yes","pavers":["req"],"cleanup":"done","removed":"true","evil":"<script>",' +
+      '"at":"2026-09-25T10:00:00Z' + big + '","by":"dev' + RLO + 'gnp.exe' + LS + 'x"},' +
+    '"685":{"lane":{"s":"booked","from":"2026-1-6","to":"20261008"}},' +
+    '"686":{"lane":"req","at":"a","by":"b"},' +
+    '"687":{"lane":{"s":"req","from":"2026-10-06","to":"2026-10-08"}},' +
+    '"688":{"asphalt":"na"},' +
+    '"689":{"stage":"ready","cleanup":"todo","removed":false,"assess":"no","cut":"na","lane":{"s":"na"},"at":"x","by":"y"},' +
+    '"690":{"stage":["base"],"assess":{"v":"onsite"}},' +
+    '"691":{"removed":true},' +
+    '"692":{"lane":{"s":"booked","from":"9999-12-31","to":"0999-01-01"}},' +
+    '"693":{"lane":{"s":"booked","from":"2024-02-29","to":"2026-02-29"}},' +
+    '"694":{"lane":{"s":"booked","from":"2026-13-01","to":"2026-00-10"}},' +
+    '"695":{"lane":{"s":"booked","from":"' + big + '","to":2026}},' +
+    '"__proto__":{"stage":"base"},"' + 'k'.repeat(5000) + '":{"stage":"base"},"bad key!":{"stage":"base"}}}';
+  for (const key of [false, true]) {
+    const s = setup({ key, srvOpts: { text: hostile } });
+    const map = await s.store.load();
+    assert.deepStrictEqual(Object.keys(map).sort(), ['684', '685', '687', '688', '691', '692', '693', '694', '695']);
+    const e = map['684'];
+    assert.deepStrictEqual(Object.keys(e), ['stage', 'assess', 'lane', 'cleanup', 'at', 'by']);
+    assert.strictEqual(e.stage, 'setup');
+    assert.strictEqual(e.assess, 'onsite');
+    assert.deepStrictEqual(e.lane, { s: 'booked', to: '2026-10-08' });
+    assert.strictEqual(e.cleanup, 'done');
+    assert.ok(e.at.length <= 40 && e.by.length <= 40);
+    assert.ok(!e.by.includes(RLO) && !e.by.includes(LS));
+    assert.deepStrictEqual(map['685'], { lane: { s: 'booked' }, at: '', by: '' });
+    assert.deepStrictEqual(map['687'], { lane: { s: 'req' }, at: '', by: '' }, 'dates dropped unless booked');
+    assert.deepStrictEqual(map['688'], { asphalt: 'na', at: '', by: '' });
+    assert.deepStrictEqual(map['691'], { removed: true, at: '', by: '' });
+    assert.deepStrictEqual(map['692'].lane, { s: 'booked', from: '9999-12-31' });
+    assert.deepStrictEqual(map['693'].lane, { s: 'booked', from: '2024-02-29' }, 'leap day real, 2026-02-29 not');
+    assert.deepStrictEqual(map['694'], { lane: { s: 'booked' }, at: '', by: '' }, 'month 13 / month 0 dropped');
+    assert.deepStrictEqual(map['695'], { lane: { s: 'booked' }, at: '', by: '' }, 'huge / numeric dates dropped');
+    assert.strictEqual(({}).stage, undefined, 'no prototype pollution');
+    assert.strictEqual(({}).s, undefined);
+    assert.strictEqual(({}).polluted, undefined);
+    if (key) {
+      track(s.store.set(700, 'base'));
+      await s.clock.advance(3000);
+      const written = JSON.parse(s.srv.text);
+      assert.strictEqual(written.version, 2);
+      assert.strictEqual(written.note, 'keep');
+      assert.ok(!Object.prototype.hasOwnProperty.call(written, 'polluted'));
+      assert.ok(!s.srv.text.includes('<script>') && !s.srv.text.includes('"REQ"') && !s.srv.text.includes('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'));
+      assert.deepStrictEqual(written.stages['684'], map['684'], 'the next save rewrites the sanitized entry');
+    }
+  }
+  const U = Stages._util;
+  for (const d of ['2026-10-06', '2024-02-29', '2026-12-31', '1000-01-01']) assert.strictEqual(U.cleanDate(d), d, d);
+  for (const d of ['2026-02-29', '2026-13-01', '2026-00-01', '2026-01-00', '2026-04-31', '2026-1-6', ' 2026-10-06', '2026-10-06T00:00:00Z',
+    '0999-12-31', '', null, 20261006, undefined, {}]) assert.strictEqual(U.cleanDate(d), null, String(d));
+});
+
+test('v2: commit messages are bounded; one-job label is cleaned', async () => {
+  const U = Stages._util;
+  const desc = {};
+  for (let i = 1; i <= 300; i++) desc[String(i)] = { label: 'x', parts: ['stage -> base', 'lane -> booked 2026-10-06..2026-10-08'] };
+  const m = U.commitMessage(desc);
+  assert.ok(m.startsWith('jobs: #1 stage -> base, lane -> booked 2026-10-06..2026-10-08; #2 '), m.slice(0, 80));
+  assert.ok(m.length <= 520, 'length ' + m.length);
+  assert.ok(/; \+\d+ more$/.test(m));
+  const shown = (m.match(/#\d+ /g) || []).length;
+  assert.strictEqual(m.slice(m.lastIndexOf('+') + 1), (300 - shown) + ' more');
+  const one = U.commitMessage({ '684': { label: '  SW Corner' + String.fromCharCode(0x202e) + ' Ellice\n& Kennedy ' + 'y'.repeat(200), parts: ['stage -> setup'] } });
+  assert.ok(one.startsWith('job #684 SW Corner Ellice & Kennedy yyy'), one);
+  assert.ok(one.endsWith(': stage -> setup'));
+  assert.ok(one.length <= 'job #684 '.length + 80 + ': stage -> setup'.length);
+
+  const { store, srv, clock } = setup({ key: true });
+  await store.load();
+  for (let i = 1; i <= 60; i++) track(store.set(1000 + i, { stage: 'setup', lane: 'req', cut: 'req', asphalt: 'req', pavers: 'req' }));
+  await clock.advance(3000);
+  assert.strictEqual(puts(srv).length, 1);
+  assert.strictEqual(Object.keys(srv.stages()).length, 60);
+  assert.ok(srv.commits[0].message.length <= 520, 'store message bounded: ' + srv.commits[0].message.length);
+  assert.ok(/\+\d+ more$/.test(srv.commits[0].message));
+});
+
+test('v2: a rejected patch rolls back (refused save); onChange sends the truth only when the rollback cannot', async () => {
+  // A refused PUT (rate limit: code "http", not retried). The file-format guards no longer reject: they queue.
+  const text = JSON.stringify({ version: 2, stages: { '684': { stage: 'setup', at: 'a', by: 'b' } } }, null, 2) + '\n';
+  const { store, srv, clock } = setup({ key: true, srvOpts: { text } });
+  srv.hook = (req) => (req.method === 'PUT' ? srv.resp(403, { message: 'API rate limit exceeded' }, { 'X-RateLimit-Remaining': '0' }) : undefined);
+  await store.load();
+  const seen = [];
+  store.onChange((m) => seen.push(m));
+  const truth = { '684': { stage: 'setup', at: 'a', by: 'b' } };
+  // one set: the UI's own rollback (to the view before the set) already shows the truth -> no onChange
+  const p = track(store.set(684, { asphalt: 'req' }));
+  await clock.advance(5000);
+  assert.strictEqual(p.state, 'rejected');
+  assert.strictEqual(p.error.code, 'http');
+  assert.ok(/rate limit/.test(p.error.message));
+  assert.strictEqual(puts(srv).length, 1);
+  assert.strictEqual(srv.text, text);
+  assert.strictEqual(store.status().pending, 0);
+  assert.strictEqual(seen.length, 0, 'no extra render after a plain rollback');
+  assert.deepStrictEqual(store.peek(), truth);
+  // two sets of the job in one batch: the rollbacks leave the first change on screen -> onChange sends the truth
+  const q1 = track(store.set(684, { asphalt: 'req' }));
+  const q2 = track(store.set(684, { cut: 'req' }));
+  await clock.advance(5000);
+  assert.strictEqual(q1.state, 'rejected');
+  assert.strictEqual(q2.state, 'rejected');
+  assert.strictEqual(seen.length, 1, 'onChange once');
+  assert.deepStrictEqual(seen[0], truth);
+  assert.deepStrictEqual(await store.load(), truth);
+  assert.strictEqual(puts(srv).length, 2);
+  assert.strictEqual(srv.text, text);
+});
+
+/* Holds the next PUT in flight until release() (then the mock server answers it normally, or with `status`). */
+function holdNextPut(srv) {
+  const h = { held: null, release: null };
+  const prevHook = srv.hook;
+  srv.hook = (req) => {
+    if (req.method !== 'PUT' || h.held) return prevHook ? prevHook(req) : undefined;
+    h.held = new Promise((resolve) => {
+      h.release = (status) => {
+        srv.hook = prevHook;
+        if (status) { resolve(srv.resp(status, { message: 'held', status: String(status) })); return; }
+        const n = srv.requests.length;
+        resolve(srv.fetch(req.url, { method: 'PUT', headers: { Authorization: req.headers.authorization }, body: req.body }));
+        srv.requests.splice(n, 1); // the replayed request is the same PUT, not a new one
+      };
+    });
+    return h.held;
+  };
+  return h;
+}
+
+test('sec. 10: existing jobs (jobNumber <= ASSESS_CUTOFF, < 9000) count as assessed "prior" unless assess is stored', async () => {
+  assert.strictEqual(Stages.ASSESS_CUTOFF, 699);
+  const E = (entry, jn, hints) => Stages.effective(entry, hints, jn);
+  const unassessed = Stages.LISTS.filter((l) => l.key === 'unassessed')[0];
+  for (const jn of [1, 698, 699]) {
+    assert.deepStrictEqual(E(null, jn), Object.assign({}, DEFAULT_EFF, { assess: 'prior' }), 'prior ' + jn);
+    assert.strictEqual(E({ stage: 'setup', at: 'a', by: 'b' }, jn).assess, 'prior', 'prior with other fields ' + jn);
+    assert.strictEqual(unassessed.predicate(E(null, jn)), false, 'unassessed excludes prior ' + jn);
+  }
+  for (const jn of [700, 701, 9000, 9001, NaN, Infinity, -Infinity, '684', null, undefined, {}, true]) {
+    assert.strictEqual(E(null, jn).assess, 'no', 'no ' + String(jn));
+  }
+  assert.strictEqual(unassessed.predicate(E(null, 700)), true, 'a newer job is unassessed');
+  // priorAssessed(jn): the job qualifies whatever is stored (the app dims "Not yet" on it even after a Virtual tap)
+  for (const jn of [1, 698, 699]) assert.strictEqual(Stages.priorAssessed(jn), true, 'qualifies ' + jn);
+  for (const jn of [700, 9000, 9001, NaN, Infinity, '684', null, undefined, {}, true]) {
+    assert.strictEqual(Stages.priorAssessed(jn), false, 'does not qualify ' + String(jn));
+  }
+  // "no" is the default and never stored, so an old job cannot be un-assessed (open design call for Riley):
+  // a patch {assess:"no"} only clears a stored value, and the job shows "prior" again
+  assert.deepStrictEqual(Stages._util.cleanPatch({ assess: 'no' }), { assess: 'no' });
+  assert.strictEqual(E({ assess: 'no' }, 684).assess, 'prior');
+  assert.strictEqual(E({ assess: 'no' }, 700).assess, 'no');
+  const parsedNo = Stages._util.parseDocText(docText2({ 684: { assess: 'no', stage: 'setup', at: 'a', by: 'b' } }));
+  assert.deepStrictEqual(parsedNo.map['684'], { stage: 'setup', at: 'a', by: 'b' });
+  assert.strictEqual(unassessed.predicate(E(null, 9001)), true, 'a pending job is unassessed');
+  // a stored value always wins (and the third argument changes nothing else)
+  assert.strictEqual(E({ assess: 'virtual' }, 684).assess, 'virtual');
+  assert.strictEqual(E({ assess: 'onsite' }, 699).assess, 'onsite');
+  assert.strictEqual(E({ assess: 'virtual' }, 700).assess, 'virtual');
+  const h = { asphalt: true, pavers: false };
+  const withJn = E({ stage: 'poured', cut: 'req' }, 684, h), without = eff({ stage: 'poured', cut: 'req' }, h);
+  assert.deepStrictEqual(Object.assign({}, withJn, { assess: 'no' }), without, 'only assess differs');
+  assert.strictEqual(Stages.keepWhenClosed(withJn), Stages.keepWhenClosed(without));
+  assert.strictEqual(Stages.fieldWorkDone(withJn), Stages.fieldWorkDone(without));
+  // without the third argument nothing changes (sync_jobs.py and the contract vectors)
+  assert.strictEqual(eff(null).assess, 'no');
+  assert.strictEqual(eff({ stage: 'setup' }, {}).assess, 'no');
+  // "prior" is not selectable, never accepted in a patch, never stored, and dropped from files
+  const assessDef = Stages.ITEMS.filter((i) => i.key === 'assess')[0];
+  assert.deepStrictEqual(assessDef.values, ['no', 'virtual', 'onsite']);
+  assert.strictEqual(assessDef.labels.prior, 'Assessed before beta');
+  assert.strictEqual(Stages._util.cleanPatch({ assess: 'prior' }), null);
+  assert.strictEqual(Stages._util.cleanPatch({ assess: 'prior', stage: 'setup' }), null);
+  assert.strictEqual(Stages.canSetItem(null, 'assess', 'prior').ok, false);
+  assert.strictEqual(Stages._util.cleanEntry({ assess: 'prior', at: 'a', by: 'b' }), null);
+  assert.deepStrictEqual(Stages._util.cleanEntry({ stage: 'setup', assess: 'prior', at: 'a', by: 'b' }), { stage: 'setup', at: 'a', by: 'b' });
+  const parsed = Stages._util.parseDocText(docText2({ 684: { assess: 'prior', at: 'a', by: 'b' }, 685: { assess: 'prior', cut: 'req', at: 'a', by: 'b' } }));
+  assert.ok(!('684' in parsed.map), 'an entry holding only "prior" is dropped');
+  assert.deepStrictEqual(parsed.map['685'], { cut: 'req', at: 'a', by: 'b' });
+  assert.strictEqual(E({ assess: 'prior' }, 700).assess, 'no', 'a stored "prior" is ignored (newer job)');
+  assert.strictEqual(E({ assess: 'prior' }, 684).assess, 'prior', 'a stored "prior" is ignored (cutoff default)');
+  const { store, srv, clock } = setup({ key: true });
+  await store.load();
+  await assert.rejects(store.set(684, { assess: 'prior' }), (e) => e.code === 'http');
+  await clock.advance(5000);
+  assert.strictEqual(puts(srv).length, 0);
+  const s1 = track(store.set(684, { assess: 'virtual' }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(s1.value, { status: 'saved' });
+  assert.strictEqual(srv.stages()['684'].assess, 'virtual', 'tapping a segment stores it');
+  assert.strictEqual(E(store.peek()['684'], 684).assess, 'virtual');
+  const s2 = track(store.set(684, { assess: null }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(s2.value, { status: 'saved' });
+  assert.ok(!srv.stages()['684'], 'resetting (Undo) stores nothing');
+  assert.strictEqual(E(store.peek()['684'] || null, 684).assess, 'prior', 'and shows prior again');
+});
+
+test('v2: contract vectors (tests/fixtures/contract_vectors.json): effective, fieldWorkDone, keepWhenClosed, LISTS', async () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'contract_vectors.json'), 'utf8'));
+  assert.ok(doc.vectors.length >= 30, 'vectors loaded');
+  assert.deepStrictEqual(Stages.LISTS.map((l) => l.key), ['unassessed', 'booklane', 'streetcuts', 'cleanup', 'asphalt', 'pavers']);
+  assert.deepStrictEqual(eff(null, null), doc.defaults);
+  for (const v of doc.vectors) {
+    const e = eff(v.entry, v.hints);
+    assert.deepStrictEqual(e, v.effective, v.name + ': effective');
+    assert.strictEqual(Stages.fieldWorkDone(e), v.fieldWorkDone, v.name + ': fieldWorkDone');
+    assert.strictEqual(Stages.keepWhenClosed(e), v.keepWhenClosed, v.name + ': keepWhenClosed');
+    assert.deepStrictEqual(Stages.LISTS.filter((l) => l.predicate(e)).map((l) => l.key), v.lists, v.name + ': lists');
+  }
+});
+
+test('v2: duplicate job keys differing only by whitespace: the exact key wins, whatever the order', async () => {
+  const U = Stages._util;
+  const exact = { stage: 'poured', cleanup: 'done' }, alias = { stage: 'base' };
+  const want = { stage: 'poured', cleanup: 'done', at: '', by: '' };
+  assert.deepStrictEqual(U.parseDocText(JSON.stringify({ version: 2, stages: { ' 684': alias, '684': exact } })).map, { '684': want });
+  assert.deepStrictEqual(U.parseDocText(JSON.stringify({ version: 2, stages: { '684': exact, ' 684': alias } })).map, { '684': want });
+  assert.deepStrictEqual(U.parseDocText(JSON.stringify({ version: 2, stages: { 'A-1 ': alias, 'A-1': exact, ' A-1': alias } })).map, { 'A-1': want });
+  // no exact key: the aliases behave like any duplicate (the last one in the file wins)
+  assert.deepStrictEqual(U.parseDocText(JSON.stringify({ version: 2, stages: { ' 684': alias, '684 ': exact } })).map, { '684': want });
+});
+
+test('v2: lane dates: a booking whose end is before its start is refused (canSetItem and set)', async () => {
+  const swapped = { s: 'booked', from: '2026-10-08', to: '2026-10-06' };
+  const r = Stages.canSetItem({}, 'lane', swapped);
+  assert.deepStrictEqual(r, { ok: false, reason: 'dates', message: 'End date is before start date' });
+  assert.deepStrictEqual(Stages.canSetItem({}, 'lane', { s: 'booked', from: '2026-10-06', to: '2026-10-06' }), { ok: true }, 'one-day booking');
+  assert.deepStrictEqual(Stages.canSetItem({}, 'lane', { s: 'booked', from: '2026-10-06', to: '2026-10-08' }), { ok: true });
+  assert.deepStrictEqual(Stages.canSetItem({}, 'lane', { s: 'booked', from: '2026-10-08' }), { ok: true }, 'one date only');
+  assert.deepStrictEqual(Stages.canSetItem({}, 'lane', { s: 'req', from: '2026-10-08', to: '2026-10-06' }), { ok: true }, 'dates ignored unless booked');
+  assert.strictEqual(Stages._util.cleanPatch({ lane: swapped }), null);
+  const { store, srv, clock } = setup({ key: true });
+  await store.load();
+  await assert.rejects(store.set(684, { lane: swapped }), (e) => e.code === 'http');
+  await clock.advance(5000);
+  assert.strictEqual(puts(srv).length, 0);
+  assert.strictEqual(store.status().pending, 0);
+});
+
+test('v2: a change made while an earlier batch of the same job is in flight never re-sends the saved fields', async () => {
+  const A = setup({ key: true, stages: { '684': entry('setup') } });
+  const B = setup({ key: true, srv: A.srv, navigator: { standalone: true, userAgent: 'iPhone' } });
+  await A.store.load();
+  await B.store.load();
+  const hold = holdNextPut(A.srv);
+  const p1 = track(A.store.set(684, { lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' } }, { label: 'Main St' }));
+  await A.clock.advance(3000); // batch 1 closes; its PUT is in flight
+  assert.ok(hold.held, 'batch 1 PUT held');
+  const p2 = track(A.store.set(684, { cut: 'done' })); // batch 2 opens while batch 1 is in flight
+  assert.deepStrictEqual(A.store.peek()['684'].lane, { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, 'shown while in flight');
+  hold.release();
+  await drain();
+  assert.deepStrictEqual(p1.value, { status: 'saved' });
+  assert.strictEqual(p2.state, 'pending');
+  // another device corrects the lane dates
+  const pb = track(B.store.set(684, { lane: { s: 'booked', from: '2026-10-13', to: '2026-10-15' } }));
+  await B.clock.advance(5000);
+  assert.deepStrictEqual(pb.value, { status: 'saved' });
+  await A.clock.advance(5000); // batch 2: 409 (stale sha) -> re-GET -> merge -> PUT
+  assert.deepStrictEqual(p2.value, { status: 'saved' });
+  assert.deepStrictEqual(A.srv.stages()['684'].lane, { s: 'booked', from: '2026-10-13', to: '2026-10-15' }, 'B\'s correction survives');
+  assert.strictEqual(A.srv.stages()['684'].cut, 'done');
+  assert.deepStrictEqual(A.srv.commits.map((c) => c.message), [
+    'job #684 Main St: lane -> booked 2026-10-06..2026-10-08',
+    'job #684: lane -> booked 2026-10-13..2026-10-15',
+    'job #684 Main St: cut -> done']);
+  assert.strictEqual(A.store.status().pending, 0);
+  assert.strictEqual(queueOf(A.storage), null);
+
+  // the same window for a replay of queued (offline) changes
+  const C = setup({ key: true, stages: { '700': entry('setup') } });
+  const D = setup({ key: true, srv: C.srv });
+  await C.store.load();
+  await D.store.load();
+  C.srv.offline = true;
+  track(C.store.set(700, { assess: 'virtual' }));
+  await C.clock.advance(3000);
+  assert.strictEqual(C.store.status().pending, 1);
+  C.srv.offline = false;
+  const hold2 = holdNextPut(C.srv);
+  await C.store.load(); // back online: load() replays the queued change; its PUT is held in flight
+  await drain();
+  assert.ok(hold2.held, 'replay PUT held');
+  const p3 = track(C.store.set(700, { cut: 'req' }));
+  hold2.release();
+  await drain();
+  assert.strictEqual(C.srv.stages()['700'].assess, 'virtual');
+  const pd = track(D.store.set(700, { assess: 'onsite' }));
+  await D.clock.advance(5000);
+  assert.deepStrictEqual(pd.value, { status: 'saved' });
+  await C.clock.advance(5000);
+  assert.deepStrictEqual(p3.value, { status: 'saved' });
+  assert.strictEqual(C.srv.stages()['700'].assess, 'onsite', 'the replayed field is not sent again');
+  assert.strictEqual(C.srv.stages()['700'].cut, 'req');
+  assert.strictEqual(C.srv.commits[C.srv.commits.length - 1].message, 'job #700: cut -> req');
+});
+
+test('v2: a batch that fails for good takes only its own fields with it (later and queued changes stay)', async () => {
+  // (a) batch 1 fails (3 conflicts) while batch 2 of the same job waits: batch 2 commits only its own field
+  const s = setup({ key: true, stages: { '684': entry('poured') } });
+  await s.store.load();
+  let conflicts = 0; // the held PUT answers 409, then the next two PUTs too
+  s.srv.hook = (req) => (req.method === 'PUT' && ++conflicts <= 2 ? s.srv.resp(409, { message: 'conflict' }) : undefined);
+  const hold = holdNextPut(s.srv);
+  const p1 = track(s.store.set(684, { asphalt: 'req' }));
+  await s.clock.advance(3000);
+  assert.ok(hold.held);
+  const p2 = track(s.store.set(684, { cut: 'done' }));
+  hold.release(409);
+  await s.clock.advance(1300); // retries at +400 ms and +800 ms, both 409 -> batch 1 fails
+  assert.strictEqual(p1.state, 'rejected');
+  assert.strictEqual(p1.error.code, 'conflict');
+  assert.strictEqual(p2.state, 'pending');
+  assert.strictEqual(s.store.peek()['684'].asphalt, undefined, 'the failed field is no longer shown');
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p2.value, { status: 'saved' });
+  assert.deepStrictEqual(s.srv.stages()['684'], { stage: 'poured', cut: 'done', at: '2026-09-26T15:00:03Z', by: 'PC' });
+  assert.strictEqual(s.srv.commits.length, 1);
+  assert.strictEqual(s.srv.commits[0].message, 'job #684: cut -> done');
+
+  // (b) removeKey() rejects the open batch but keeps an earlier offline change of the same job
+  const t = setup({ key: true, stages: { '684': entry('setup') } });
+  await t.store.load();
+  t.srv.offline = true;
+  const q1 = track(t.store.set(684, { lane: { s: 'booked', from: '2026-10-06' } }, { label: 'Main St' }));
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(q1.value, { status: 'queued' });
+  const q2 = track(t.store.set(684, { cut: 'req' }));
+  await t.store.removeKey();
+  await drain();
+  assert.strictEqual(q2.state, 'rejected');
+  assert.strictEqual(q2.error.code, 'readonly');
+  const kept = queueOf(t.storage);
+  assert.deepStrictEqual(Object.keys(kept.changes), ['684']);
+  assert.deepStrictEqual(kept.changes['684'].fields, { lane: { s: 'booked', from: '2026-10-06' } },
+    'the offline lane booking is still queued; the rejected cut is not');
+  assert.strictEqual(kept.changes['684'].label, 'Main St');
+  assert.strictEqual(t.store.status().pending, 1);
+  t.srv.offline = false;
+  assert.deepStrictEqual(await t.store.setKey(KEY), { ok: true });
+  await t.clock.advance(10);
+  assert.deepStrictEqual(t.srv.stages()['684'].lane, { s: 'booked', from: '2026-10-06' });
+  assert.strictEqual(t.srv.stages()['684'].cut, undefined);
+  assert.strictEqual(t.srv.commits[0].message, 'job #684 Main St: lane -> booked 2026-10-06..');
+  assert.strictEqual(queueOf(t.storage), null);
+});
+
+/* ============================== beta channel (r2-plan sec. 9) ============================== */
+const BETA_CFG = { channel: 'beta', base: '../', ns: 'ejb_', stateFile: 'stages-beta.json', overlayFile: 'stages.json', cachePrefix: 'ejb-' };
+const REPO_API = 'https://api.github.com/repos/Claude69420/eckstein-jobs-state/contents/';
+const REPO_RAW = 'https://raw.githubusercontent.com/Claude69420/eckstein-jobs-state/main/';
+const API_BETA = REPO_API + 'stages-beta.json', RAW_BETA = REPO_RAW + 'stages-beta.json';
+const T_OLD = '2026-09-26T10:00:00Z', T_MID = '2026-09-26T12:00:00Z', T_NEW = '2026-09-26T14:00:00Z';
+const BETA_REQUESTS = []; // every request of every beta test: the overlay is never written (checked at the end)
+
+/* Mock GitHub serving several files of the state repo (contents API with sha checks + raw CDN).
+ * files: {name: text | null (missing)}. */
+function makeFilesServer(files) {
+  const srv = { files: {}, offline: false, validKeys: new Set([KEY]), requests: [], commits: [], hook: null, n: 1 };
+  Object.keys(files || {}).forEach((f) => { if (files[f] !== null) srv.files[f] = { text: files[f], sha: 'sha-' + f + '-1' }; });
+  const resp = (status, body) => {
+    const text = typeof body === 'string' ? body : JSON.stringify(body);
+    return { status, ok: status >= 200 && status < 300, headers: { get: () => null }, text: () => Promise.resolve(text) };
+  };
+  srv.resp = resp;
+  srv.put = (name, text) => { srv.files[name] = { text, sha: 'sha-' + name + '-' + (++srv.n) }; };
+  srv.del = (name) => { delete srv.files[name]; };
+  srv.stages = (name) => JSON.parse(srv.files[name].text).stages;
+  srv.fetch = function (url, init) {
+    const opt = init || {};
+    const headers = {};
+    Object.keys(opt.headers || {}).forEach((k) => { headers[k.toLowerCase()] = opt.headers[k]; });
+    const req = { url: String(url), method: String(opt.method || 'GET').toUpperCase(), headers, body: opt.body, cache: opt.cache };
+    srv.requests.push(req); ALL_REQUESTS.push(req); if (srv.beta !== false) BETA_REQUESTS.push(req);
+    if (srv.offline) return Promise.reject(new TypeError('Failed to fetch'));
+    if (srv.hook) { const r = srv.hook(req); if (r) return Promise.resolve(r); }
+    const u = new URL(req.url);
+    const rawM = /^\/Claude69420\/eckstein-jobs-state\/main\/([^/]+)$/.exec(u.pathname);
+    if (u.origin === 'https://raw.githubusercontent.com' && rawM) {
+      const f = srv.files[rawM[1]];
+      return Promise.resolve(f ? resp(200, f.text) : resp(404, '404: Not Found'));
+    }
+    const apiM = /^\/repos\/Claude69420\/eckstein-jobs-state\/contents\/([^/]+)$/.exec(u.pathname);
+    if (u.origin === 'https://api.github.com' && apiM && !u.search) {
+      const name = apiM[1], f = srv.files[name];
+      const m = /^Bearer (.+)$/.exec(headers.authorization || '');
+      if (!m || !srv.validKeys.has(m[1])) return Promise.resolve(resp(401, { message: 'Bad credentials' }));
+      if (req.method === 'GET') {
+        if (!f) return Promise.resolve(resp(404, { message: 'Not Found' }));
+        return Promise.resolve(resp(200, { name, sha: f.sha, type: 'file', encoding: 'base64', content: b64lines(f.text) }));
+      }
+      if (req.method === 'PUT') {
+        const b = JSON.parse(req.body);
+        if (f && !b.sha) return Promise.resolve(resp(422, { message: '"sha" wasn\'t supplied.' }));
+        if (f && b.sha !== f.sha) return Promise.resolve(resp(409, { message: 'does not match' }));
+        srv.put(name, Buffer.from(b.content, 'base64').toString('utf8'));
+        srv.commits.push({ name, message: b.message, text: srv.files[name].text });
+        return Promise.resolve(resp(f ? 200 : 201, { content: { name, sha: srv.files[name].sha } }));
+      }
+    }
+    return Promise.resolve(resp(404, { message: 'Not Found' }));
+  };
+  return srv;
+}
+function v1Doc(stages) { return JSON.stringify({ version: 1, stages }, null, 2) + '\n'; }
+function v2Doc(stages) { return JSON.stringify({ version: 2, stages }, null, 2) + '\n'; }
+function setupBeta(o) {
+  o = o || {};
+  const clock = makeClock();
+  const srv = o.srv || makeFilesServer(o.files || {});
+  const cfg = o.config !== undefined ? o.config : BETA_CFG;
+  if (!Stages.resolveConfig(cfg).overlayFile) srv.beta = false; // a main-app store writes stages.json legitimately
+  const init = Object.assign({}, o.ls || {});
+  if (o.key) init.ejb_gh_token = KEY;
+  const storage = o.storage || makeStorage(init);
+  const document = makeTarget({ visibilityState: 'visible' });
+  const window = makeTarget();
+  const navigator = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140' };
+  const store = Stages.createStore({ fetch: srv.fetch, storage, now: clock.now, hostname: o.hostname !== undefined ? o.hostname : LIVE_HOST,
+    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document, window, navigator,
+    config: cfg, allowUpgrade: o.allowUpgrade === true });
+  return { clock, srv, storage, document, window, store };
+}
+const overlayPuts = (reqs) => reqs.filter((r) => r.method !== 'GET' && /\/contents\/stages\.json$/.test(new URL(r.url).pathname));
+
+test('beta: config defaults = the main app (ej_ keys, stages.json URLs, no overlay); EJ_CONFIG global and env.config', async () => {
+  assert.deepStrictEqual(Stages.resolveConfig(undefined),
+    { channel: 'main', base: '', ns: 'ej_', stateFile: 'stages.json', overlayFile: null, cachePrefix: 'ej-' });
+  assert.deepStrictEqual(Stages.resolveConfig(null), Stages.resolveConfig(undefined));
+  assert.deepStrictEqual(Stages.resolveConfig({}), Stages.resolveConfig(undefined));
+  assert.deepStrictEqual(Stages.resolveConfig(BETA_CFG), BETA_CFG);
+  assert.strictEqual(Stages.API_URL, API);
+  assert.strictEqual(Stages.RAW_URL, RAW);
+  // Bad values never fall back quietly: the config is locked (tested in 'fail closed: a bad EJ_CONFIG ...').
+  const bad = Stages.resolveConfig({ ns: 'ej b', stateFile: '../x.json', overlayFile: 'https://evil/x.json', base: 'https://evil/', channel: 'B E T A' });
+  assert.ok(bad.locked);
+  assert.deepStrictEqual(Object.assign({}, bad, { locked: undefined }), Object.assign({}, Stages.resolveConfig({}), { locked: undefined }), 'the values themselves are the defaults');
+
+  // Default store: exactly the old keys and URLs, no overlay read, no status.overlay (a v2 file: see the upgrade guard).
+  const d = setupBeta({ config: {}, files: { 'stages.json': v2Doc({ '684': entry('base') }) },
+    ls: { ej_gh_token: KEY, ejb_gh_token: 'github_pat_WRONGNS_0123456789' } });
+  assert.strictEqual(d.store.config.ns, 'ej_');
+  assert.strictEqual(d.store.mode, 'github');
+  const map = await d.store.load();
+  assert.strictEqual(map['684'].stage, 'base');
+  assert.deepStrictEqual(d.srv.requests.map((r) => r.method + ' ' + r.url), ['GET ' + API]);
+  assert.strictEqual(d.srv.requests[0].headers.authorization, 'Bearer ' + KEY, 'ej_gh_token, not ejb_gh_token');
+  assert.ok(!('overlay' in d.store.status()));
+  d.store.set(684, 'prep');
+  await d.clock.advance(3000);
+  assert.deepStrictEqual(d.srv.stages('stages.json')['684'], { stage: 'prep', at: '2026-09-26T15:00:00Z', by: 'PC' }, 'no sat without an overlay');
+  assert.ok(d.storage.getItem('ej_stages_cache'));
+  assert.strictEqual(d.storage.getItem('ejb_stages_cache'), null);
+
+  // window.EJ_CONFIG is read when env.config is absent.
+  globalThis.EJ_CONFIG = BETA_CFG;
+  try {
+    const clock = makeClock(), srv = makeFilesServer({}), storage = makeStorage({ ej_gh_token: KEY });
+    const g = Stages.createStore({ fetch: srv.fetch, storage, now: clock.now, hostname: LIVE_HOST, setTimeout: clock.setTimeout,
+      clearTimeout: clock.clearTimeout, document: makeTarget({ visibilityState: 'visible' }), window: makeTarget(), navigator: {} });
+    assert.deepStrictEqual(g.config, BETA_CFG);
+    assert.strictEqual(g.mode, 'readonly', 'the v1 key (ej_gh_token) is not the beta key');
+  } finally { delete globalThis.EJ_CONFIG; }
+});
+
+test('fail closed: a bad EJ_CONFIG locks the store (never v1\'s stages.json or "ej_" keys, never a write)', async () => {
+  const cases = [
+    [{ channel: 'beta', base: '../', ns: 'ejb_', stateFile: 'stages_beta.JSON', overlayFile: 'stages.json', cachePrefix: 'ejb-' }, 'stateFile'],
+    [{ channel: 'beta', base: '../', ns: 'ejb_', stateFile: 'stages-beta.json ', overlayFile: 'stages.json', cachePrefix: 'ejb-' }, 'stateFile'],
+    [{ channel: 'beta', base: '../', ns: 'ejb-', stateFile: 'stages-beta.json', overlayFile: 'stages.json', cachePrefix: 'ejb-' }, 'ns'],
+    [{ channel: 'beta', base: '../', ns: 'ej_', stateFile: 'stages-beta.json', overlayFile: 'stages.json', cachePrefix: 'ejb-' }, '"ej_" keys'],
+    [{ channel: 'beta', base: '../', ns: 'ejb_', overlayFile: 'stages.json' }, 'must not write stages.json'],
+    [{ channel: 'beta', ns: 'ejb_', stateFile: 'stages.json' }, 'must not write stages.json'],
+    [{ stateFile: 'x.json', overlayFile: 'x.json' }, 'overlayFile = stateFile'],
+    [{ overlayFile: 'https://evil/x.json' }, 'overlayFile'],
+    [{ base: 'https://evil/' }, 'base'],
+    ['beta', 'not an object'],
+    [[], 'not an object']
+  ];
+  for (const [cfg, why] of cases) {
+    const r = Stages.resolveConfig(cfg);
+    assert.ok(typeof r.locked === 'string' && r.locked.indexOf(why) >= 0, JSON.stringify(cfg) + ' -> ' + r.locked);
+  }
+  // Good configs come back unchanged and unlocked (an explicit null overlay is fine).
+  assert.ok(!('locked' in Stages.resolveConfig({ overlayFile: null })));
+  assert.ok(!('locked' in Stages.resolveConfig({ channel: 'main', ns: 'ej_', stateFile: 'stages.json' })));
+
+  // A locked store with keys saved under BOTH prefixes, on localhost (which would otherwise be "local" mode).
+  for (const host of [LIVE_HOST, 'localhost']) {
+    const ls = { ej_gh_token: KEY, ejb_gh_token: KEY, ej_stage_queue: '{"version":2,"changes":{}}' };
+    const t = setupBeta({ config: cases[0][0], hostname: host, ls,
+      files: { 'stages.json': v1Doc({ '684': entry('base') }), 'stages-beta.json': v2Doc({}) } });
+    const snapshot = JSON.stringify(ls);
+    assert.strictEqual(t.store.mode, 'readonly', host);
+    assert.strictEqual(t.store.hasKey(), false);
+    assert.ok(t.store.config.locked);
+    const st = t.store.status();
+    assert.ok(st.locked && /misconfigured/.test(st.lastError), host + ': ' + st.lastError);
+    const m = await t.store.load();
+    assert.strictEqual(m['684'].stage, 'base', 'still shows stages read-only');
+    const p = track(t.store.set(684, 'prep'));
+    await t.clock.advance(3000);
+    assert.strictEqual(p.state, 'rejected');
+    assert.strictEqual(p.error.code, 'readonly');
+    const k = await t.store.setKey(KEY);
+    assert.strictEqual(k.ok, false);
+    assert.ok(/misconfigured/.test(k.reason));
+    await t.store.removeKey();
+    assert.ok(/misconfigured/.test(t.store.status().lastError), 'the config error is never cleared');
+    assert.deepStrictEqual(t.srv.requests.filter((r) => r.method !== 'GET'), [], 'nothing written to GitHub');
+    const after = {};
+    ['ej_gh_token', 'ejb_gh_token', 'ej_stage_queue'].forEach((key) => { after[key] = t.storage.getItem(key); });
+    assert.strictEqual(JSON.stringify(after), snapshot, 'localStorage untouched');
+    assert.strictEqual(t.storage.getItem('ej_stages_cache'), null);
+    assert.strictEqual(t.storage.getItem('ejb_stages_cache'), null);
+  }
+});
+
+test('fail closed: the store never writes a v2 file over an existing v1 file (live v1 stages.json) unless allowUpgrade', async () => {
+  // The r2 main app (defaults) with a real key, e.g. the r2 root on localhost during the beta trial.
+  const t = setupBeta({ config: {}, hostname: 'localhost', ls: { ej_gh_token: KEY },
+    files: { 'stages.json': v1Doc({ '684': entry('base') }) } });
+  assert.strictEqual(t.store.mode, 'github');
+  await t.store.load();
+  const p = track(t.store.set(684, 'prep'));
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'queued', reason: 'format' }, 'the move waits on this device');
+  assert.strictEqual(t.store.status().pending, 1);
+  assert.deepStrictEqual(t.srv.requests.filter((r) => r.method !== 'GET'), [], 'no PUT over the v1 file');
+  assert.strictEqual(JSON.parse(t.srv.files['stages.json'].text).version, 1);
+  assert.ok(/still in the v1 format/.test(t.store.status().lastError));
+  // A file without a version field counts as v1 too.
+  const nv = setupBeta({ config: {}, ls: { ej_gh_token: KEY }, files: { 'stages.json': JSON.stringify({ stages: {} }) } });
+  const p2 = track(nv.store.set(684, 'prep'));
+  await nv.clock.advance(3000);
+  assert.deepStrictEqual(p2.value, { status: 'queued', reason: 'format' });
+  assert.deepStrictEqual(nv.srv.requests.filter((r) => r.method !== 'GET'), []);
+  // v2 file: saves normally. Missing file: created as v2. allowUpgrade (tests / a one-off migration): converts.
+  const v2 = setupBeta({ config: {}, ls: { ej_gh_token: KEY }, files: { 'stages.json': v2Doc({}) } });
+  const p3 = track(v2.store.set(684, 'prep'));
+  await v2.clock.advance(3000);
+  assert.deepStrictEqual(p3.value, { status: 'saved' });
+  const none = setupBeta({ config: {}, ls: { ej_gh_token: KEY }, files: {} });
+  const p4 = track(none.store.set(684, 'prep'));
+  await none.clock.advance(3000);
+  assert.deepStrictEqual(p4.value, { status: 'saved' });
+  assert.strictEqual(JSON.parse(none.srv.files['stages.json'].text).version, 2);
+  const up = setupBeta({ config: {}, allowUpgrade: true, ls: { ej_gh_token: KEY }, files: { 'stages.json': v1Doc({ '684': entry('base') }) } });
+  const p5 = track(up.store.set(684, 'prep'));
+  await up.clock.advance(3000);
+  assert.deepStrictEqual(p5.value, { status: 'saved' });
+  assert.strictEqual(JSON.parse(up.srv.files['stages.json'].text).version, 2);
+});
+
+test('beta build: a fresh tools/build_beta.py build\'s EJ_CONFIG resolves unchanged; one ns rule in stages.js, app.js, prices.js and index.html', () => {
+  // Since the promotion the committed beta/ is the retired notice, so build a beta into a temp dir (--out) and read that.
+  const root = path.join(__dirname, '..');
+  const os = require('os');
+  const { spawnSync } = require('child_process');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ej_beta_build_'));
+  let html;
+  try {
+    let r = null;
+    for (const py of ['python', 'python3', 'py']) {
+      r = spawnSync(py, [path.join(root, 'tools', 'build_beta.py'), '--out', out], { encoding: 'utf8' });
+      if (!r.error) break;
+    }
+    assert.ok(r && !r.error, 'python is needed for this test');
+    assert.strictEqual(r.status, 0, 'build_beta.py --out: ' + r.stdout + r.stderr);
+    html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  } finally { fs.rmSync(out, { recursive: true, force: true }); }
+  const m = /window\.EJ_CONFIG = (\{[^\n]*\});<\/script>/.exec(html);
+  assert.ok(m, 'EJ_CONFIG found in the built beta index.html');
+  const cfg = JSON.parse(m[1]);
+  assert.deepStrictEqual(Stages.resolveConfig(cfg), cfg, 'no field falls back and the config is not locked');
+  assert.deepStrictEqual(cfg, BETA_CFG);
+  const src = Stages.NS_RE.source;
+  for (const f of ['js/app.js', 'js/prices.js', 'index.html']) {
+    const text = fs.readFileSync(path.join(root, f), 'utf8');
+    const found = text.match(/NS_RE = \/([^/\n]+)\//);
+    assert.ok(found, f + ' defines NS_RE');
+    assert.strictEqual(found[1], src, f + ' uses the same ns pattern as js/stages.js');
+  }
+});
+
+test('beta: ejb_ storage keys and stages-beta.json URLs; the overlay is read from stages.json (API with the key)', async () => {
+  const b = setupBeta({ key: true, ls: { ej_gh_token: 'github_pat_V1ONLY_0123456789abcdef', ej_device: 'v1 phone', ejb_device: 'Beta phone' },
+    files: { 'stages-beta.json': v2Doc({}), 'stages.json': v1Doc({ '684': entry('base', T_OLD, 'iPhone app') }) } });
+  assert.strictEqual(b.store.mode, 'github');
+  await b.store.load();
+  assert.deepStrictEqual(b.srv.requests.map((r) => r.method + ' ' + r.url), ['GET ' + API_BETA, 'GET ' + API]);
+  b.srv.requests.forEach((r) => assert.strictEqual(r.headers.authorization, 'Bearer ' + KEY));
+  assert.strictEqual(b.store.deviceLabel(), 'Beta phone');
+  assert.ok(b.storage.getItem('ejb_stages_cache'));
+  assert.ok(b.storage.getItem('ejb_overlay_cache'));
+  b.srv.offline = true;
+  const p = track(b.store.set(699, { cut: 'req' }));
+  await b.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'queued' });
+  assert.ok(JSON.parse(b.storage.getItem('ejb_stage_queue')).changes['699']);
+  assert.strictEqual(b.storage.getItem('ej_stage_queue'), null);
+  assert.strictEqual(b.storage.getItem('ej_stages_cache'), null);
+  const st = b.store.status();
+  assert.deepStrictEqual(st.overlay, { file: 'stages.json', stateFile: 'stages-beta.json', note: null, lastSync: T0 });
+
+  // Read-only (no key): raw URLs of both files, no Authorization header.
+  const r = setupBeta({ files: { 'stages-beta.json': v2Doc({}), 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  assert.strictEqual(r.store.mode, 'readonly');
+  const m = await r.store.load();
+  assert.strictEqual(m['684'].stage, 'base');
+  assert.deepStrictEqual(r.srv.requests.map((x) => x.url), [RAW_BETA + '?t=' + T0, RAW + '?t=' + T0]);
+  r.srv.requests.forEach((x) => assert.ok(!('authorization' in x.headers)));
+
+  // Local mode (localhost, no key): state in ejb_stages, overlay from the raw CDN.
+  const l = setupBeta({ hostname: 'localhost', files: { 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  assert.strictEqual(l.store.mode, 'local');
+  assert.strictEqual((await l.store.load())['684'].stage, 'base');
+  assert.deepStrictEqual(l.srv.requests.map((x) => x.url), [RAW + '?t=' + T0]);
+  await l.store.set(699, 'setup');
+  const saved = JSON.parse(l.storage.getItem('ejb_stages'));
+  assert.deepStrictEqual(saved.stages['699'], { stage: 'setup', sat: '2026-09-26T15:00:00Z', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(l.storage.getItem('ej_stages'), null);
+  assert.strictEqual(overlayPuts(l.srv.requests).length, 0);
+});
+
+test('beta: overlay merge rule truth table (pure mergeEntry)', async () => {
+  const ov = { stage: 'base', at: T_MID, by: 'iPhone app' };
+  const M = Stages.mergeEntry;
+  // no beta entry -> overlay stage (at/by from the overlay)
+  assert.deepStrictEqual(M(null, ov), { stage: 'base', at: T_MID, by: 'iPhone app' });
+  // beta entry without sat -> overlay stage, beta items kept
+  assert.deepStrictEqual(M({ stage: 'setup', cut: 'req', at: T_OLD, by: 'PC' }, ov),
+    { stage: 'base', cut: 'req', at: T_MID, by: 'iPhone app' });
+  // sat older than overlay.at -> overlay stage
+  assert.deepStrictEqual(M({ stage: 'setup', sat: T_OLD, at: T_OLD, by: 'PC' }, ov), { stage: 'base', sat: T_OLD, at: T_MID, by: 'iPhone app' });
+  // sat newer -> the beta stage (entry unchanged)
+  assert.deepStrictEqual(M({ stage: 'setup', sat: T_NEW, at: T_NEW, by: 'PC' }, ov), { stage: 'setup', sat: T_NEW, at: T_NEW, by: 'PC' });
+  // sat equal -> the beta stage (overlay must be strictly newer)
+  assert.strictEqual(M({ stage: 'setup', sat: T_MID, at: T_MID, by: 'PC' }, ov).stage, 'setup');
+  // beta set Ready after v1's move: {sat} only -> Ready (no stage field)
+  assert.deepStrictEqual(M({ sat: T_NEW, at: T_NEW, by: 'PC' }, ov), { sat: T_NEW, at: T_NEW, by: 'PC' });
+  // no overlay entry / invalid overlay stage -> the beta entry as is
+  assert.deepStrictEqual(M({ stage: 'setup', at: T_OLD, by: 'PC' }, null), { stage: 'setup', at: T_OLD, by: 'PC' });
+  assert.deepStrictEqual(M({ stage: 'setup', at: T_OLD, by: 'PC' }, { stage: 'bogus', at: T_NEW, by: 'x' }), { stage: 'setup', at: T_OLD, by: 'PC' });
+  assert.strictEqual(M(null, null), null);
+  // overlay "ready" (explicit, e.g. a v2 file) wins like any stage; nothing left -> null
+  assert.strictEqual(M({ stage: 'setup', at: T_OLD, by: 'PC' }, { stage: 'ready', at: T_MID, by: 'x' }), null);
+  // unusable overlay.at never beats a sat; without a sat the overlay still wins
+  assert.strictEqual(M({ stage: 'setup', sat: T_OLD, at: T_OLD, by: 'PC' }, { stage: 'base', at: 'yesterday', by: 'x' }).stage, 'setup');
+  assert.strictEqual(M({ stage: 'setup', at: T_OLD, by: 'PC' }, { stage: 'base', at: '', by: '' }).stage, 'base');
+  // beta entry newer than the overlay (items changed later) keeps its own at/by even when the overlay stage wins
+  assert.deepStrictEqual(M({ stage: 'setup', cut: 'req', at: T_NEW, by: 'PC' }, ov), { stage: 'base', cut: 'req', at: T_NEW, by: 'PC' });
+});
+
+test('beta: shared overlay vectors (tests/fixtures/overlay_vectors.json; sync_jobs.py must match): times, merge, effective, keepWhenClosed', async () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'overlay_vectors.json'), 'utf8'));
+  assert.ok(doc.vectors.length >= 20 && doc.times.length >= 5, 'vectors loaded');
+  for (const x of doc.times) {
+    const ms = Stages._util.isoMs(x.s);
+    assert.strictEqual(Number.isNaN(ms) ? null : ms, x.ms, 'time ' + JSON.stringify(x.s));
+  }
+  for (const v of doc.vectors) {
+    // Through the same parsers the store uses: the beta file entry via sanitize, the v1 entry via the overlay parser.
+    const state = v.state === null ? null : (Stages._util.parseDocText(JSON.stringify({ version: 2, stages: { 1: v.state } })).map['1'] || null);
+    const ov = v.overlay === null ? null : (Stages._util.parseOverlayText(JSON.stringify({ stages: { 1: v.overlay } })).map['1'] || null);
+    const merged = Stages.mergeEntry(state, ov);
+    const eff = Stages.effective(merged, null);
+    const from = Stages._util.overlayWins(state, ov) ? 'overlay' : (state ? 'state' : 'none');
+    assert.strictEqual(eff.stage, v.stage, v.name + ': stage');
+    assert.strictEqual(from, v.stageFrom, v.name + ': stageFrom');
+    assert.deepStrictEqual(eff, v.effective, v.name + ': effective');
+    assert.strictEqual(Stages.keepWhenClosed(eff), v.keepWhenClosed, v.name + ': keepWhenClosed');
+    // The whole store agrees (read-only beta, both files served).
+    const files = { 'stages-beta.json': v2Doc(v.state === null ? {} : { 1: v.state }), 'stages.json': v1Doc(v.overlay === null ? {} : { 1: v.overlay }) };
+    const t = setupBeta({ files });
+    const m = await t.store.load();
+    assert.deepStrictEqual(Stages.effective(m['1'] || null, null), v.effective, v.name + ': store view');
+  }
+});
+
+test('beta: store merge (overlay missing / damaged / newer / v1 vs v2 file); items never come from the overlay', async () => {
+  const beta = v2Doc({
+    '1': { cut: 'req', at: T_OLD, by: 'PC' },                                   // no sat
+    '2': { stage: 'setup', sat: T_OLD, at: T_OLD, by: 'PC' },                   // sat older than v1
+    '3': { stage: 'setup', sat: T_NEW, at: T_NEW, by: 'PC' },                   // sat newer than v1
+    '4': { stage: 'prep', asphalt: 'na', sat: T_OLD, at: T_OLD, by: 'PC' }       // no v1 entry
+  });
+  const v1 = v1Doc({ '1': entry('base', T_MID), '2': entry('base', T_MID), '3': entry('base', T_MID), '9': entry('poured', T_MID, 'iPhone app') });
+  const t = setupBeta({ key: true, files: { 'stages-beta.json': beta, 'stages.json': v1 } });
+  const m = await t.store.load();
+  assert.deepStrictEqual(m, {
+    '1': { stage: 'base', cut: 'req', at: T_MID, by: 'iPhone app' },
+    '2': { stage: 'base', sat: T_OLD, at: T_MID, by: 'iPhone app' },
+    '3': { stage: 'setup', sat: T_NEW, at: T_NEW, by: 'PC' },
+    '4': { stage: 'prep', asphalt: 'na', sat: T_OLD, at: T_OLD, by: 'PC' },
+    '9': { stage: 'poured', at: T_MID, by: 'iPhone app' }
+  });
+  assert.deepStrictEqual(t.store.peek(), m, 'peek() gives the merged view too');
+  assert.strictEqual(t.store.status().overlay.note, null);
+
+  // Overlay missing (404): the beta file alone.
+  const miss = setupBeta({ key: true, files: { 'stages-beta.json': beta } });
+  const mm = await miss.store.load();
+  assert.strictEqual(mm['1'].stage, undefined);
+  assert.strictEqual(mm['2'].stage, 'setup');
+  assert.strictEqual(miss.store.status().overlay.note, null);
+  assert.strictEqual(miss.store.lastError, null);
+
+  // Overlay damaged: no overlay + a note; never lastError, never blocks a save.
+  const dmg = setupBeta({ key: true, files: { 'stages-beta.json': beta, 'stages.json': '{"stages": {"684": "base",}' } });
+  const md = await dmg.store.load();
+  assert.strictEqual(md['2'].stage, 'setup');
+  assert.ok(!('9' in md));
+  assert.ok(/damaged/.test(dmg.store.status().overlay.note));
+  assert.strictEqual(dmg.store.lastError, null);
+  assert.strictEqual(dmg.store.writable, true);
+  const ps = track(dmg.store.set(5, 'base'));
+  await dmg.clock.advance(3000);
+  assert.deepStrictEqual(ps.value, { status: 'saved' });
+  assert.strictEqual(dmg.srv.stages('stages-beta.json')['5'].stage, 'base');
+
+  // Overlay newer format (version 3): no overlay + a note; saves still work.
+  const nw = setupBeta({ key: true, files: { 'stages-beta.json': beta,
+    'stages.json': JSON.stringify({ version: 3, stages: { '9': { stage: 'poured', at: T_MID, by: 'x' } } }) } });
+  const mn = await nw.store.load();
+  assert.ok(!('9' in mn));
+  assert.ok(/newer/.test(nw.store.status().overlay.note));
+  const pn = track(nw.store.set(9, 'setup'));
+  await nw.clock.advance(3000);
+  assert.deepStrictEqual(pn.value, { status: 'saved' });
+
+  // Overlay as a v2 file with items: only the stage is used (explicit "ready" counts; no stage = no overlay entry).
+  const v2ov = v2Doc({
+    '1': { stage: 'base', cut: 'req', asphalt: 'req', pavers: 'req', lane: { s: 'req' }, assess: 'onsite', cleanup: 'done', removed: true, at: T_MID, by: 'x' },
+    '2': { stage: 'ready', at: T_MID, by: 'x' },
+    '3': { asphalt: 'req', at: T_NEW, by: 'x' },
+    '4': { stage: 'poured', at: T_MID, by: 'x' }
+  });
+  const v2t = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({ '2': { stage: 'setup', at: T_OLD, by: 'PC' }, '4': { cut: 'na', pavers: 'na', at: T_OLD, by: 'PC' } }), 'stages.json': v2ov } });
+  const m2 = await v2t.store.load();
+  assert.deepStrictEqual(m2['1'], { stage: 'base', at: T_MID, by: 'x' }, 'items never from the overlay');
+  assert.ok(!('2' in m2), 'explicit overlay "ready" (newer, no sat) moves the job back to Ready');
+  assert.ok(!('3' in m2), 'an overlay entry without a stage is ignored');
+  assert.deepStrictEqual(m2['4'], { stage: 'poured', pavers: 'na', at: T_MID, by: 'x' });
+  assert.strictEqual(Stages.effective(m2['4'], { asphalt: true }).asphalt, 'req', 'hint, not the overlay');
+
+  // v1 shorthand entries ("684": "prep") count with an empty at (only wins over a beta entry without sat).
+  const sh = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({ '7': { stage: 'setup', sat: T_OLD, at: T_OLD, by: 'PC' } }),
+    'stages.json': JSON.stringify({ stages: { '6': 'prep', '7': 'poured' } }) } });
+  const ms = await sh.store.load();
+  assert.strictEqual(ms['6'].stage, 'prep');
+  assert.strictEqual(ms['7'].stage, 'setup');
+  [t, miss, dmg, nw, v2t, sh].forEach((x) => assert.strictEqual(overlayPuts(x.srv.requests).length, 0));
+});
+
+test('beta: setting the stage writes sat (= at); items do not; v1 moves after it show, earlier ones do not', async () => {
+  const t = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({}), 'stages.json': v1Doc({ '684': entry('base', T_OLD, 'iPhone app') }) } });
+  const seen = [];
+  t.store.onChange((m) => seen.push(m));
+  await t.store.load();
+  t.store.start();
+  assert.strictEqual(t.store.peek()['684'].stage, 'base');
+  const p = track(t.store.set(684, 'excavation', { label: 'Main St' }));
+  assert.strictEqual(t.store.peek()['684'].stage, 'excavation', 'optimistic view: the beta stage wins at once');
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' });
+  assert.deepStrictEqual(t.srv.stages('stages-beta.json')['684'], { stage: 'excavation', sat: '2026-09-26T15:00:00Z', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(t.srv.commits[0].name, 'stages-beta.json');
+  assert.strictEqual(t.srv.commits[0].message, 'job #684 Main St: stage -> excavation');
+  assert.strictEqual(JSON.parse(t.srv.files['stages.json'].text).stages['684'].stage, 'base', 'v1 file untouched');
+
+  // An item change keeps sat as it is.
+  await t.clock.advance(60000);
+  t.store.set(684, { cut: 'done' });
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(t.srv.stages('stages-beta.json')['684'], { stage: 'excavation', cut: 'done', sat: '2026-09-26T15:00:00Z', at: '2026-09-26T15:01:03Z', by: 'PC' });
+
+  // v1 moves the job BEFORE the beta's sat (clock skew / late commit): not shown.
+  t.srv.put('stages.json', v1Doc({ '684': entry('poured', '2026-09-26T14:59:00Z', 'iPhone app') }));
+  await t.clock.advance(60000);
+  assert.strictEqual(t.store.peek()['684'].stage, 'excavation');
+  // v1 moves it after the sat: shown, items still from the beta file.
+  const n = seen.length;
+  t.srv.put('stages.json', v1Doc({ '684': entry('prep', '2026-09-26T15:30:00Z', 'iPhone app') }));
+  await t.clock.advance(60000);
+  assert.deepStrictEqual(t.store.peek()['684'], { stage: 'prep', cut: 'done', sat: '2026-09-26T15:00:00Z', at: '2026-09-26T15:30:00Z', by: 'iPhone app' });
+  assert.strictEqual(seen.length, n + 1, 'onChange fired for an overlay-only change');
+  assert.strictEqual(seen[seen.length - 1]['684'].stage, 'prep');
+
+  // Setting the stage the beta file already has (but v1 overrides it) renews sat and commits "stage -> excavation".
+  const q = track(t.store.set(684, 'excavation'));
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(q.value, { status: 'saved' });
+  const e = t.srv.stages('stages-beta.json')['684'];
+  assert.strictEqual(e.stage, 'excavation');
+  assert.strictEqual(e.at, '2026-09-26T15:03:06Z');
+  assert.strictEqual(e.sat, '2026-09-26T15:30:01Z', 'v1 clock ahead: sat = v1 at + 1 s, so this move still wins');
+  assert.strictEqual(t.srv.commits[t.srv.commits.length - 1].message, 'job #684: stage -> excavation');
+  assert.strictEqual(t.store.peek()['684'].stage, 'excavation');
+  // The same stage again (file and view agree) is a no-op: no commit.
+  const c = t.srv.commits.length;
+  assert.deepStrictEqual(await t.store.set(684, 'excavation'), { status: 'saved' });
+  await t.clock.advance(3000);
+  assert.strictEqual(t.srv.commits.length, c);
+
+  // Moving back to Ready over a v1 stage keeps a {sat} entry so the move sticks.
+  t.srv.put('stages.json', v1Doc({ '684': entry('prep', '2026-09-26T15:30:00Z'), '700': entry('base', T_OLD) }));
+  await t.clock.advance(60000);
+  assert.strictEqual(t.store.peek()['700'].stage, 'base');
+  t.store.set(700, 'ready', { label: 'Elm St' });
+  assert.ok(!('stage' in (t.store.peek()['700'] || {})));
+  await t.clock.advance(3000);
+  const r = t.srv.stages('stages-beta.json')['700'];
+  assert.deepStrictEqual(Object.keys(r), ['sat', 'at', 'by']);
+  assert.strictEqual(t.srv.commits[t.srv.commits.length - 1].message, 'job #700 Elm St: stage -> ready');
+  await t.clock.advance(60000);
+  assert.strictEqual(Stages.effective(t.store.peek()['700']).stage, 'ready');
+  assert.strictEqual(overlayPuts(t.srv.requests).length, 0);
+  assert.ok(t.srv.commits.every((x) => x.name === 'stages-beta.json'));
+  t.store.stop();
+});
+
+test('beta: sat survives the write-ahead queue, the per-field merge on 409 and a reload', async () => {
+  const t = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({}), 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  await t.store.load();
+  t.srv.offline = true;
+  const p = track(t.store.set(684, 'prep'));
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'queued' });
+  const q = JSON.parse(t.storage.getItem('ejb_stage_queue'));
+  assert.deepStrictEqual(q.changes['684'].fields, { stage: 'prep', sat: '2026-09-26T15:00:00Z' });
+  // App restarts offline: the queued stage (with its sat) still wins over v1 in the view.
+  const t2 = setupBeta({ key: true, srv: t.srv, storage: t.storage });
+  assert.strictEqual(t2.store.peek()['684'].stage, 'prep');
+  // Another device changed the beta file meanwhile: per-field merge keeps its item and our stage + sat.
+  t.srv.offline = false;
+  t.srv.put('stages-beta.json', v2Doc({ '684': { cut: 'req', at: T_OLD, by: 'Other' } }));
+  t2.store.start();
+  t2.window.dispatch('online');
+  await t2.clock.advance(10);
+  assert.deepStrictEqual(t.srv.stages('stages-beta.json')['684'], { stage: 'prep', cut: 'req', sat: '2026-09-26T15:00:00Z', at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(overlayPuts(t.srv.requests).length, 0);
+
+  // A tampered sat in the file is dropped on read (then the overlay wins, as for "no sat").
+  const bad = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({ '684': { stage: 'setup', sat: 'soon', at: T_NEW, by: 'PC' } }),
+    'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  assert.strictEqual((await bad.store.load())['684'].stage, 'base');
+  // A patch can never set sat itself.
+  await assert.rejects(bad.store.set(684, { sat: T_NEW }), (e) => e.code === 'http');
+  assert.strictEqual(Stages._util.cleanPatch({ stage: 'base', sat: T_NEW }), null);
+});
+
+test('beta: 404 stages-beta.json + overlay present = merged view; first save creates the beta file; setKey accepts it', async () => {
+  const t = setupBeta({ key: true, files: { 'stages.json': v1Doc({ '684': entry('base', T_OLD), '699': entry('prep', T_OLD) }) } });
+  const m = await t.store.load();
+  assert.deepStrictEqual(Object.keys(m).sort(), ['684', '699']);
+  assert.strictEqual(m['699'].stage, 'prep');
+  assert.strictEqual(t.store.lastError, null);
+  const p = track(t.store.set(699, { cut: 'req' }));
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' });
+  const put = t.srv.requests.filter((r) => r.method === 'PUT');
+  assert.strictEqual(put.length, 1);
+  assert.strictEqual(put[0].url, API_BETA);
+  assert.ok(!('sha' in JSON.parse(put[0].body)), 'creates the file (no sha)');
+  assert.deepStrictEqual(t.srv.stages('stages-beta.json'), { '699': { cut: 'req', at: '2026-09-26T15:00:00Z', by: 'PC' } });
+  assert.deepStrictEqual(t.store.peek()['699'], { stage: 'prep', cut: 'req', at: '2026-09-26T15:00:00Z', by: 'PC' });
+
+  // setKey: beta file missing but v1's file readable -> accepted; both missing -> refused (names the beta file).
+  const k = setupBeta({ files: { 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  assert.deepStrictEqual(await k.store.setKey(KEY), { ok: true });
+  assert.strictEqual(k.store.mode, 'github');
+  assert.strictEqual(k.storage.getItem('ejb_gh_token'), KEY);
+  assert.strictEqual(k.storage.getItem('ej_gh_token'), null);
+  assert.strictEqual(k.store.peek()['684'].stage, 'base');
+  const none = setupBeta({ files: {} });
+  const res = await none.store.setKey(KEY);
+  assert.strictEqual(res.ok, false);
+  assert.ok(/stages-beta\.json/.test(res.reason));
+  assert.strictEqual(none.storage.getItem('ejb_gh_token'), null);
+  [t, k, none].forEach((x) => assert.strictEqual(overlayPuts(x.srv.requests).length, 0));
+});
+
+test('beta: overlay polling (same cadence), read failures keep the last overlay, offline cold start from ejb_overlay_cache', async () => {
+  const t = setupBeta({ key: true, files: { 'stages-beta.json': v2Doc({}), 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+  const changes = [];
+  t.store.onChange((m) => changes.push(m));
+  await t.store.load();
+  t.store.start();
+  await t.clock.advance(59999);
+  assert.strictEqual(gets(t.srv).length, 2);
+  await t.clock.advance(1);
+  assert.deepStrictEqual(gets(t.srv).slice(2).map((r) => r.url), [API_BETA, API], 'one poll reads both files');
+  assert.strictEqual(changes.length, 0, 'nothing changed: no onChange');
+  // Only the overlay changes -> onChange.
+  t.srv.put('stages.json', v1Doc({ '684': entry('prep', T_MID) }));
+  await t.clock.advance(60000);
+  assert.strictEqual(changes.length, 1);
+  assert.strictEqual(changes[0]['684'].stage, 'prep');
+  // HTTP 500 on the overlay: the last overlay stays, a note explains; state reads are unaffected.
+  t.srv.hook = (req) => (/\/contents\/stages\.json$/.test(req.url) ? t.srv.resp(500, { message: 'boom' }) : undefined);
+  await t.clock.advance(60000);
+  assert.strictEqual(t.store.peek()['684'].stage, 'prep');
+  assert.ok(/Couldn’t read v1 stages/.test(t.store.status().overlay.note));
+  assert.strictEqual(t.store.lastError, null);
+  t.srv.hook = null;
+  await t.clock.advance(60000);
+  assert.strictEqual(t.store.status().overlay.note, null);
+  // Offline: the last overlay stays.
+  t.srv.offline = true;
+  await t.clock.advance(60000);
+  assert.strictEqual(t.store.peek()['684'].stage, 'prep');
+  t.store.stop();
+  // Cold start offline: the overlay comes from ejb_overlay_cache.
+  const cold = setupBeta({ key: true, srv: t.srv, storage: t.storage });
+  assert.strictEqual(cold.store.peek()['684'].stage, 'prep');
+  const m = await cold.store.load();
+  assert.strictEqual(m['684'].stage, 'prep');
+
+  // Read-only and local modes poll the overlay every 300 s (raw CDN).
+  for (const host of [LIVE_HOST, 'localhost']) {
+    const r = setupBeta({ hostname: host, files: { 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) } });
+    await r.store.load();
+    const before = r.srv.requests.length;
+    r.store.start();
+    await r.clock.advance(299999);
+    assert.strictEqual(r.srv.requests.length, before, host);
+    await r.clock.advance(1);
+    assert.ok(r.srv.requests.length > before, host + ' polled at 300 s');
+    assert.ok(r.srv.requests.slice(before).some((x) => x.url.startsWith(RAW + '?t=')), host);
+    r.store.stop();
+  }
+  // A rejected key: the overlay falls back to the raw CDN (no Authorization header).
+  const inv = setupBeta({ files: { 'stages.json': v1Doc({ '684': entry('base', T_OLD) }) }, ls: { ejb_gh_token: 'github_pat_REVOKED_0123456789abcdef' } });
+  const mi = await inv.store.load();
+  assert.strictEqual(inv.store.mode, 'invalid');
+  assert.strictEqual(mi['684'].stage, 'base');
+  const last = inv.srv.requests[inv.srv.requests.length - 1];
+  assert.ok(last.url.startsWith(RAW + '?t='));
+  assert.ok(!('authorization' in last.headers));
+});
+
+test('beta: without an overlay no sat is written; a stale sat is dropped when the stage moves', async () => {
+  const t = setupBeta({ config: {}, key: false, ls: { ej_gh_token: KEY },
+    files: { 'stages.json': v2Doc({ '684': { stage: 'base', cut: 'req', sat: T_OLD, at: T_OLD, by: 'PC' } }) } });
+  const m = await t.store.load();
+  assert.strictEqual(m['684'].sat, T_OLD, 'kept when read');
+  t.store.set(684, { cut: 'done' });
+  await t.clock.advance(3000);
+  assert.strictEqual(t.srv.stages('stages.json')['684'].sat, T_OLD, 'an item change keeps it');
+  t.store.set(684, 'prep');
+  await t.clock.advance(3000);
+  assert.deepStrictEqual(t.srv.stages('stages.json')['684'], { stage: 'prep', cut: 'done', at: '2026-09-26T15:00:03Z', by: 'PC' });
+  assert.strictEqual(t.srv.commits[t.srv.commits.length - 1].message, 'job #684: stage -> prep');
+});
+
+test('beta: the overlay file is never written (no PUT/POST/DELETE to stages.json in any beta test)', async () => {
+  assert.ok(BETA_REQUESTS.length > 40, 'ran over the beta tests');
+  assert.strictEqual(overlayPuts(BETA_REQUESTS).length, 0);
+  assert.ok(BETA_REQUESTS.some((r) => r.method === 'PUT' && r.url === API_BETA), 'beta saves did happen');
+  // Source check: the store has exactly one PUT, and it targets the state file.
+  const src = fs.readFileSync(SRC, 'utf8');
+  assert.strictEqual((src.match(/method: 'PUT'/g) || []).length, 1);
+  assert.ok(/request\(STATE_API, \{ method: 'PUT'/.test(src));
+  assert.ok(!/request\(OVL_API, \{ method: 'PUT'/.test(src));
+});
+
 test('key hygiene: never in a URL, a body, a status, lastError or the console; only api.github.com receives it', async () => {
   // Exercise the error paths once more with status capture.
   const s = setup({ key: true });
@@ -939,6 +2387,205 @@ test('key hygiene: never in a URL, a body, a status, lastError or the console; o
   const src = fs.readFileSync(SRC, 'utf8');
   assert.ok(!/console\s*\./.test(src), 'stages.js must not log');
   assert.ok(!/Math\.random/.test(src));
+});
+
+/* ======================= promotion (r2-plan sec. 9): R-1 devices and the one-time beta key copy ======================= */
+const FAKE_BETA_KEY = 'github_pat_FAKE_BETA_TEST_ONLY_0123456789';   // TEST ONLY
+const FAKE_PRICE_KEY = 'FAKE_PRICE_KEY_TEST_ONLY_base64==';          // TEST ONLY
+const BETA_LS = { ejb_gh_token: FAKE_BETA_KEY, ejb_price_key: FAKE_PRICE_KEY, ejb_show_prices: '1', ejb_device: 'PC beta' };
+
+test('promotion: migrateFromBeta copies every ejb_ key into a MISSING ej_ key once, marks the time, removes the beta secrets', () => {
+  assert.deepStrictEqual(Stages.MIGRATE_KEYS, ['gh_token', 'price_key', 'show_prices', 'device']);
+  assert.deepStrictEqual(Stages.MIGRATE_SECRETS, ['gh_token', 'price_key']);
+  const ls = Object.assign({ ejb_routes: '[]', ejb_theme: 'dark', ejb_stage_queue: '{"version":2,"changes":{}}' }, BETA_LS, { ejb_device: 'Office PC' });
+  const st = makeStorage(ls);
+  const r = Stages.migrateFromBeta(st, undefined, T0);
+  assert.deepStrictEqual(r, { done: true, copied: ['gh_token', 'price_key', 'show_prices', 'device'], removed: ['gh_token', 'price_key'] });
+  assert.strictEqual(st.getItem('ej_gh_token'), FAKE_BETA_KEY);
+  assert.strictEqual(st.getItem('ej_price_key'), FAKE_PRICE_KEY);
+  assert.strictEqual(st.getItem('ej_show_prices'), '1');
+  assert.strictEqual(st.getItem('ej_device'), 'Office PC');
+  assert.strictEqual(st.getItem('ej_migrated_from_beta'), new Date(T0).toISOString());
+  assert.strictEqual(st.getItem('ejb_gh_token'), null, 'the beta copy of the edit key is removed (no UI left for it)');
+  assert.strictEqual(st.getItem('ejb_price_key'), null, 'the beta copy of the pricing key is removed');
+  for (const k of ['ejb_show_prices', 'ejb_device', 'ejb_routes', 'ejb_theme', 'ejb_stage_queue']) assert.strictEqual(st.getItem(k), ls[k], k + ' is left in place');
+  assert.strictEqual(st.getItem('ej_routes'), null, 'an empty beta route list adds nothing');
+  assert.strictEqual(st.getItem('ej_theme'), null, 'prefs are not copied');
+  assert.strictEqual(st.getItem('ej_stage_queue'), null, 'unsent beta changes are not copied (they targeted stages-beta.json)');
+  assert.ok(JSON.stringify(r).indexOf('FAKE') < 0, 'the result never carries a value');
+});
+
+test('promotion: a beta device name that says "beta" is not copied (the PC keeps v1\'s "PC" label)', () => {
+  for (const name of ['PC beta', 'EJ Beta PC', 'BETA']) {
+    const st = makeStorage(Object.assign({}, BETA_LS, { ejb_device: name }));
+    const r = Stages.migrateFromBeta(st, undefined, T0);
+    assert.strictEqual(r.done, true);
+    assert.ok(r.copied.indexOf('device') < 0, name);
+    assert.strictEqual(st.getItem('ej_device'), null, name);
+    assert.strictEqual(st.getItem('ejb_device'), name, 'left in place');
+  }
+});
+
+test('promotion: the beta\'s saved routes are merged into ej_routes once (no duplicates, newest first, cap 50)', () => {
+  const R = (name, when, extra) => Object.assign({ name, when, seq: [{ name: 'Shop', lat: 49.9, lon: -97.1, shop: true }], rt: false }, extra || {});
+  const main = [R('Mon', '2026-09-22T12:00:00.000Z'), R('Same', '2026-09-20T12:00:00.000Z')];
+  const beta = [R('Beta Thu', '2026-09-25T12:00:00.000Z', { skipped: [{ name: 'X', lat: 49.8, lon: -97.2, skip: true }] }),
+    R('Same', '2026-09-20T12:00:00.000Z'), R('Beta Sun', '2026-09-21T12:00:00.000Z'), 'junk', { name: 'no seq', when: 'x' }];
+  const st = makeStorage({ ej_routes: JSON.stringify(main), ejb_routes: JSON.stringify(beta) });
+  const r = Stages.migrateFromBeta(st, undefined, T0);
+  assert.deepStrictEqual(r.copied, ['routes']);
+  const got = JSON.parse(st.getItem('ej_routes'));
+  assert.deepStrictEqual(got.map((x) => x.name), ['Beta Thu', 'Mon', 'Beta Sun', 'Same']);
+  assert.deepStrictEqual(got[0].skipped, beta[0].skipped, 'skipped stops kept');
+  assert.strictEqual(st.getItem('ejb_routes'), JSON.stringify(beta), 'the beta list is left in place');
+  // no main list yet: the beta list becomes it
+  const st2 = makeStorage({ ejb_routes: JSON.stringify([R('Only', '2026-09-25T12:00:00.000Z')]) });
+  assert.deepStrictEqual(Stages.migrateFromBeta(st2, undefined, T0).copied, ['routes']);
+  assert.deepStrictEqual(JSON.parse(st2.getItem('ej_routes')).map((x) => x.name), ['Only']);
+  // cap 50 (the app's own cap), newest kept
+  const many = []; for (let i = 0; i < 40; i++) many.push(R('m' + i, new Date(T0 - i * 3600e3).toISOString()));
+  const bmany = []; for (let i = 0; i < 40; i++) bmany.push(R('b' + i, new Date(T0 - i * 3600e3 - 1800e3).toISOString()));
+  const st3 = makeStorage({ ej_routes: JSON.stringify(many), ejb_routes: JSON.stringify(bmany) });
+  Stages.migrateFromBeta(st3, undefined, T0);
+  const g3 = JSON.parse(st3.getItem('ej_routes'));
+  assert.strictEqual(g3.length, 50);
+  assert.deepStrictEqual(g3.slice(0, 3).map((x) => x.name), ['m0', 'b0', 'm1']);
+  // an unreadable main list is never overwritten
+  const st4 = makeStorage({ ej_routes: '{broken', ejb_routes: JSON.stringify([R('B', '2026-09-25T12:00:00.000Z')]) });
+  assert.strictEqual(Stages.migrateFromBeta(st4, undefined, T0).done, true);
+  assert.strictEqual(st4.getItem('ej_routes'), '{broken');
+});
+
+test('promotion: an existing ej_ key always wins (the PC\'s v1 edit key and device name stay); empty counts as missing', () => {
+  const st = makeStorage(Object.assign({ ej_gh_token: KEY, ej_device: 'PC', ej_show_prices: '' }, BETA_LS));
+  const r = Stages.migrateFromBeta(st, {}, T0);
+  assert.deepStrictEqual(r.copied, ['price_key', 'show_prices']);
+  assert.deepStrictEqual(r.removed, ['gh_token', 'price_key'], 'the stale beta edit key goes too (the main key is in use)');
+  assert.strictEqual(st.getItem('ejb_gh_token'), null);
+  assert.strictEqual(st.getItem('ej_gh_token'), KEY);
+  assert.strictEqual(st.getItem('ej_device'), 'PC');
+  assert.strictEqual(st.getItem('ej_price_key'), FAKE_PRICE_KEY);
+  assert.strictEqual(st.getItem('ej_show_prices'), '1');
+});
+
+test('promotion: the copy runs once (marker), never on a beta / locked config, and a storage failure retries later', () => {
+  const st = makeStorage({});
+  assert.deepStrictEqual(Stages.migrateFromBeta(st, undefined, T0), { done: true, copied: [], removed: [] }, 'no beta keys: nothing copied, marked');
+  st.setItem('ejb_price_key', FAKE_PRICE_KEY);
+  const again = Stages.migrateFromBeta(st, undefined, T0 + 1000);
+  assert.strictEqual(again.done, true); assert.deepStrictEqual(again.copied, []);
+  assert.strictEqual(st.getItem('ej_price_key'), null, 'after the marker a later beta key is not copied');
+  assert.strictEqual(st.getItem('ej_migrated_from_beta'), new Date(T0).toISOString(), 'the marker keeps the first time');
+
+  for (const cfg of [BETA_CFG, { ns: 'ejb_' }, { channel: 'beta', ns: 'ej_' }, { stateFile: 'x' }, 'junk']) {
+    const s = makeStorage(Object.assign({}, BETA_LS));
+    const r = Stages.migrateFromBeta(s, cfg, T0);
+    assert.strictEqual(r.done, false, JSON.stringify(cfg));
+    assert.deepStrictEqual([...s._map.keys()].filter((k) => k.indexOf('ej_') === 0), [], 'no ej_ key written for ' + JSON.stringify(cfg));
+  }
+
+  const failing = makeStorage(Object.assign({}, BETA_LS), { throwSet: true });
+  const f = Stages.migrateFromBeta(failing, undefined, T0);
+  assert.strictEqual(f.done, false);
+  assert.strictEqual(failing.getItem('ej_migrated_from_beta'), null, 'no marker: the next load tries again');
+  assert.strictEqual(failing.getItem('ejb_gh_token'), FAKE_BETA_KEY, 'a failed copy never removes the beta secret');
+  assert.strictEqual(failing.getItem('ejb_price_key'), FAKE_PRICE_KEY);
+  assert.doesNotThrow(() => Stages.migrateFromBeta(makeStorage({}, { throwAll: true }), undefined, T0));
+  assert.strictEqual(Stages.migrateFromBeta(makeStorage({}, { throwAll: true }), undefined, T0).done, false);
+  assert.strictEqual(Stages.migrateFromBeta(null, undefined, T0).done, false);
+});
+
+test('promotion: after the copy a main-app store uses the beta edit key and device name (no v1 key on this browser)', async () => {
+  const storage = makeStorage(Object.assign({}, BETA_LS, { ejb_gh_token: KEY, ejb_device: 'Riley PC' }));
+  Stages.migrateFromBeta(storage, undefined, T0);
+  const s = setup({ storage, stages: { '684': entry('base') }, srvOpts: { text: v2Doc({ '684': entry('base') }) }, allowUpgrade: false });
+  assert.strictEqual(s.store.hasKey(), true);
+  assert.strictEqual(s.store.deviceLabel(), 'Riley PC');
+  await s.store.load();
+  assert.strictEqual(s.store.mode, 'github');
+  const p = track(s.store.set(684, 'prep'));
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' });
+  const doc = JSON.parse(s.srv.text);
+  assert.strictEqual(doc.version, 2);
+  assert.strictEqual(doc.stages['684'].stage, 'prep');
+  assert.strictEqual(doc.stages['684'].by, 'Riley PC');
+  assert.strictEqual(doc.stages['684'].sat, undefined, 'the main app (no overlay) never writes sat');
+});
+
+test('promotion: an R-1 device upgrades cleanly (v1 queue + v1 cache + key + device; the file is v2 after the conversion)', async () => {
+  const r1 = {
+    ej_gh_token: KEY, ej_device: 'iPhone v1',
+    ej_stage_queue: JSON.stringify({ version: 1, changes: { '684': { stage: 'base', at: '2026-09-26T19:00:00Z', by: 'iPhone v1', label: 'Main St' } } }),
+    ej_stages_cache: JSON.stringify({ version: 1, at: T0 - 60000, map: { '699': entry('prep', '2026-09-26T18:30:00Z', 'PC'), '650': entry('inspected') } }),
+    ej_mode: 'stage', ej_vis_stage: '["base","prep"]', ej_routes: '[]', ej_theme: 'dark', ej_glass: 'tinted'
+  };
+  const storage = makeStorage(r1);
+  assert.deepStrictEqual(Stages.migrateFromBeta(storage, undefined, T0).copied, [], 'no beta on this device: nothing copied');
+  const remote = { '699': Object.assign(entry('prep', '2026-09-26T18:30:00Z', 'PC'), { assess: 'onsite' }), '650': entry('inspected') };
+  const s = setup({ storage, srvOpts: { text: v2Doc(remote) }, allowUpgrade: false });
+  // offline cold start: the R-1 cache + the R-1 queue on top, before any network read
+  const cold = s.store.peek();
+  assert.strictEqual(cold['699'].stage, 'prep');
+  assert.strictEqual(cold['650'].stage, 'inspected');
+  assert.strictEqual(cold['684'].stage, 'base');
+  assert.strictEqual(s.store.status().pending, 1);
+  assert.strictEqual(s.store.deviceLabel(), 'iPhone v1');
+  await s.store.load();
+  await s.clock.advance(10);
+  assert.strictEqual(puts(s.srv).length, 1, 'the R-1 queued move is replayed once');
+  const doc = JSON.parse(s.srv.text);
+  assert.strictEqual(doc.version, 2);
+  assert.deepStrictEqual(doc.stages['684'], { stage: 'base', at: '2026-09-26T19:00:00Z', by: 'iPhone v1' });
+  assert.strictEqual(doc.stages['699'].assess, 'onsite', 'fields of other jobs are kept');
+  assert.strictEqual(queueOf(storage), null);
+  const cache = JSON.parse(storage.getItem('ej_stages_cache'));
+  assert.strictEqual(cache.version, 2);
+  assert.strictEqual(cache.map['684'].stage, 'base');
+  for (const k of ['ej_mode', 'ej_vis_stage', 'ej_routes', 'ej_theme', 'ej_glass']) assert.strictEqual(storage.getItem(k), r1[k], k + ' untouched');
+  assert.ok(![...storage._map.keys()].some((k) => k.indexOf('ejb_') === 0), 'the main app never writes ejb_ keys');
+});
+
+test('promotion: an R-1 queued move waits (kept, never PUT) while stages.json is still v1, then saves once it is v2', async () => {
+  const q = { version: 1, changes: { '684': { stage: 'base', at: '2026-09-26T19:00:00Z', by: 'PC', label: '' } } };
+  const s = setup({ key: true, stages: { '699': entry('prep') }, ls: { ej_stage_queue: JSON.stringify(q) }, allowUpgrade: false });
+  await s.store.load();
+  await s.clock.advance(10);
+  assert.strictEqual(puts(s.srv).length, 0, 'a v2 store never writes over the live v1 file');
+  assert.strictEqual(JSON.parse(s.srv.text).version, 1);
+  assert.strictEqual(s.store.status().pending, 1, 'the queued move is kept');
+  assert.strictEqual(queueOf(s.storage).changes['684'].fields.stage, 'base', 'still in ej_stage_queue');
+  assert.strictEqual(s.store.peek()['684'].stage, 'base');
+  assert.ok(/still in the v1 format/.test(s.store.status().lastError));
+  // a live move in the same window is kept too (not rolled back)
+  const p = track(s.store.set(699, 'poured'));
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'queued', reason: 'format' });
+  assert.strictEqual(s.store.peek()['699'].stage, 'poured');
+  assert.strictEqual(puts(s.srv).length, 0);
+  // the conversion lands: the next poll replays both moves in ONE PUT
+  s.srv.commitFile(v2Doc({ '699': entry('prep'), '650': Object.assign(entry('inspected'), { assess: 'onsite' }) }), 'promote');
+  await s.store.load();
+  await s.clock.advance(10);
+  assert.strictEqual(puts(s.srv).length, 1, 'replayed exactly once');
+  const doc = JSON.parse(s.srv.text);
+  assert.strictEqual(doc.version, 2);
+  assert.strictEqual(doc.stages['684'].stage, 'base');
+  assert.strictEqual(doc.stages['699'].stage, 'poured');
+  assert.strictEqual(doc.stages['650'].assess, 'onsite', 'the promoted items are kept');
+  assert.strictEqual(s.store.status().pending, 0);
+  assert.strictEqual(s.store.status().lastError, null, 'the paused message clears after the save');
+});
+
+test('promotion: a version remembered from an earlier read never refuses a save (re-read once before refusing)', async () => {
+  const s = setup({ key: true, stages: { '699': entry('prep') }, allowUpgrade: false });
+  await s.store.load();                       // reads v1 (the live file before the conversion)
+  s.srv.commitFile(v2Doc({ '699': entry('prep') }), 'promote');   // converted; no poll yet
+  const p = track(s.store.set(684, 'base'));
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' }, 'the FIRST move after the conversion saves');
+  assert.strictEqual(puts(s.srv).length, 1);
+  assert.strictEqual(JSON.parse(s.srv.text).stages['684'].stage, 'base');
 });
 
 /* ---------- run ---------- */

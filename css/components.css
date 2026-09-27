@@ -68,7 +68,7 @@ input, select, textarea{ font:inherit; color:inherit; }
   bottom:calc(var(--tabbar-b) + var(--tabbar-h) + 8px); border-radius:var(--r-acc); padding:8px 12px 10px;
   touch-action:none; }                              /* swipe-up is handled in JS; #chips overrides with pan-x */
 .acc-slot{ position:relative; z-index:1; }
-.filterbar{ display:grid; gap:8px; min-width:0; }
+.filterbar{ display:grid; grid-template-columns:minmax(0, 1fr); gap:8px; min-width:0; }   /* minmax(0,..): a wide chip row never widens the bar */
 .filterbar-row{ display:flex; align-items:center; gap:8px; min-height:var(--hit); min-width:0; }
 .filterbar .count{ margin-left:auto; font:var(--t-footnote); color:var(--label-2); white-space:nowrap; font-variant-numeric:tabular-nums;
   overflow:hidden; text-overflow:ellipsis; min-width:0; }
@@ -138,6 +138,15 @@ input, select, textarea{ font:inherit; color:inherit; }
 .grabber{ width:36px; height:5px; margin:0 auto 6px; border-radius:3px; background:var(--label-3); }
 .sheet-top{ display:flex; align-items:center; gap:8px; min-height:36px; }
 .sheet-title{ margin:0; font:var(--t-title3); letter-spacing:-.01em; }
+/* Beta channel mark (app.js adds it only when EJ_CONFIG.channel is "beta"; docs/r2-plan.md sec. 9). Orange = the EJ Beta icon. */
+.beta-pill{ flex:none; padding:1px 7px; border-radius:999px; font:var(--t-caption-em); letter-spacing:.02em;
+  background:rgba(255,149,0,.16); color:#a14d00; }
+:root[data-theme="dark"] .beta-pill{ background:rgba(255,159,10,.22); color:#ffb340; }
+.beta-pill--eyebrow{ display:inline-block; margin-bottom:4px; }            /* above the job title in the detail sheet */
+/* collapsed phone capsule: a badge on its top edge (takes no room from the count / Route row); opaque over the map */
+.accessory > .beta-pill--acc{ position:absolute; z-index:2; top:-9px; right:18px; pointer-events:none;
+  background:#fff1dc; box-shadow:0 1px 3px rgba(0,0,0,.18); }
+:root[data-theme="dark"] .accessory > .beta-pill--acc{ background:#3d2a0e; }
 .sheet-top .close-btn{ margin-left:auto; }
 .sheet-sub{ font:var(--t-footnote); color:var(--label-2); margin:0 0 8px; }
 .sheet-sub a{ color:var(--accent); text-decoration:none; font-weight:600; }
@@ -209,28 +218,12 @@ a.card, .card.is-link{ cursor:pointer; }
 .lock-note button{ color:var(--accent); font-weight:600; white-space:nowrap; }
 .lock-note span{ min-width:0; }
 
-/* ---------- Planner (existing ids; fills only) ---------- */
+/* ---------- Plan view basics (the R-2 route editor block is further down) ---------- */
 .group-title{ margin:14px 8px 6px; font:var(--t-footnote); font-weight:600; color:var(--label-2); text-transform:uppercase; letter-spacing:.02em; }
 #v-plan, #v-routes, #v-settings{ padding:0 4px; }
 .field{ display:flex; gap:8px; margin:8px 0; }
 .field input, .set-field input{ flex:1; min-width:0; height:44px; padding:0 12px; border:0; border-radius:12px;
   background:var(--fill-3); color:var(--label); font:var(--t-body); -webkit-appearance:none; appearance:none; }
-#stops{ list-style:none; margin:0; padding:0; }
-#stops li{ display:flex; gap:8px; align-items:center; min-height:48px; padding:6px 6px 6px 10px; border-radius:var(--r-sm); background:var(--fill-4); margin-bottom:6px; }
-#stops li.empty{ background:none; color:var(--label-2); font:var(--t-subhead); padding:6px 4px; }
-#stops .n{ flex:none; width:26px; height:26px; border-radius:8px; background:var(--fill-1); font:700 12px/26px var(--font); text-align:center; }
-#stops .n.is-shop{ background:var(--label); color:var(--on-label); }
-#stops .tx{ flex:1; min-width:0; font:var(--t-subhead); }
-#stops .tx small{ display:block; font:var(--t-caption); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mini{ position:relative; flex:none; width:32px; height:32px; border-radius:50%; display:grid; place-items:center; color:var(--label-2); font-size:13px; }
-.mini::after{ content:""; position:absolute; inset:-6px -2px; }
-@media (hover:hover){ .mini:hover{ background:var(--fill-3); color:var(--label); } }
-.mini .ico{ width:16px; height:16px; }
-.opts{ margin:12px 0; border-radius:var(--r-md); background:var(--fill-4); overflow:hidden; }
-.opt{ display:flex; align-items:center; gap:12px; min-height:48px; padding:6px 12px 6px 14px; font:var(--t-subhead); cursor:pointer; }
-.opt + .opt{ border-top:.5px solid var(--separator); }
-.opt > span{ flex:1; }
-.opt.is-disabled{ color:var(--label-3); cursor:default; }
 /* iOS-style switch on a real checkbox */
 .switch{ -webkit-appearance:none; appearance:none; position:relative; flex:none; width:51px; height:31px; margin:0; border-radius:16px;
   background:var(--fill-1); cursor:pointer; transition:background-color 200ms var(--ease-out); }
@@ -239,33 +232,6 @@ a.card, .card.is-link{ cursor:pointer; }
 .switch:checked{ background:var(--ok); }
 .switch:checked::before{ translate:20px 0; }
 .switch:disabled{ opacity:.45; cursor:default; }
-#pickbox{ margin-top:8px; border-radius:var(--r-md); background:var(--fill-4); overflow:hidden; }
-.pick-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:.5px solid var(--separator); font:var(--t-footnote); color:var(--label-2); }
-.pick-head span{ flex:1; }
-.pick-list{ max-height:260px; overflow-y:auto; overscroll-behavior:contain; }
-.pick-item{ display:flex; align-items:center; gap:10px; min-height:44px; padding:6px 10px; font:var(--t-subhead); cursor:pointer; }
-.pick-item + .pick-item{ border-top:.5px solid var(--separator); }
-.pick-item input{ width:20px; height:20px; accent-color:var(--accent); flex:none; margin:0; }
-.pick-item .tx{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pick-item small{ color:var(--label-2); }
-#pres{ margin-top:10px; }
-.res{ border-radius:var(--r-md); background:var(--fill-4); overflow:hidden; margin-bottom:8px; }
-.res-hd{ padding:12px 14px 10px; }
-.res-title{ font:var(--t-subhead-em); overflow-wrap:anywhere; }
-.res-total{ font:var(--t-title3); margin-top:2px; font-variant-numeric:tabular-nums; }
-.res-cap{ font:var(--t-caption); color:var(--label-2); margin-top:2px; }
-.res-btns{ display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
-.res-opts{ border-top:.5px solid var(--separator); }
-.res-note{ padding:8px 14px; font:var(--t-footnote); color:var(--label-2); border-top:.5px solid var(--separator); }
-.res-note b{ color:var(--label); font-weight:600; }
-.oot-list{ margin:4px 0 0; padding:0; list-style:none; }
-.oot-list li{ padding:2px 0; }
-#plist{ border-top:.5px solid var(--separator); padding:4px 6px 6px; }
-.pl-row{ display:flex; gap:10px; align-items:center; min-height:48px; padding:6px 8px; border-radius:var(--r-sm); cursor:pointer; }
-@media (hover:hover){ .pl-row:hover{ background:var(--fill-3); } }
-.pl-row .tx{ flex:1; min-width:0; font:var(--t-subhead); overflow-wrap:anywhere; }
-.leg{ font:var(--t-caption); color:var(--label-2); margin-top:1px; font-variant-numeric:tabular-nums; }
-.pl-row .rpin{ flex:none; }
 .spinner-line{ display:flex; align-items:center; gap:10px; padding:14px; font:var(--t-subhead); color:var(--label-2); }
 .spinner{ width:18px; height:18px; border-radius:50%; border:2.5px solid var(--fill-1); border-top-color:var(--accent); animation:ej-spin .8s linear infinite; }
 
@@ -284,15 +250,15 @@ a.card, .card.is-link{ cursor:pointer; }
 .set-note:empty{ display:none; }
 .set-note.is-ok{ color:var(--ok); } .set-note.is-err{ color:var(--danger); }
 .status-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; background:var(--label-3); }
-.status-dot.is-on{ background:var(--ok); } .status-dot.is-local{ background:var(--stage-3); } .status-dot.is-err{ background:var(--danger); }
+.status-dot.is-on{ background:var(--ok); } .status-dot.is-local{ background:var(--stage-4); } .status-dot.is-err{ background:var(--danger); }
 .notices{ margin:6px 0 0; padding-left:18px; font:var(--t-footnote); color:var(--label-2); }
 .notices li + li{ margin-top:4px; }
 
-/* ---------- Stage slider: 6 discrete stops, lens thumb while dragging ---------- */
-.stage{ --n:6; --p:0; --c:var(--stage-1); --pad:32px; --thumb:28px; -webkit-user-select:none; user-select:none; outline-offset:4px; border-radius:var(--r-sm); }
+/* ---------- Stage slider: 7 discrete stops (JS writes --n from Stages.STAGES), lens thumb while dragging ---------- */
+.stage{ --n:7; --p:0; --c:var(--stage-1); --pad:24px; --thumb:28px; -webkit-user-select:none; user-select:none; outline-offset:4px; border-radius:var(--r-sm); }
 .stage-now{ display:flex; align-items:center; gap:8px; margin-bottom:4px; font:var(--t-headline); }
 .stage-now .dot{ background:var(--c); transition:background-color 200ms var(--ease-out); }
-.stage-now small{ margin-left:auto; font:var(--t-footnote); color:var(--label-2); white-space:nowrap; }
+.stage-now small{ margin-left:auto; min-width:0; font:var(--t-footnote); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .stage-track{ position:relative; height:44px; margin:0 var(--pad); touch-action:none; cursor:pointer; }
 .stage-rail, .stage-fill{ position:absolute; left:0; top:50%; height:6px; margin-top:-3px; border-radius:3px; }
 .stage-rail{ right:0; background:var(--fill-1); }
@@ -323,6 +289,15 @@ a.card, .card.is-link{ cursor:pointer; }
 .stage[aria-disabled="true"] .stage-thumb{ display:none; }
 .stage[aria-disabled="true"] .stage-track, .stage[aria-disabled="true"] .stage-labels button{ cursor:default; }
 .stage[aria-disabled="true"] .stage-now .dot{ background:var(--c-real, var(--label-3)); }
+/* R-2 gates: stops past a gate are dimmed; a lock glyph replaces the first blocked tick; a refused move shakes the thumb */
+.stage-now small.is-lock-note{ color:var(--warn-ink); }   /* one line (ellipsis, full text in the title): the header never grows mid-drag */
+.stage-tick.is-locked{ background:transparent; box-shadow:inset 0 0 0 1.5px var(--label-3); }
+.stage-tick.is-barrier{ width:11px; height:13px; margin:-8px 0 0 -5.5px; border-radius:0; box-shadow:none; background:var(--label-2);
+  -webkit-mask:var(--lock-glyph) center / contain no-repeat; mask:var(--lock-glyph) center / contain no-repeat; }
+.stage-labels button.is-locked{ color:var(--label-3); }
+.stage{ --lock-glyph:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 13'%3E%3Cpath d='M2.8 6V4.2a2.7 2.7 0 0 1 5.4 0V6' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3Crect x='.5' y='5.6' width='10' height='7' rx='1.8'/%3E%3C/svg%3E"); }
+.stage.is-shake .stage-thumb{ animation:ej-shake 460ms var(--ease-std); }
+@keyframes ej-shake{ 0%,100%{ translate:0 0; } 18%{ translate:-6px 0; } 38%{ translate:5px 0; } 58%{ translate:-3px 0; } 78%{ translate:2px 0; } }
 .stage--compact .stage-labels{ display:none; }
 .stage--compact{ --pad:14px; }
 .stage--compact .stage-now{ font:var(--t-subhead-em); }
@@ -391,6 +366,218 @@ a.card, .card.is-link{ cursor:pointer; }
 .toast.is-low{ top:auto; bottom:calc(var(--safe-b) + 16px); translate:0 calc(100% + 40px); }
 .toast.is-low.is-on{ translate:0 0; }
 
+/* =====================================================================================================
+ * R-2 (builder A "items-ui"): job items, Stage-mode list chips, closed / field-work-done marks. Content only (fills,
+ * no glass). Builders B (route editor) and C (pricing) add their own blocks after this one.
+ * ===================================================================================================== */
+
+/* ---------- Job items card (#dItems): one compact row per shown item, iOS-style segmented switch ---------- */
+.items{ padding:2px 14px; }
+.items-h{ margin:0 0 2px; font:var(--t-caption-em); color:var(--label-2); text-transform:uppercase; letter-spacing:.03em; }
+.item{ display:grid; grid-template-columns:minmax(0, 1fr) auto; grid-template-rows:minmax(44px, auto); align-items:center; column-gap:10px; min-height:44px;
+  margin:0 -8px; padding:0 8px; border-radius:10px; }
+.item:not([hidden]) ~ .item{ box-shadow:inset 0 .5px 0 var(--separator); }   /* hairline between VISIBLE rows only */
+.item-name{ min-width:0; font:var(--t-subhead); overflow-wrap:anywhere; }
+.item.is-quiet .item-name{ color:var(--label-2); }          /* N/A (default) rows stay in the background */
+.item-cap{ display:block; font:var(--t-caption); color:var(--label-2); }
+.item-cap.is-late{ color:var(--danger); }
+.seg--item{ height:30px; width:calc(var(--n) * 66px + 4px); }   /* equal 66px segments on every row: right edges and segments line up */
+.seg--item > button{ min-width:0; padding:0 6px; font:var(--t-caption-em); white-space:nowrap; }
+.seg--item > button::after{ inset:-7px 0; }                /* 44px hit on a 30px control */
+.seg--item > button[aria-checked="true"][data-tone="req"]{ color:var(--warn-ink); }
+.seg--item > button[aria-checked="true"][data-tone="done"]{ color:var(--ok-thumb-ink); }
+.seg--item[data-tone="req"] > .seg-thumb{ background:var(--warn-thumb); }     /* the thumb carries the tone (contrast) */
+.seg--item[data-tone="done"] > .seg-thumb{ background:var(--ok-thumb); }
+.seg--item > .seg-thumb{ transition:translate var(--d-snappy) var(--spring-snappy), background-color 200ms var(--ease-out); }
+.seg--item > button[aria-disabled="true"]{ color:var(--label-3); cursor:default; }
+.seg--item.is-ro > button{ cursor:default; }
+.seg--item.is-ro > button:not([aria-checked="true"]){ color:var(--label-3); }
+.seg--item.is-none > .seg-thumb{ opacity:0; }                                   /* nothing selected (assess "prior") */
+.seg--item.is-nudge{ animation:ej-shake 380ms var(--ease-std); }
+.item-dates{ grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 0 10px; }
+.item-dates label{ display:grid; gap:2px; min-width:0; font:var(--t-caption); color:var(--label-2); }
+.item-dates input{ display:block; width:100%; min-width:0; height:36px; padding:0 10px; border:0; border-radius:9px;   /* 16px: iOS never zooms */
+  background:var(--fill-3); color:var(--label); font:var(--t-callout); text-align:left; -webkit-appearance:none; appearance:none; }
+.item-dates input::-webkit-date-and-time-value{ text-align:left; }
+.item-dates input:disabled{ color:var(--label-3); }
+.item-dates.is-late input[data-d="to"]{ color:var(--danger); }
+/* A blocked stage move points at the item that blocks it */
+.item.is-flagged, .mc-items.is-flagged{ animation:ej-flag 1.8s var(--ease-out); }
+@keyframes ej-flag{ 0%, 45%{ background:color-mix(in oklab, var(--warn) 24%, transparent); } 100%{ background:transparent; } }
+
+/* ---------- Closed in Jobber / field work done / lane dates ---------- */
+.tag.closed{ color:var(--label-2); }
+.tag.done{ color:var(--ok-ink); }
+.tag.lane{ color:var(--label-2); }
+.tag.is-late{ color:var(--danger); }
+.lead{ position:relative; display:inline-grid; flex:none; }
+.done-badge{ position:absolute; right:-5px; bottom:-4px; width:14px; height:14px; border-radius:50%; background:var(--ok);
+  box-shadow:0 0 0 1.5px var(--pin-ring); display:grid; place-items:center; }
+.done-badge .ico{ width:9px; height:9px; stroke-width:3.4; stroke:#fff; }
+.tag .ico{ width:10px; height:10px; stroke:currentColor; margin-right:3px; vertical-align:-1px; }
+.remove-box{ padding:0 16px 12px; }
+.remove-box .set-note{ margin-top:6px; }
+
+/* ---------- Desktop map card: one short line of open items ---------- */
+.map-card .mc-items{ margin:-4px -6px 6px; padding:1px 6px; border-radius:6px; font:var(--t-footnote); color:var(--label-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-items .req{ color:var(--warn-ink); }
+.mc-items .ok{ color:var(--ok-ink); }
+
+/* ---------- Stage-mode chips: 7 stage chips | thin divider | list chips (shown only when they have jobs) ----------
+ * iPhone accessory (collapsed): ONE horizontally scrolling row, vertical hairline between the sets.
+ * iPhone open sheet: stages on a 4-column grid (All + 7 = 2 rows, as in R-1); the list chips continue to the RIGHT of it
+ * in the same 2-row band (vertical hairline, 2-row column grid) and the band scrolls sideways, so the lists add no row to
+ * the sheet head (the medium detent keeps R-1's list height). The first list column peeks at the right edge.
+ * Desktop panel: 4-column stage grid, hairline, lists wrap. */
+.chip-set{ display:contents; }
+.chip-div{ flex:none; align-self:center; width:1px; height:22px; margin:0 2px; background:var(--separator); }
+.chip .lbl{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.chip--list{ padding-left:12px; }
+.dot--list{ display:inline-grid; place-items:center; background:var(--fill-2); color:var(--label-2); }
+.dot--list .ico{ width:12px; height:12px; stroke-width:2.6; }
+
+/* In the sheet / desktop panel: All + 7 stages on a 4-column grid (2 rows, short names, no per-stage counts: they live in
+ * the tooltip / aria-label, the Route menu and the list headers), then the list chips with counts: beside the grid in a
+ * sideways-scrolling band (iPhone) or under a hairline, wrapping (desktop). The iPhone accessory keeps ONE scrolling row. */
+.chips--stage .chip{ gap:5px; padding:0 11px 0 5px; }
+.chips--stage .chip[data-k=""], .chips--stage .chip--list{ padding-left:11px; }
+.chips--stage .chip .dot{ width:22px; height:22px; line-height:22px; font-size:11px; }
+.sheet .chips--stage{ display:block; min-width:0; overflow:visible; margin:0; padding:0; -webkit-mask-image:none; mask-image:none; }
+.sheet .chip-set--stages{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; }
+.sheet .chip-set--stages .chip{ min-width:0; gap:4px; padding:0 6px 0 4px; font-size:12px; }
+.sheet .chip-set--stages .chip .dot{ width:20px; height:20px; line-height:20px; font-size:10px; }
+.sheet .chip-set--stages .chip[data-k=""]{ justify-content:center; padding:0 8px; }
+.sheet .chip-div{ display:block; width:auto; height:.5px; margin:8px 0 4px; }
+.sheet .chip-set--lists{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:0 -16px; padding:4px 16px;
+  touch-action:pan-x; overscroll-behavior-x:contain;
+  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent);
+          mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent); }
+.sheet .chip-set--lists::-webkit-scrollbar{ display:none; }
+@media (max-width: 899.98px){                                /* iPhone sheet with list chips: ONE 2-row band, sideways */
+  .sheet .chips--stage.has-lists{ display:flex; align-items:stretch; gap:8px; overflow-x:auto; overscroll-behavior-x:contain;
+    margin:0 -16px; padding:0 16px; scroll-padding-inline:16px;
+    -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 8px), transparent);
+            mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 8px), transparent); }
+  .sheet .chips--stage.has-lists .chip-set--stages{ flex:none; width:calc(100% - 12px); }   /* the first list column peeks */
+  .sheet .chips--stage.has-lists .chip-div{ flex:none; width:.5px; height:auto; margin:6px 0; }
+  .sheet .chips--stage.has-lists .chip-set--lists{ flex:none; display:grid; grid-auto-flow:column; grid-template-rows:repeat(2, 36px);
+    gap:6px; margin:0; padding:0; overflow:visible; -webkit-mask-image:none; mask-image:none; }
+}
+
+/* ---------- Route menu: stages section + lists section ---------- */
+.route-menu{ max-height:calc(100dvh - 16px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+.route-menu::-webkit-scrollbar{ display:none; }
+.rm-sep{ height:.5px; margin:4px 10px; background:var(--separator); }
+.rm-item .dot--list{ box-shadow:none; }
+
+/* =====================================================================================================
+ * R-2 (builder B "route-editor"): the ONE route editor in the Plan view (header in the sheet head; stop list, footer,
+ * add box and saved routes in the body). Content only: fills, no glass, no popovers (so never glass on glass).
+ * ===================================================================================================== */
+.sheet[data-view="plan"] .sheet-sub, .sheet:not([data-view="plan"]) .ed-head{ display:none; }
+.ed-head{ display:flex; align-items:center; gap:8px; margin:2px 0 0; min-height:var(--hit); }
+.ed-sum{ flex:1; min-width:0; }
+.ed-total{ font:var(--t-headline); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ed-cap{ font:var(--t-caption); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ed-head .btn{ flex:none; padding:0 12px; }
+
+/* Stop rows: [pin] [name / leg · job or address] [skip switch] [drag handle]; hairlines between rows */
+.ed-list{ margin:2px 0 0; }
+.ed-row{ position:relative; display:grid; grid-template-columns:26px minmax(0, 1fr) auto auto; align-items:center; column-gap:10px;
+  min-height:56px; padding:5px 4px 5px 8px; border-radius:var(--r-sm); cursor:pointer; -webkit-user-select:none; user-select:none; }
+.ed-row + .ed-row::before{ content:""; position:absolute; top:0; left:44px; right:4px; height:.5px; background:var(--separator); pointer-events:none; }
+.ed-row.is-open{ background:var(--fill-4); }
+.ed-row.is-open::before, .ed-row.is-open + .ed-row::before{ visibility:hidden; }
+@media (hover:hover){ .ed-row:not(.is-unmapped):hover{ background:var(--fill-4); } }
+.ed-row.is-unmapped{ cursor:default; }
+.ed-row:focus-visible{ outline-offset:-2px; }
+.ed-row .rpin{ box-shadow:none; }
+.ed-tx{ min-width:0; }
+.ed-tx--wide{ grid-column:2 / -1; }
+.ed-tx .t{ font:var(--t-subhead-em); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ed-tx .s{ font:var(--t-footnote); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.ed-row.is-skip .t{ color:var(--label-2); font-weight:500; }
+.rpin.is-skip{ background:var(--fill-1); color:var(--label-2); box-shadow:none; }
+.ed-empty{ padding:10px 8px 12px 44px; font:var(--t-footnote); color:var(--label-2); }
+.group-title.ed-grp{ margin:16px 8px 4px; }
+/* Small iOS switch; the label around it gives a 44px hit */
+.ed-sw{ display:grid; place-items:center; margin:-9px 0; padding:9px 2px; cursor:pointer; }
+.switch--sm{ width:42px; height:26px; border-radius:13px; }
+.switch--sm::before{ width:22px; height:22px; }
+.switch--sm:checked::before{ translate:16px 0; }
+/* Drag handle (Apple Maps style): touch-action:none here ONLY, so the sheet scrolls from anywhere else */
+.ed-grip{ position:relative; width:44px; height:44px; margin-right:-8px; display:grid; place-items:center; border-radius:10px;
+  color:var(--label-3); cursor:grab; touch-action:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+.ed-grip .ico{ width:20px; height:20px; }
+.ed-grip.is-off{ cursor:default; }
+@media (hover:hover){ button.ed-grip:hover{ color:var(--label-2); } }
+.ed-list.is-sorting, .ed-list.is-sorting .ed-grip{ cursor:grabbing; }
+.ed-list.is-sorting .ed-row{ transition:translate 200ms var(--ease-out); }
+.ed-list.is-sorting .ed-row::before{ visibility:hidden; }
+.ed-row.is-lifted{ z-index:3; background:var(--glass-opaque); scale:1.02; transition:scale 160ms var(--ease-out) !important;
+  box-shadow:0 10px 28px rgba(0,0,0,.20), 0 0 0 .5px var(--separator); }
+.ed-row.is-lifted .ed-grip{ color:var(--label-2); }
+.ed-row.is-lifted.is-dropping{ scale:1; transition:translate 180ms var(--ease-out), scale 180ms var(--ease-out) !important; }
+.ed-row.is-flash{ animation:ej-flash 1.6s var(--ease-out); }
+@keyframes ej-flash{ 0%, 40%{ background:var(--accent-soft); } 100%{ background:transparent; } }
+/* Row actions (tap a row, or Enter): inline, never a popover */
+.ed-acts{ grid-column:1 / -1; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; padding:6px 0 3px; }
+.ed-acts .btn{ min-height:32px; padding:0 11px; }
+
+/* Footer: Add stop · Google Maps (one link, or its parts) · Save · Clear */
+.ed-foot{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 4px 4px; }
+.ed-foot .btn{ padding:0 12px; }
+.ed-foot .btn .ico{ width:16px; height:16px; }
+#edMaps .ico{ width:14px; height:14px; margin:0 -4px 0 -2px; transition:rotate var(--d-snappy) var(--spring-snappy); }
+#edMaps[aria-expanded="true"] .ico{ rotate:180deg; }
+.ed-clear{ position:relative; margin-left:auto; min-height:36px; padding:0 8px; color:var(--danger); font:var(--t-footnote); font-weight:600; }
+.ed-clear::after{ content:""; position:absolute; inset:-4px 0; }
+.ed-parts{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 4px 8px; }
+.ed-note{ flex-basis:100%; margin:2px 2px 0; font:var(--t-caption); color:var(--label-2); }
+/* + Add stop: one field for an address or a job, suggestions below */
+.ed-add{ margin:6px 4px 10px; }
+.ed-add .field{ margin:0 0 6px; }
+.ed-sugg{ border-radius:var(--r-md); background:var(--fill-4); overflow:hidden; }
+.ed-sugg:empty{ display:none; }
+.ed-opt{ display:grid; grid-template-columns:22px minmax(0, 1fr) auto; align-items:center; gap:10px; width:100%; min-height:48px; padding:6px 12px; text-align:left; }
+.ed-opt + .ed-opt{ box-shadow:inset 0 .5px 0 var(--separator); }
+.ed-opt[aria-selected="true"]{ background:var(--fill-3); }
+@media (hover:hover){ .ed-opt:hover{ background:var(--fill-3); } }
+.ed-opt .tx{ display:grid; min-width:0; }
+.ed-opt .t{ font:var(--t-subhead-em); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ed-opt .s{ font:var(--t-caption); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ed-opt .dot{ justify-self:center; }
+.ed-opt .tag{ margin-left:0; }
+.ed-opt-ico{ display:grid; place-items:center; color:var(--accent); }
+.ed-opt-ico .ico{ width:20px; height:20px; }
+/* Map: skipped stops are small grey squares; the stop whose row is open is scaled up */
+.rpin{ transition:scale var(--d-snappy) var(--spring-snappy); }
+.rpin.is-selected{ scale:1.3; }
+.rpin--dot{ width:16px; height:16px; border-radius:5px; background:#8e8e93; box-shadow:0 0 0 2px var(--pin-ring), 0 1px 3px rgba(0,0,0,.3); }
+
+/* =====================================================================================================
+ * R-2 (builder C "pricing-ui"): Jobber totals, only on devices with a pricing key and only while the $ toggle is on.
+ * Quiet secondary text (tabular figures), never on map pins. Content only: fills, no glass.
+ * ===================================================================================================== */
+/* $ toggle in the map controls capsule: pressed = prices shown (a tinted fill inside the glass, like the panel views) */
+.map-controls .pr-tgl{ color:var(--label-2); }
+.map-controls .pr-tgl[aria-pressed="true"]{ background:var(--accent-soft); color:var(--accent); }
+@media (hover:hover){ .map-controls .pr-tgl[aria-pressed="true"]:hover{ background:color-mix(in oklab, var(--accent) 24%, transparent); } }
+/* List row: the pill, and under it the job's total */
+.trail{ display:flex; flex-direction:column; align-items:flex-end; gap:3px; min-width:0; }
+.trail .price{ font:var(--t-footnote); color:var(--label-2); font-variant-numeric:tabular-nums; white-space:nowrap; line-height:1.1; }
+/* Group header: "Ready to start (5) · $48.2k" */
+.grp-sum{ margin-left:-4px; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* List chips: "Asphalt 3 · $12k" */
+.chip .v{ margin-left:-2px; font:var(--t-footnote); color:var(--label-2); font-variant-numeric:tabular-nums; }
+.chip[aria-pressed="true"] .v{ color:inherit; opacity:.75; }
+/* Detail sheet: "Jobber total $12,345 · Uninvoiced $3,400" under the sub line */
+.detail-price{ margin:3px 0 0; font:var(--t-subhead); color:var(--label-2); font-variant-numeric:tabular-nums; }
+.detail-price b{ font:var(--t-subhead-em); color:var(--label); }
+/* Desktop hover card: total on the title line */
+.map-card .mc-price{ padding-top:2px; font:var(--t-subhead-em); color:var(--label-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
 /* ---------- Leaflet ---------- */
 .leaflet-control-attribution{ background:none !important; margin:0 7px 0 0 !important; max-width:calc(100vw - 32px);
   font:10px/1.3 var(--font); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -412,6 +599,7 @@ a.card, .card.is-link{ cursor:pointer; }
   .panel-views .icon-btn .ico{ width:20px; height:20px; }
   .panel-views .icon-btn[aria-pressed="true"]{ background:var(--fill-3); color:var(--accent); }
   .chips{ flex-wrap:wrap; overflow:visible; margin:0; padding:0; -webkit-mask-image:none; mask-image:none; }
+  .sheet .chip-set--lists{ flex-wrap:wrap; overflow:visible; margin:0; padding:4px 0 0; -webkit-mask-image:none; mask-image:none; }
   .map-controls{ top:max(12px, calc(var(--safe-t) + 8px)); right:calc(12px + var(--safe-r)); }
   .map-controls .desktop-only{ display:grid; }
   .map-controls .sep.desktop-only{ display:block; }
@@ -422,23 +610,28 @@ a.card, .card.is-link{ cursor:pointer; }
 
 /* ---------- Mouse + trackpad (PC): thin overlay-style scrollbars inside the glass panel, not Windows' classic bar ---------- */
 @media (hover:hover) and (pointer:fine){
-  .sheet-body, .pick-list{ scrollbar-width:thin; scrollbar-color:var(--label-3) transparent; scrollbar-gutter:stable; }
+  .sheet-body{ scrollbar-width:thin; scrollbar-color:var(--label-3) transparent; scrollbar-gutter:stable; }
 }
 
 /* ---------- Phone (< 900px): desktop-only controls stay hidden whatever their own display rule says ---------- */
 @media (max-width: 899.98px){
   .desktop-only{ display:none !important; }
-  /* Stage mode: all 7 chips on two rows, no side-scroll (the per-stage counts live in the Route menu and the list headers) */
-  .chips.chips--wrap{ flex-wrap:wrap; gap:6px; overflow:visible; margin:0; padding:0; -webkit-mask-image:none; mask-image:none; }
-  .chips--wrap .chip{ gap:5px; padding:0 11px 0 5px; }
-  .chips--wrap .chip[data-k=""]{ padding-left:11px; }
-  .chips--wrap .chip .dot{ width:22px; height:22px; line-height:22px; font-size:11px; }
   .filterbar .seg > button{ min-width:60px; }
+}
+
+/* ---------- Narrow phones (320pt: iPhone SE 1st gen, mini with Display Zoom) ---------- */
+@media (max-width: 359.98px){
+  .item{ grid-template-columns:minmax(0, 1fr); grid-template-rows:auto; row-gap:4px; padding-top:8px; padding-bottom:8px; }
+  .seg--item{ width:100%; }                                  /* name above a full-width switch: words never split */
+  .item-name{ overflow-wrap:normal; }
+  .stage{ --pad:16px; }
+  .stage-labels button{ font-size:11px; letter-spacing:-.02em; }
 }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{ transition-duration:.01ms !important; animation-duration:.01ms !important; }
   .pressable.is-pressed, .stage.is-dragging .stage-thumb, .jpin.is-selected{ scale:1 !important; }
+  .ed-row.is-lifted, .ed-row.is-lifted.is-dropping{ transition-duration:.01ms !important; scale:1 !important; }
   .spinner, .is-spinning .ico{ animation-duration:1.5s !important; }
 }

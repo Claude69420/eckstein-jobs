@@ -1,3 +1,5 @@
 # Vendored third-party files are shipped byte-for-byte (sha256 pinned in APP_MASTER): never convert line endings.
 vendor/* -text
+# beta/vendor/ is gone since the beta was retired (R-2 promoted, 2026-09-26); kept for a future beta built with
+# python tools/build_beta.py --force (it copies vendor/ into beta/vendor/ again).
 beta/vendor/* -text

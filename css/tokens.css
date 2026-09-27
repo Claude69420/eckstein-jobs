@@ -30,12 +30,24 @@
   --accent-soft:rgba(0,136,255,.14);
   --danger:rgb(255 56 60);
   --ok:rgb(52 199 89);
-  --stage-1:rgb(97 85 245);    /* ready */
-  --stage-2:rgb(172 127 94);   /* excavation */
-  --stage-3:rgb(255 141 40);   /* base */
-  --stage-4:rgb(255 204 0);    /* prep (black glyph ink) */
-  --stage-5:rgb(203 48 224);   /* inspected (passed inspection) */
-  --stage-6:rgb(52 199 89);    /* poured */
+  --ok-ink:rgb(36 138 61);      /* green TEXT on light fills (job items Done / Booked) */
+  /* Stages 1-7 (R-2: setup slots in at 2, the rest shift up one). JS only ever writes var(--stage-N) and
+   * var(--stage-on-N) (glyph ink on that colour), so a colour change happens here only. */
+  --stage-1:rgb(97 85 245);    /* ready (indigo) */
+  --stage-2:rgb(0 186 199);    /* setup (teal, R-2) */
+  --stage-3:rgb(172 127 94);   /* excavation (brown) */
+  --stage-4:rgb(255 141 40);   /* base (orange) */
+  --stage-5:rgb(255 204 0);    /* prep (yellow, black glyph ink) */
+  --stage-6:rgb(203 48 224);   /* inspected (passed inspection, purple) */
+  --stage-7:rgb(52 199 89);    /* poured (green) */
+  --stage-on-1:#fff; --stage-on-2:#000; --stage-on-3:#fff; --stage-on-4:#fff; --stage-on-5:#000; --stage-on-6:#fff; --stage-on-7:#fff;
+  --warn:rgb(230 118 0);       /* job items: "Required" accents (flag flash) */
+  /* Selected item-switch segments carry their tone on a tinted thumb with a matching ink (>= 4.5:1 at 12 px), and the
+   * orange texts (lock note, card items) use --warn-ink: plain orange on the white / grey thumb was ~2.2-3:1. */
+  --warn-ink:rgb(163 74 0);
+  --warn-thumb:rgb(255 234 208);
+  --ok-thumb:rgb(221 245 227);
+  --ok-thumb-ink:rgb(24 110 46);
   --uns-ring:#b45309;          /* unscheduled (as before) */
   --pend-ring:#7c3aed;         /* pending 9000+ (as before) */
   --pin-ring:#fff;
@@ -132,12 +144,19 @@
   --accent-soft:rgba(0,145,255,.22);
   --danger:rgb(255 66 69);
   --ok:rgb(48 209 88);
+  --ok-ink:rgb(48 209 88);
   --stage-1:rgb(109 124 255);
-  --stage-2:rgb(183 138 102);
-  --stage-3:rgb(255 146 48);
-  --stage-4:rgb(255 214 0);
-  --stage-5:rgb(219 52 242);
-  --stage-6:rgb(48 209 88);
+  --stage-2:rgb(0 205 218);                  /* setup (teal) */
+  --stage-3:rgb(183 138 102);
+  --stage-4:rgb(255 146 48);
+  --stage-5:rgb(255 214 0);
+  --stage-6:rgb(219 52 242);
+  --stage-7:rgb(48 209 88);
+  --warn:rgb(255 159 10);
+  --warn-ink:rgb(255 200 120);
+  --warn-thumb:rgb(110 66 8);
+  --ok-thumb:rgb(28 92 44);
+  --ok-thumb-ink:rgb(150 240 170);
   --route:rgb(0 145 255);
   --route-casing:rgba(0,0,0,.4);
   --glass-tint:rgba(255,255,255,.134);       /* sohumsuthar regular, dark */

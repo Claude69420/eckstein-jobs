@@ -1,0 +1,10 @@
+{
+ "about": "sha256 of beta/icons/* and of tools/make_icons.py (LF) when the icons were made; written by python tools/build_beta.py --icons, checked by --check",
+ "icons": {
+  "icon-180.png": "cebac24a8bab24755e9bf74fa1137b9f2c44438bc743defa144fcb1bf75e6991",
+  "icon-192.png": "6c65bb09e19338cbd9fdc9670e218ee023f74bf41d8f3b33cb291e90573410b8",
+  "icon-512.png": "e72267de5bfc895ab4cb3f4cdc9aafd222fc4053ffcf725c71c74d2a7f212304",
+  "icon-maskable-512.png": "b58ae120213f7caa55983319fb165fcc5ab59bcdcb6a4f5b52376a08f5f01dfd"
+ },
+ "make_icons.py": "6fffb94586ff61c63ccbccdb2d7b164bd041e33a6b68b39de22a48e965468adc"
+}

@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "stages": {
+    "150": {"stage": "base", "assess": "onsite", "at": "2026-09-20T10:00:00Z", "by": "PC"},
+    "152": {"stage": "poured", "cleanup": "done", "at": "2026-09-20T10:00:00Z", "by": "PC"},
+    "153": {"stage": "excavation", "removed": true, "at": "2026-09-20T10:00:00Z", "by": "PC"},
+    "155": {"stage": "prep", "asphalt": "req", "at": "2026-09-21T08:00:00Z", "by": "iPhone"},
+    "156": {"stage": "setup2", "at": "2026-09-20T10:00:00Z", "by": "PC"},
+    "201": {"stage": "setup", "lane": {"s": "booked", "from": "2026-10-06", "to": "2026-10-08"}, "at": "2026-09-21T08:00:00Z", "by": "iPhone"}
+  }
+}

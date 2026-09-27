@@ -1,4 +1,4 @@
-// Eckstein Jobs service worker (cache "ej-v2").
+// Eckstein Jobs service worker (cache "ej-v3", R-2).
 // - Same-origin GET: network-first so twice-daily data and new deploys always show; offline falls back
 //   to the last good copy of that PATH (stored without the query string; matched with ignoreSearch,
 //   so the app's ?t= cache-busters never grow the cache). No slow-network timer (it could mix app versions).
@@ -6,12 +6,18 @@
 //   checked by the page against whatever we return.
 // - Every other cross-origin request (GitHub API / raw, Esri tiles, geocoders...) is NOT intercepted:
 //   no respondWith, straight to the network, never cached. Stage data and the edit key never touch
-//   this cache.
+//   this cache. data/prices.json (R-2) is same-origin and ENCRYPTED: its last good copy is kept like any
+//   data file, so prices still decrypt offline; the pricing key itself never reaches this worker.
 // - Install precaches the app shell tolerantly (a missing file never fails install); activate deletes
-//   every cache that is not ej-v2 (so ej-v1 goes) and then claims open pages.
+//   only OUR old caches (name starts with PREFIX and is not C: R-1's ej-v2 and older ej-v1 go) and then claims
+//   open pages. Never an "ejb-" cache: those belong to the retired beta at /beta/ (R-2 promoted 2026-09-26), whose
+//   retire worker (beta/sw.js) and notice page delete them and unregister the beta worker ("ejb-v1" does not start
+//   with "ej-"). This worker's scope (/eckstein-jobs/) also covers /beta/ once the beta worker is gone: harmless,
+//   the notice page is then just cached network-first like any page.
 'use strict';
 
-const C = 'ej-v2';
+const C = 'ej-v3';
+const PREFIX = 'ej-';
 
 const SHELL = [
   './',
@@ -21,6 +27,7 @@ const SHELL = [
   'css/components.css',
   'js/tsp.js',
   'js/stages.js',
+  'js/prices.js',
   'js/ui.js',
   'js/app.js',
   'manifest.json',
@@ -68,7 +75,7 @@ self.addEventListener('install', function (e) {
 
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== C; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== C; }).map(function (k) { return caches.delete(k); }));
   }).catch(function () {}).then(function () { return self.clients.claim(); }));
 });
 

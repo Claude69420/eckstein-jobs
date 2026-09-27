@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "stages": {
+    "100": {"stage": "base", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "101": "prep",
+    "103": {"stage": "poured", "at": "2026-09-22T10:00:00Z", "by": "Office PC"},
+    "104": {"stage": "excavation", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "105": {"stage": "setup", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "106": {"stage": "setup2", "at": "2026-09-23T10:00:00Z", "by": "Office PC"},
+    "107": {"stage": "poured", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "108": {"stage": "ready", "at": "2026-09-23T10:00:00Z", "by": "Office PC"},
+    " 111": {"stage": "inspected", "at": "2026-09-23T10:00:00Z", "by": "Office PC"},
+    "112": {"stage": "poured", "at": "yesterday", "by": "Office PC"},
+    "114": {"stage": "  Base ", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "116": {"stage": "prep", "at": "2026-09-20T05:30:00-05:00", "by": "Office PC", "note": "hand edit"},
+    "1000": {"stage": "setup", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "A-1": {"stage": "setup", "at": "2026-09-20T10:00:00Z", "by": "Office PC"},
+    "bad key!": {"stage": "base", "at": "2026-09-20T10:00:00Z", "by": "Office PC"}
+  },
+  "meta": {"n": 1.0, "x": 1e-7, "list": [1, "two", null, true], "empty": {}}
+}

@@ -1,8 +1,8 @@
 {
-  "name": "Eckstein Jobs Beta",
+  "name": "Eckstein Jobs Beta (retired)",
   "short_name": "EJ Beta",
   "id": "/eckstein-jobs/beta/",
-  "description": "R-2 beta of Eckstein Jobs (trial next to v1): stages with job items, route editor, pricing.",
+  "description": "Retired: EJ Beta is now the main Eckstein Jobs app (https://claude69420.github.io/eckstein-jobs/).",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -16,10 +16,13 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script>
-/* Boot: theme (ej_theme = auto|light|dark) and glass (ej_glass = liquid|tinted|solid) before first paint. */
+/* Boot: theme (<ns>theme = auto|light|dark) and glass (<ns>glass = liquid|tinted|solid) before first paint.
+   ns = window.EJ_CONFIG.ns (localStorage prefix): "ej_" by default, "ejb_" in the beta (docs/r2-plan.md section 9). */
 (function () {
-  var d = document.documentElement, p = { theme: 'auto', glass: '' };
-  try { p.theme = localStorage.getItem('ej_theme') || 'auto'; p.glass = localStorage.getItem('ej_glass') || ''; } catch (e) {}
+  var d = document.documentElement, p = { theme: 'auto', glass: '' }, ns = 'ej_';
+  var NS_RE = /^[A-Za-z0-9_]{1,16}$/; // the same rule as js/stages.js, js/app.js, js/prices.js (a bad ns -> "ejx_", never "ej_")
+  try { var c = window.EJ_CONFIG; if (c && typeof c === 'object' && 'ns' in c) ns = typeof c.ns === 'string' && NS_RE.test(c.ns) ? c.ns : 'ejx_'; } catch (e) {}
+  try { p.theme = localStorage.getItem(ns + 'theme') || 'auto'; p.glass = localStorage.getItem(ns + 'glass') || ''; } catch (e) {}
   function mm(q) { try { return window.matchMedia(q); } catch (e) { return { matches: false }; } }
   var dark = mm('(prefers-color-scheme: dark)'), rt = mm('(prefers-reduced-transparency: reduce)');
   function apply() {
@@ -33,8 +36,8 @@
   }
   window.getUiPrefs = function () { return { theme: p.theme || 'auto', glass: p.glass || d.getAttribute('data-glass') || 'liquid' }; };   /* effective glass when unset */
   window.setUiPrefs = function (next) {
-    if (next.theme) { p.theme = next.theme; try { localStorage.setItem('ej_theme', next.theme); } catch (e) {} }
-    if (next.glass) { p.glass = next.glass; try { localStorage.setItem('ej_glass', next.glass); } catch (e) {} }
+    if (next.theme) { p.theme = next.theme; try { localStorage.setItem(ns + 'theme', next.theme); } catch (e) {} }
+    if (next.glass) { p.glass = next.glass; try { localStorage.setItem(ns + 'glass', next.glass); } catch (e) {} }
     apply();
   };
   function watch(q) { if (q.addEventListener) q.addEventListener('change', apply); else if (q.addListener) q.addListener(apply); }
@@ -44,9 +47,11 @@
   apply();
 })();
 </script>
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/glass.css">
-<link rel="stylesheet" href="css/components.css">
+<!-- ?v=: build id on every local css/js URL (bump it on each release). GitHub Pages sends max-age=600, so a new
+     index.html must never pick up an HTTP-cached older app file; sw.js stores and matches them without the query. -->
+<link rel="stylesheet" href="css/tokens.css?v=r2.0">
+<link rel="stylesheet" href="css/glass.css?v=r2.0">
+<link rel="stylesheet" href="css/components.css?v=r2.0">
 </head>
 <body>
 <div id="jmap" aria-label="Job map"></div>
@@ -57,6 +62,8 @@
   <div class="sep desktop-only" aria-hidden="true"></div>
   <button type="button" class="icon-btn pressable" data-act="locate" aria-label="My location" title="My location"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.5 10.6l7.2 2.1 2.1 7.2z"/></svg></button>
   <button type="button" class="icon-btn pressable" id="rf" aria-label="Reload latest data" title="Reload the latest synced data"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.8h-4.8"/></svg></button>
+  <!-- R-2 pricing: only on devices with a pricing key (Settings -> Pricing); pressed = prices shown -->
+  <button type="button" class="icon-btn pressable pr-tgl" id="prTgl" aria-pressed="false" aria-label="Show prices" title="Show prices" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v17"/><path d="M16.2 7.6c-.7-1.2-2.2-1.9-4.2-1.9-2.5 0-4.1 1.2-4.1 3 0 4.3 8.6 2.2 8.6 6.4 0 1.9-1.7 3.1-4.4 3.1-2.1 0-3.7-.7-4.5-2"/></svg></button>
   <button type="button" class="icon-btn pressable" data-act="settings" aria-label="Settings" title="Settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg></button>
 </nav>
 
@@ -72,7 +79,7 @@
         <span class="count" id="count" role="status">Loading…</span>
         <div class="split" role="group" aria-label="Route from the shop">
           <button type="button" class="btn btn--prominent pressable" id="routeSel" disabled title="Route the selected jobs from the shop">Route</button>
-          <button type="button" class="btn btn--prominent pressable split-more" id="routeMore" disabled aria-haspopup="menu" aria-expanded="false" aria-controls="route-menu" aria-label="Route a whole stage from the shop" title="Route every job in one stage from the shop"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          <button type="button" class="btn btn--prominent pressable split-more" id="routeMore" disabled aria-haspopup="menu" aria-expanded="false" aria-controls="route-menu" aria-label="Route a stage or list from the shop" title="Route every job in one stage or list from the shop"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
         </div>
       </div>
       <div class="chips" id="chips" role="toolbar" aria-label="Filter"></div>
@@ -105,29 +112,35 @@
     <div class="sheet-sub"><span id="upd">loading…</span> · <a href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener" title="Pull fresh from Jobber now: tap 'Run workflow' on the page that opens (~1 min), then reload">Sync</a></div>
     <!-- #filterbar lands here in the Jobs view (always on desktop; while the sheet is open on iPhone) -->
     <input class="search" id="q" type="search" placeholder="Search jobs, clients, permits" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search jobs">
+    <!-- R-2 route editor header (Plan view only, hidden while the route is empty): totals + caption, Re-optimize.
+         "Return to shop" is a labelled switch row at the end of the stop list (built by app.js). -->
+    <div class="ed-head" id="edHead" hidden>
+      <div class="ed-sum"><div class="ed-total" id="edTotal"></div><div class="ed-cap" id="edCap"></div></div>
+      <button type="button" class="btn btn--sm btn--tinted pressable" id="edOpt" title="Find the shortest order for the included stops (the shop stays first)">Re-optimize</button>
+    </div>
   </header>
   <div class="sheet-body">
     <div class="view on" id="v-jobs"><div class="job-list" id="jlist" role="list"></div></div>
 
     <div class="view" id="v-routes"><div id="rlist" class="muted">loading…</div></div>
 
+    <!-- R-2 route editor (builder B): ONE editor for the one-click stage route and manual planning. Header (#edHead) sits in
+         the sheet head so it never scrolls away; the stop list, footer, add box and saved routes scroll. Rows are built by app.js. -->
     <div class="view" id="v-plan">
-      <div class="group-title">Stops</div>
-      <ul id="stops"></ul>
-      <div class="field"><input id="addr" type="text" placeholder="Type an address or intersection…" autocomplete="off" enterkeyhint="go" aria-label="Address to add"><button type="button" class="btn pressable" id="addAddr">Add</button></div>
-      <div class="btn-row">
-        <button type="button" class="btn btn--sm pressable" id="addShop">+ Shop</button>
-        <button type="button" class="btn btn--sm pressable" id="pickJob" aria-expanded="false">+ From jobs</button>
-        <button type="button" class="btn btn--sm btn--danger pressable" id="clearStops">Clear</button>
+      <div class="ed-list" id="edList" role="list" aria-label="Route stops" aria-describedby="edHint"></div>
+      <p class="sr-only" id="edHint">Drag a stop by its handle, or focus a stop and press Alt with the Up or Down arrow to move it.</p>
+      <div class="ed-foot" id="edFoot">
+        <button type="button" class="btn btn--sm pressable" id="edAdd" aria-expanded="false" aria-controls="edAddBox"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add stop</button>
+        <a class="btn btn--sm btn--tinted pressable" id="edMaps" href="#" target="_blank" rel="noopener">Google Maps</a>
+        <button type="button" class="btn btn--sm pressable" id="edSave">Save</button>
+        <button type="button" class="ed-clear pressable" id="edClear" title="Clear the route (start again from the shop)">Clear</button>
       </div>
-      <div id="pickbox" hidden></div>
-      <div class="opts">
-        <label class="opt"><span>First stop is fixed start</span><input type="checkbox" class="switch" id="fxs" checked></label>
-        <label class="opt" id="fxeRow"><span>Last stop is fixed end</span><input type="checkbox" class="switch" id="fxe"></label>
-        <label class="opt"><span>Return to start</span><input type="checkbox" class="switch" id="rt"></label>
+      <div class="ed-parts" id="edParts" hidden></div>
+      <div class="ed-add" id="edAddBox" hidden>
+        <div class="field"><input id="addr" type="text" placeholder="Address, intersection or job" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Add a stop: address, intersection or job" aria-controls="edSugg" aria-autocomplete="list"><button type="button" class="btn pressable" id="addAddr">Add</button></div>
+        <div class="ed-sugg" id="edSugg" role="listbox" aria-label="Suggestions"></div>
       </div>
-      <button type="button" class="btn btn--prominent btn--block pressable" id="opt">Optimize route</button>
-      <div id="pres"></div>
+      <p class="sr-only" id="edLive" role="status" aria-live="polite"></p>
       <div class="group-title">Saved routes</div>
       <div id="savedlist" class="muted">none yet</div>
     </div>
@@ -181,6 +194,24 @@
         </div>
       </section>
 
+      <section class="set-group" aria-labelledby="setPrH">
+        <h3 id="setPrH">Pricing</h3>
+        <div class="set-box" id="prStatusBox" hidden>
+          <p class="set-status" id="prStatus">Checking…</p>
+        </div>
+        <div class="set-box">
+          <div class="set-field" style="margin-top:0">
+            <label for="prKey">Pricing key</label>
+            <div class="field" style="margin:0"><input id="prKey" type="password" placeholder="Paste pricing key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"><button type="button" class="btn pressable" id="prSave">Save</button></div>
+          </div>
+          <p class="set-note" id="prMsg" role="status"></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn--sm btn--danger pressable" id="prRemove" hidden>Remove key</button>
+          </div>
+          <p class="set-note" id="prNote">Optional. Shows Jobber totals on this device only.</p>
+        </div>
+      </section>
+
       <section class="set-group" aria-labelledby="setDataH">
         <h3 id="setDataH">Data</h3>
         <div class="set-box">
@@ -196,7 +227,7 @@
       <section class="set-group" aria-labelledby="setAboutH">
         <h3 id="setAboutH">About</h3>
         <div class="set-box">
-          <p class="set-status">Eckstein Jobs · version R-1</p>
+          <p class="set-status" id="aboutVer">Eckstein Jobs · version R-2</p>
           <ul class="notices">
             <li>Glass material adapted from sohumsuthar/liquid-glass (MIT, © 2026 Sohum Suthar); full notice in css/glass.css.</li>
             <li>Desktop refraction: hyalite v0.5.0 (MIT, © 2026 VII-Cae), shipped unmodified in vendor/ with its LICENSE.</li>
@@ -213,56 +244,53 @@
   <header class="sheet-head">
     <div class="grabber" aria-hidden="true"></div>
     <div class="detail-head">
-      <div><h2 class="detail-title" id="dTitle">Job</h2><p class="detail-sub" id="dSub"></p><div class="detail-tags" id="dTags"></div></div>
+      <div><h2 class="detail-title" id="dTitle">Job</h2><p class="detail-sub" id="dSub"></p><p class="detail-price" id="dPrice" hidden></p><div class="detail-tags" id="dTags"></div></div>
       <button type="button" class="close-btn pressable" data-act="close-detail" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
   </header>
   <div class="sheet-body">
     <div class="card">
-      <div class="stage" id="dStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Ready to start">
-        <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small>Stage 1 of 6</small></div>
+      <!-- R-2: ticks, labels and "of N" are generated from Stages.STAGES by UI.StageSlider (7 stops) -->
+      <div class="stage" id="dStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuenow="1" aria-valuetext="Ready to start">
+        <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small></small></div>
         <div class="stage-track">
           <div class="stage-rail"></div><div class="stage-fill"></div>
-          <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
-          <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
-          <div class="stage-thumb"><div class="stage-lens" aria-hidden="true">
-            <div class="stage-rail"></div><div class="stage-fill"></div>
-            <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
-            <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
-          </div></div>
+          <div class="stage-thumb"><div class="stage-lens" aria-hidden="true"><div class="stage-rail"></div><div class="stage-fill"></div></div></div>
         </div>
-        <ol class="stage-labels">
-          <li><button type="button" tabindex="-1" data-k="0" style="--k:0">Ready</button></li><li><button type="button" tabindex="-1" data-k="1" style="--k:1">Excav.</button></li>
-          <li><button type="button" tabindex="-1" data-k="2" style="--k:2">Base</button></li><li><button type="button" tabindex="-1" data-k="3" style="--k:3">Prep</button></li>
-          <li><button type="button" tabindex="-1" data-k="4" style="--k:4">Passed</button></li><li><button type="button" tabindex="-1" data-k="5" style="--k:5">Poured</button></li>
-        </ol>
+        <ol class="stage-labels"></ol>
       </div>
       <div class="lock-note" id="dLock" hidden><span>Stages are read-only on this device.</span><button type="button" data-act="settings" data-section="stages">Settings → Stages</button></div>
     </div>
     <div class="actions">
       <a class="btn btn--prominent pressable" id="dDir" href="#" target="_blank" rel="noopener"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19v-5a4 4 0 0 1 4-4h10"/><path d="M15 6l4 4-4 4"/></svg>Directions</a>
-      <button type="button" class="btn pressable" id="dAdd">Add to Plan</button>
+      <button type="button" class="btn pressable" id="dAdd">Add to route</button>
       <button type="button" class="btn pressable" id="dCopy">Copy address</button>
     </div>
+    <!-- R-2 job items (assessed, lane closure, street cut, asphalt, pavers, cuts & cleanup): rows built by app.js. Below the
+         actions so Directions stays in the medium detent; the heading is for screen readers only (each row names its item) -->
+    <section class="card items" id="dItems" aria-labelledby="dItemsH" hidden>
+      <h3 class="items-h sr-only" id="dItemsH">Job items</h3>
+      <div class="items-list" id="dItemList"></div>
+    </section>
     <div class="card" id="dInfo"></div>
+    <!-- R-2: only for jobs closed in Jobber (kept because field work remains) -->
+    <div class="remove-box" id="dRemoveBox" hidden>
+      <button type="button" class="btn btn--sm btn--danger pressable" id="dRemove">Remove from app</button>
+      <p class="set-note">Closed in Jobber. Removing hides it on every device; use it for a job that was cancelled.</p>
+    </div>
   </div>
 </section>
 
-<div class="route-menu glass" id="route-menu" role="menu" aria-label="Route a whole stage from the shop" hidden></div>
+<div class="route-menu glass" id="route-menu" role="menu" aria-label="Route a stage or list from the shop" hidden></div>
 
 <div class="map-card glass" id="map-card" role="dialog" aria-label="Job preview">
-  <div class="mc-top"><div style="min-width:0"><div class="mc-title" id="mcTitle"></div><div class="mc-sub" id="mcSub"></div></div></div>
-  <div class="stage stage--compact" id="mcStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Ready to start">
-    <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small>Stage 1 of 6</small></div>
+  <div class="mc-top"><div style="min-width:0"><div class="mc-title" id="mcTitle"></div><div class="mc-sub" id="mcSub"></div></div><div class="mc-price" id="mcPrice" hidden></div></div>
+  <div class="mc-items" id="mcItems" hidden></div>
+  <div class="stage stage--compact" id="mcStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuenow="1" aria-valuetext="Ready to start">
+    <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small></small></div>
     <div class="stage-track">
       <div class="stage-rail"></div><div class="stage-fill"></div>
-      <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
-      <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
-      <div class="stage-thumb"><div class="stage-lens" aria-hidden="true">
-        <div class="stage-rail"></div><div class="stage-fill"></div>
-        <i class="stage-tick" data-k="0" style="--k:0"></i><i class="stage-tick" data-k="1" style="--k:1"></i><i class="stage-tick" data-k="2" style="--k:2"></i>
-        <i class="stage-tick" data-k="3" style="--k:3"></i><i class="stage-tick" data-k="4" style="--k:4"></i><i class="stage-tick" data-k="5" style="--k:5"></i>
-      </div></div>
+      <div class="stage-thumb"><div class="stage-lens" aria-hidden="true"><div class="stage-rail"></div><div class="stage-fill"></div></div></div>
     </div>
   </div>
   <div class="mc-foot">
@@ -274,9 +302,10 @@
 <div class="toast glass glass--sm" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="btn pressable" hidden>Undo</button></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="js/tsp.js"></script>
-<script src="js/stages.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/app.js"></script>
+<script src="js/tsp.js?v=r2.0"></script>
+<script src="js/stages.js?v=r2.0"></script>
+<script src="js/prices.js?v=r2.0"></script>
+<script src="js/ui.js?v=r2.0"></script>
+<script src="js/app.js?v=r2.0"></script>
 </body>
 </html>

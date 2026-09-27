@@ -22,12 +22,19 @@ SECRET_AMOUNTS = ["43210", "31337", "27182", "16180", "1618"]          # fixture
 def fixture(name):
     return json.loads((FIX / name).read_text(encoding="utf-8"))
 
-# End-to-end stage files (beta channel, r2-plan §9): v1's stages.json (stage/at/by only, as R-1 writes it) and the
-# beta's stages-beta.json (items + sat). Together they give the same decisions as the combined sync_stages.json:
+# End-to-end stage files.
+# Single-file mode (the default since the version 2 promotion, S.BETA_STATE_FILE None): stages.json is ONE v2 file,
+# sync_stages_promoted.json = the promotion merge of the two beta-trial files below (stage per contract rule 2, items
+# from the beta file, sat dropped), plus #156 with a stage this sync does not understand (a newer app).
+# Dual-file mode (the beta trial, r2-plan §9; S.BETA_STATE_FILE = "stages-beta.json"): v1's stages.json (stage/at/by
+# only, as R-1 writes it) and the beta's stages-beta.json (items + sat).
+# Every one of these gives the same decisions as the combined sync_stages.json:
 # kept 150 (v1 base is newer than the beta sat), 151 (asphalt hint), 155 (beta prep + asphalt, beta sat newer),
 # 156 (v1 stage not understood); dropped 152 (field work done), 153 (removed in the beta), 154 (no work).
+PROMOTED_TEXT = (FIX / "sync_stages_promoted.json").read_text(encoding="utf-8")
 V1_TEXT = (FIX / "sync_stages_v1.json").read_text(encoding="utf-8")
 BETA_TEXT = (FIX / "sync_stages_beta.json").read_text(encoding="utf-8")
+STAGES_TEXT = PROMOTED_TEXT   # stages.json in single-file mode
 
 def http_error(code, headers=None):
     return urllib.error.HTTPError(S.GRAPHQL_URL, code, f"HTTP {code}", headers or {}, None)
@@ -93,13 +100,14 @@ class SyncTestCase(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def run_main(self, jobber, stages_text=None, stages_exc=None, beta_text=None, beta_exc=None):
-        """stages_* = v1's stages.json; beta_* = stages-beta.json (default: the beta fixture; beta_exc=http_error(404)
-        for "no beta file yet")."""
+        """stages_* = stages.json (v2 in single-file mode, v1's file in dual-file mode); beta_* = stages-beta.json,
+        only served in dual-file mode (default: the beta fixture; beta_exc=http_error(404) for "no beta file yet").
+        In single-file mode (the default) a request to the beta file fails the test."""
         beta_text = BETA_TEXT if beta_text is None and beta_exc is None else beta_text
         self.fetched = []
         def fake_text(url, timeout=20):
             self.fetched.append(url)
-            if url.startswith(S.STAGES_BETA_RAW_URL + "?"):
+            if url.startswith((S.STATE_RAW_BASE + S.STAGES_BETA_FILE) + "?"):   # (checked after main: fetch_stages swallows errors)
                 if beta_exc: raise beta_exc
                 return beta_text
             self.assertTrue(url.startswith(S.STAGES_RAW_URL + "?"), url)
@@ -110,6 +118,10 @@ class SyncTestCase(unittest.TestCase):
                 contextlib.redirect_stdout(buf):
             rc = S.main(["--out", str(self.out), "--data", str(self.inp)])
         self.log = buf.getvalue()
+        if S.BETA_STATE_FILE is None:
+            self.assertFalse([u for u in self.fetched if u.startswith((S.STATE_RAW_BASE + S.STAGES_BETA_FILE))],
+                             "stages-beta.json requested in single-file mode")
+            self.assertNotIn("stages-beta.json", self.log)
         for amt in SECRET_AMOUNTS: self.assertNotIn(amt, self.log, "an amount was printed")
         self.assertNotIn(TEST_ONLY_KEY_B64, self.log)
         return rc
@@ -349,7 +361,7 @@ class EndToEnd(SyncTestCase):
         (self.out / S.PRICES_NAME).write_text(json.dumps(S.encrypt_prices({"155": {"t": 16180.33, "u": 1618.03}}, TEST_ONLY_KEY)),
                                              encoding="utf-8")
         os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
-        rc = self.run_main(self.default_jobber(), V1_TEXT)
+        rc = self.run_main(self.default_jobber(), STAGES_TEXT)
         self.assertEqual(rc, 0)
         # jobs.json keeps the R-1 membership (active + pending); closed jobs are only in closed_jobs.json
         self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001])
@@ -384,8 +396,9 @@ class EndToEnd(SyncTestCase):
             self.assertEqual(order, sorted(order, reverse=True))
         meta = self.meta()
         self.assertEqual((meta["total"], meta["mapped"], meta["closed"], meta["stages_read"], meta["stages_beta_read"]),
-                         (4, 4, 4, "ok", "ok"))
-        self.assertEqual(meta["stage_entries"], {"stages.json": 6, "stages-beta.json": 5})
+                         (4, 4, 4, "ok", "not read (single-file mode)"))
+        self.assertEqual(meta["stage_entries"], {"stages.json": 6})
+        self.assertEqual([u.split("?")[0] for u in self.fetched], [S.STAGES_RAW_URL], "only stages.json is read")
         self.assertEqual(sorted(meta["by_client"].values()), [1, 1, 2])   # jobs.json only (Crown x2, Harris, Other)
         # prices
         doc = json.loads((self.out / S.PRICES_NAME).read_text(encoding="utf-8"))
@@ -414,7 +427,7 @@ class EndToEnd(SyncTestCase):
                 self.assertEqual(closed, [150, 151, 152, 153, 154, 155, 156])
 
     def test_second_run_drops_nothing_extra_and_keeps_closed(self):
-        stages = V1_TEXT
+        stages = STAGES_TEXT
         self.run_main(self.default_jobber(), stages)
         first = self.all_out()
         self.run_main(self.default_jobber(), stages)          # previous files are now the first run's output
@@ -424,7 +437,7 @@ class EndToEnd(SyncTestCase):
 
     def test_price_key_missing_leaves_existing_file_alone(self):
         (self.out / S.PRICES_NAME).write_text("OLD-FILE", encoding="utf-8")
-        self.run_main(self.default_jobber(), V1_TEXT)
+        self.run_main(self.default_jobber(), STAGES_TEXT)
         self.assertEqual((self.out / S.PRICES_NAME).read_text(encoding="utf-8"), "OLD-FILE")
         self.assertIn("prices: skipped (PRICE_KEY not set)", self.log)
         self.assertEqual(self.log.count("prices:"), 1)
@@ -464,7 +477,7 @@ class EndToEnd(SyncTestCase):
         (self.out / S.PRICES_NAME).write_text("OLD-FILE", encoding="utf-8")
         os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
         fake = self.refusing_jobber("uninvoicedTotal")
-        self.assertEqual(self.run_main(fake, V1_TEXT), 0)
+        self.assertEqual(self.run_main(fake, STAGES_TEXT), 0)
         jobs = self.all_out()
         self.assertEqual(sorted(jobs), [150, 151, 155, 156, 201, 202, 203, 9001])
         self.assertEqual(jobs[202]["hints"], {"asphalt": False, "pavers": True}, "line items still used")
@@ -475,7 +488,7 @@ class EndToEnd(SyncTestCase):
 
     def test_line_items_refused_keeps_previous_hints(self):
         fake = self.refusing_jobber("uninvoicedTotal", "lineItems")
-        self.run_main(fake, V1_TEXT)
+        self.run_main(fake, STAGES_TEXT)
         jobs = self.jobs_out()
         self.assertEqual(jobs[201]["hints"], {"asphalt": True, "pavers": False}, "previous hint kept")
         self.assertEqual(jobs[202]["hints"], {"asphalt": False, "pavers": False}, "title only, no previous record")
@@ -516,7 +529,7 @@ class EndToEnd(SyncTestCase):
         for broken in ("[{truncated", '{"jobs": []}'):
             with self.subTest(broken=broken):
                 (self.out / S.JOBS_NAME).write_text(broken, encoding="utf-8")
-                self.assertEqual(self.run_main(self.default_jobber(), V1_TEXT), 0)
+                self.assertEqual(self.run_main(self.default_jobber(), STAGES_TEXT), 0)
                 self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001], "jobs.json rebuilt from Jobber")
                 for name, text in files:
                     self.assertEqual((self.out / name).read_text(encoding="utf-8"), text, f"{name} untouched")
@@ -541,7 +554,7 @@ class EndToEnd(SyncTestCase):
                     self.assertLessEqual(timeout, 45.0)
                     clock["t"] += timeout   # every refresh request hangs until its timeout
                 return jobber(url, data, headers, timeout)
-            self.assertEqual(self.run_main(slow_call, V1_TEXT), 0)
+            self.assertEqual(self.run_main(slow_call, STAGES_TEXT), 0)
         refreshes = [c for c in jobber.calls if "RefreshJob" in (c["data"] or {}).get("query", "")]
         self.assertLessEqual(clock["t"] - 1000.0, S.REFRESH_BUDGET_S + 1, "all refreshes within the budget")
         self.assertLessEqual(len(refreshes), 3)
@@ -574,14 +587,13 @@ class EndToEnd(SyncTestCase):
         shutil.move(str(self.out / S.JOBS_NAME), str(self.inp / S.JOBS_NAME))
         shutil.move(str(self.out / S.CACHE_NAME), str(self.inp / S.CACHE_NAME))
         inp_before = {p.name: p.read_bytes() for p in self.inp.iterdir()}
-        self.run_main(self.default_jobber(), V1_TEXT)
+        self.run_main(self.default_jobber(), STAGES_TEXT)
         self.assertEqual(sorted(self.all_out()), [150, 151, 155, 156, 201, 202, 203, 9001])
         self.assertEqual({p.name: p.read_bytes() for p in self.inp.iterdir()}, inp_before, "--data is read-only")
         self.assertTrue(all(self.jobs_out()[jn]["ok"] for jn in (201, 202, 203)), "cache read from --data")
 
 
 # ----------------------------------------------------------------------------- review fixes (R-2 fix loop)
-STAGES_TEXT = V1_TEXT
 
 def stages_without(*job_numbers):
     doc = json.loads(STAGES_TEXT)
@@ -882,22 +894,207 @@ class OverlayUnit(unittest.TestCase):
             def f(url, timeout=20): raise urllib.error.HTTPError(url, code, "x", {}, None)
             return f
         with mock.patch.object(S, "_http_text", raiser(404)):
-            self.assertEqual(S.fetch_stages(S.STAGES_BETA_RAW_URL, missing_ok=True), ({}, "not found (no entries yet)"))
+            self.assertEqual(S.fetch_stages((S.STATE_RAW_BASE + S.STAGES_BETA_FILE), missing_ok=True), ({}, "not found (no entries yet)"))
             self.assertEqual(S.fetch_stages(S.STAGES_RAW_URL), (None, "fetch failed (HTTP 404)"), "v1 file: 404 = failure")
         with mock.patch.object(S, "_http_text", raiser(500)):
-            self.assertEqual(S.fetch_stages(S.STAGES_BETA_RAW_URL, missing_ok=True), (None, "fetch failed (HTTP 500)"))
+            self.assertEqual(S.fetch_stages((S.STATE_RAW_BASE + S.STAGES_BETA_FILE), missing_ok=True), (None, "fetch failed (HTTP 500)"))
 
 
-class BetaChannel(SyncTestCase):
-    NOT_FOUND = urllib.error.HTTPError(S.STAGES_BETA_RAW_URL, 404, "Not Found", {}, None)
+class DualMode:
+    """Mixin: runs a SyncTestCase in dual-file mode (the beta trial, S.BETA_STATE_FILE = "stages-beta.json"), the path
+    the single BETA_STATE_FILE switch turns back on (rollback)."""
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.object(S, "BETA_STATE_FILE", S.STAGES_BETA_FILE)
+        p.start(); self.addCleanup(p.stop)
+
+
+class ClosedJobsFiles(SyncTestCase):
+    """closed_jobs.json handling, the same in either mode (single-file here, dual-file in ClosedJobsFilesDual)."""
+    STAGES = STAGES_TEXT
+
+    def test_migrates_closed_records_out_of_the_previous_jobs_json(self):
+        self.assertTrue(any(r.get("closed") for r in fixture("sync_prev_jobs.json")), "fixture: #155 is closed:true")
+        self.run_main(self.default_jobber(), self.STAGES)
+        self.assertNotIn(155, self.jobs_out())
+        self.assertIs(self.closed_out()[155]["closed"], True)
+        self.assertEqual(self.closed_out()[155]["title"], "Already closed last run")
+
+    def test_previous_closed_jobs_come_from_closed_jobs_json(self):
+        rec = dict(next(r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] == 150), closed=True)
+        rec["title"] = "from closed_jobs.json"
+        prev = [r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] not in (150, 155)]
+        (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
+        (self.out / S.CLOSED_NAME).write_text(json.dumps([rec]), encoding="utf-8")
+        self.run_main(self.default_jobber(), self.STAGES)
+        closed = self.closed_out()
+        self.assertEqual(sorted(closed), [150, 151, 156])     # 155 is in neither previous file any more
+        self.assertEqual(closed[150]["title"], "from closed_jobs.json")
+        self.assertEqual(closed[150]["status"], "requires_invoicing", "still refreshed from Jobber")
+
+    def test_closed_job_active_again_leaves_closed_jobs_json(self):
+        self.run_main(self.default_jobber(), self.STAGES)
+        self.assertIn(150, self.closed_out())
+        pages = fixture("sync_jobber_pages.json")["pages"]
+        back = json.loads(json.dumps(pages[0]["data"]["jobs"]["nodes"][0]))
+        back.update({"id": "TEST-ID-150", "jobNumber": 150, "title": "active again"})
+        pages[0]["data"]["jobs"]["nodes"].append(back)
+        self.run_main(FakeJobber(pages, refresh=self.default_jobber().refresh), self.STAGES)
+        self.assertIn(150, self.jobs_out()); self.assertNotIn("closed", self.jobs_out()[150])
+        self.assertNotIn(150, self.closed_out())
+
+    def test_unreadable_closed_jobs_file_never_stops_the_job_sync(self):
+        os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
+        files = ((S.CLOSED_NAME, "{broken"), (S.ARCHIVE_NAME, "ARCHIVE"), (S.PRICES_NAME, "PRICES"))
+        for name, text in files: (self.out / name).write_text(text, encoding="utf-8")
+        self.assertEqual(self.run_main(self.default_jobber(), self.STAGES), 0)
+        self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001], "jobs.json still updated for v1")
+        for name, text in files:
+            self.assertEqual((self.out / name).read_text(encoding="utf-8"), text, f"{name} untouched")
+        self.assertIn("::warning::carry-forward: closed_jobs.json unreadable (JSONDecodeError)", self.log)
+        self.assertIn("::warning::prices: skipped (closed_jobs.json unreadable", self.log)
+        self.assertEqual(self.fetched, [], "no stage files needed")
+        meta = self.meta()
+        self.assertEqual(meta["total"], 4)
+        self.assertIn("closed_jobs.json unreadable", meta["stages_read"])
+
+    def test_closed_jobs_file_not_a_list_is_unreadable(self):
+        (self.out / S.CLOSED_NAME).write_text('{"jobs": []}', encoding="utf-8")
+        self.run_main(self.default_jobber(), self.STAGES)
+        self.assertIn("::warning::carry-forward: closed_jobs.json is not a list", self.log)
+        self.assertEqual((self.out / S.CLOSED_NAME).read_text(encoding="utf-8"), '{"jobs": []}')
+
+    def test_prices_cover_active_and_closed_jobs(self):
+        os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
+        self.run_main(self.default_jobber(), self.STAGES)
+        self.run_main(self.default_jobber(), self.STAGES)          # second run: closed jobs read from closed_jobs.json
+        prices = S.decrypt_prices(json.loads((self.out / S.PRICES_NAME).read_text(encoding="utf-8")), TEST_ONLY_KEY)
+        self.assertEqual(sorted(prices), ["150", "201", "202"])
+        self.assertEqual(prices["150"], {"t": 27182.81, "u": 27182.81})
+
+
+class ClosedJobsFilesDual(DualMode, ClosedJobsFiles):
+    STAGES = V1_TEXT
+
+
+class SingleFileMode(SyncTestCase):
+    """The default since the version 2 promotion (r2-plan §9 "Promotion"): only stages.json (v2, items included)."""
+    def test_default_is_single_file_mode(self):
+        self.assertIsNone(S.BETA_STATE_FILE)
+        self.assertEqual(S.stage_files(), ("stages.json",))
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertEqual([u.split("?")[0] for u in self.fetched], [S.STAGES_RAW_URL])
+        self.assertIn("kept #156 closed in Jobber (stage entry not understood (kept to be safe)", self.log)
+        self.assertIn("kept #155 closed in Jobber (work started", self.log)
+        self.assertIn("dropped #152 (field work done)", self.log)
+        self.assertIn("dropped #153 (removed from app)", self.log)
+        self.assertIn("dropped #154 (no work in progress)", self.log)
+        meta = self.meta()
+        self.assertEqual((meta["stages_read"], meta["stages_beta_read"], meta["stage_entries"]),
+                         ("ok", "not read (single-file mode)", {"stages.json": 6}))
+
+    def test_items_in_stages_json_decide(self):
+        doc = json.loads(STAGES_TEXT)
+        doc["stages"].update({
+            "150": {"stage": "base", "removed": True, "at": "2026-09-22T10:00:00Z", "by": "PC"},   # removed wins
+            "151": {"asphalt": "na", "at": "2026-09-22T10:00:00Z", "by": "PC"},                   # stored na beats the hint
+            "152": {"stage": "poured", "at": "2026-09-22T10:00:00Z", "by": "PC"},                 # cleanup still to do
+            "154": {"cut": "req", "sat": "2026-09-19T00:00:00Z"},                                 # a leftover sat: harmless
+            "155": {"stage": "poured", "cleanup": "done", "asphalt": "req"},                       # asphalt still required
+            "156": {"lane": {"s": "booked", "from": "2026-10-06"}}})                               # lane booked
+        self.run_main(self.default_jobber(), json.dumps(doc))
+        self.assertEqual(sorted(self.closed_out()), [152, 154, 155, 156])
+        self.assertIn("dropped #150 (removed from app)", self.log)
+        self.assertIn("dropped #151 (no work in progress)", self.log)
+        self.assertIn("dropped #153 (removed from app)", self.log)
+
+    def test_v1_shaped_entries_are_read_as_they_are(self):
+        """A stage-only entry (the R-1 shape) is evaluated directly: no items means cleanup still to do."""
+        self.run_main(self.default_jobber(), V1_TEXT)
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 155, 156])
+        self.assertIn("dropped #154 (no work in progress)", self.log)
+
+    def test_stages_json_404_keeps_everything(self):
+        self.run_main(self.default_jobber(), stages_exc=urllib.error.HTTPError(S.STAGES_RAW_URL, 404, "Not Found", {}, None))
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 154, 155, 156])
+        self.assertIn("::warning::carry-forward: stages.json unreadable (fetch failed (HTTP 404))", self.log)
+        self.assertNotIn("dropped", self.log)
+        self.assertEqual(self.meta()["stages_read"], "fetch failed (HTTP 404)")
+
+    def test_empty_stages_json_after_it_had_entries_keeps_everything(self):
+        """The count guard (the beta file's in the trial) now protects stages.json, which carries the items: even
+        with no closed jobs kept last run, an empty file after N entries is a reset or stale copy."""
+        prev = [r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] != 155]   # no closed:true record
+        (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
+        (self.out / S.META_NAME).write_text(json.dumps({"stage_entries": {"stages.json": 31, "stages-beta.json": 5}}),
+                                            encoding="utf-8")
+        self.run_main(self.default_jobber(), '{"version":2,"stages":{}}')
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 154, 156], "nothing dropped")
+        self.assertNotIn("dropped", self.log)
+        self.assertIn("::warning::carry-forward: stages.json unreadable (no entries at all, but it had 31 last run", self.log)
+        self.assertEqual(self.meta()["stage_entries"], {"stages.json": 31}, "guard armed for the next run; beta count gone")
+        self.run_main(self.default_jobber(), STAGES_TEXT)      # the file is back: normal decisions again
+        self.assertNotIn("unreadable", self.log)
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 156])
+        self.assertEqual(self.meta()["stage_entries"], {"stages.json": 6})
+
+    def test_empty_stages_json_while_closed_jobs_were_kept_keeps_them(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        (self.out / S.META_NAME).write_text("{}", encoding="utf-8")   # no count: the closed-jobs guard alone
+        self.run_main(self.default_jobber(), '{"version":2,"stages":{}}')
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 155, 156])
+        self.assertIn("::warning::carry-forward: stages.json unreadable (no entries at all, but closed jobs were kept",
+                      self.log)
+
+    def test_first_run_after_the_promotion(self):
+        """Last run was the beta trial (dual-file mode); this run reads the promoted stages.json alone: same closed jobs,
+        no warning, the beta count is forgotten, the archive carries over."""
+        with mock.patch.object(S, "BETA_STATE_FILE", S.STAGES_BETA_FILE):
+            self.run_main(self.default_jobber(), V1_TEXT)
+        self.assertEqual(self.meta()["stage_entries"], {"stages.json": 6, "stages-beta.json": 5})
+        trial = sorted(self.closed_out())
+        self.run_main(self.default_jobber(), PROMOTED_TEXT)
+        self.assertEqual(sorted(self.closed_out()), trial)
+        self.assertEqual(trial, [150, 151, 155, 156])
+        self.assertNotIn("::warning::carry-forward", self.log)
+        self.assertNotIn("dropped", self.log)
+        meta = self.meta()
+        self.assertEqual((meta["stages_beta_read"], meta["stage_entries"]), ("not read (single-file mode)", {"stages.json": 6}))
+        arch = json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]
+        self.assertEqual(sorted(r["jobNumber"] for r in arch), [152, 153, 154])
+
+    def test_read_stage_files_unit(self):
+        with mock.patch.object(S, "_http_text", lambda url, timeout=20: STAGES_TEXT):
+            state, overlay, counts, notes = S.read_stage_files([], set(), {"stages.json": 3})
+        self.assertEqual((sorted(state), overlay, counts, notes),
+                         (["150", "152", "153", "155", "156", "201"], None, {"stages.json": 6}, {"stages.json": "ok"}))
+        with mock.patch.object(S, "_http_text", lambda url, timeout=20: '{"stages":{}}'):
+            state, overlay, counts, notes = S.read_stage_files([], set(), {"stages.json": 3})
+        self.assertEqual((state, overlay, counts), (None, None, {}))
+        self.assertIn("it had 3 last run", notes["stages.json"])
+        with mock.patch.object(S, "_http_text", lambda url, timeout=20: '{"stages":{}}'):
+            self.assertEqual(S.read_stage_files([], set(), {})[:3], ({}, None, {"stages.json": 0}), "a new store is fine")
+
+
+class BetaChannel(DualMode, SyncTestCase):
+    """Dual-file mode (the beta trial; S.BETA_STATE_FILE = "stages-beta.json"): stages-beta.json merged with v1's
+    stages.json per contract rule 2."""
+    NOT_FOUND = urllib.error.HTTPError((S.STATE_RAW_BASE + S.STAGES_BETA_FILE), 404, "Not Found", {}, None)
 
     def fresh_previous(self):
         shutil.copy(FIX / "sync_prev_jobs.json", self.out / S.JOBS_NAME)
         for name in (S.CLOSED_NAME, S.ARCHIVE_NAME, S.META_NAME): (self.out / name).unlink(missing_ok=True)
 
+    def test_meta_shape_in_dual_mode(self):
+        self.assertEqual(S.stage_files(), ("stages.json", "stages-beta.json"))
+        self.run_main(self.default_jobber(), V1_TEXT)
+        meta = self.meta()
+        self.assertEqual((meta["stages_read"], meta["stages_beta_read"]), ("ok", "ok"))
+        self.assertEqual(meta["stage_entries"], {"stages.json": 6, "stages-beta.json": 5})
+
     def test_reads_both_files_and_jobs_json_keeps_r1_membership(self):
         self.run_main(self.default_jobber(), V1_TEXT)
-        self.assertEqual(sorted(u.split("?")[0] for u in self.fetched), sorted([S.STAGES_RAW_URL, S.STAGES_BETA_RAW_URL]))
+        self.assertEqual(sorted(u.split("?")[0] for u in self.fetched), sorted([S.STAGES_RAW_URL, (S.STATE_RAW_BASE + S.STAGES_BETA_FILE)]))
         jobs = self.jobs_out()
         self.assertEqual(sorted(jobs), [201, 202, 203, 9001])
         for r in jobs.values(): self.assertNotIn("closed", r)
@@ -910,36 +1107,6 @@ class BetaChannel(SyncTestCase):
         self.assertIn("dropped #153 (removed from app)", self.log)
         arch = json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]
         self.assertEqual(sorted(r["jobNumber"] for r in arch), [152, 153, 154])
-
-    def test_migrates_closed_records_out_of_the_previous_jobs_json(self):
-        self.assertTrue(any(r.get("closed") for r in fixture("sync_prev_jobs.json")), "fixture: #155 is closed:true")
-        self.run_main(self.default_jobber(), V1_TEXT)
-        self.assertNotIn(155, self.jobs_out())
-        self.assertIs(self.closed_out()[155]["closed"], True)
-        self.assertEqual(self.closed_out()[155]["title"], "Already closed last run")
-
-    def test_previous_closed_jobs_come_from_closed_jobs_json(self):
-        rec = dict(next(r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] == 150), closed=True)
-        rec["title"] = "from closed_jobs.json"
-        prev = [r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] not in (150, 155)]
-        (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
-        (self.out / S.CLOSED_NAME).write_text(json.dumps([rec]), encoding="utf-8")
-        self.run_main(self.default_jobber(), V1_TEXT)
-        closed = self.closed_out()
-        self.assertEqual(sorted(closed), [150, 151, 156])     # 155 is in neither previous file any more
-        self.assertEqual(closed[150]["title"], "from closed_jobs.json")
-        self.assertEqual(closed[150]["status"], "requires_invoicing", "still refreshed from Jobber")
-
-    def test_closed_job_active_again_leaves_closed_jobs_json(self):
-        self.run_main(self.default_jobber(), V1_TEXT)
-        self.assertIn(150, self.closed_out())
-        pages = fixture("sync_jobber_pages.json")["pages"]
-        back = json.loads(json.dumps(pages[0]["data"]["jobs"]["nodes"][0]))
-        back.update({"id": "TEST-ID-150", "jobNumber": 150, "title": "active again"})
-        pages[0]["data"]["jobs"]["nodes"].append(back)
-        self.run_main(FakeJobber(pages, refresh=self.default_jobber().refresh), V1_TEXT)
-        self.assertIn(150, self.jobs_out()); self.assertNotIn("closed", self.jobs_out()[150])
-        self.assertNotIn(150, self.closed_out())
 
     def test_beta_file_404_is_empty_not_a_failure(self):
         self.run_main(self.default_jobber(), V1_TEXT, beta_exc=self.NOT_FOUND)
@@ -1023,35 +1190,6 @@ class BetaChannel(SyncTestCase):
         self.run_main(self.default_jobber(), V1_TEXT)      # the file is back: normal decisions again
         self.assertNotIn("unreadable", self.log)
 
-    def test_unreadable_closed_jobs_file_never_stops_the_job_sync(self):
-        os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
-        files = ((S.CLOSED_NAME, "{broken"), (S.ARCHIVE_NAME, "ARCHIVE"), (S.PRICES_NAME, "PRICES"))
-        for name, text in files: (self.out / name).write_text(text, encoding="utf-8")
-        self.assertEqual(self.run_main(self.default_jobber(), V1_TEXT), 0)
-        self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001], "jobs.json still updated for v1")
-        for name, text in files:
-            self.assertEqual((self.out / name).read_text(encoding="utf-8"), text, f"{name} untouched")
-        self.assertIn("::warning::carry-forward: closed_jobs.json unreadable (JSONDecodeError)", self.log)
-        self.assertIn("::warning::prices: skipped (closed_jobs.json unreadable", self.log)
-        self.assertEqual(self.fetched, [], "no stage files needed")
-        meta = self.meta()
-        self.assertEqual(meta["total"], 4)
-        self.assertIn("closed_jobs.json unreadable", meta["stages_read"])
-
-    def test_closed_jobs_file_not_a_list_is_unreadable(self):
-        (self.out / S.CLOSED_NAME).write_text('{"jobs": []}', encoding="utf-8")
-        self.run_main(self.default_jobber(), V1_TEXT)
-        self.assertIn("::warning::carry-forward: closed_jobs.json is not a list", self.log)
-        self.assertEqual((self.out / S.CLOSED_NAME).read_text(encoding="utf-8"), '{"jobs": []}')
-
-    def test_prices_cover_active_and_closed_jobs(self):
-        os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
-        self.run_main(self.default_jobber(), V1_TEXT)
-        self.run_main(self.default_jobber(), V1_TEXT)          # second run: closed jobs read from closed_jobs.json
-        prices = S.decrypt_prices(json.loads((self.out / S.PRICES_NAME).read_text(encoding="utf-8")), TEST_ONLY_KEY)
-        self.assertEqual(sorted(prices), ["150", "201", "202"])
-        self.assertEqual(prices["150"], {"t": 27182.81, "u": 27182.81})
-
     def test_first_run_on_main_data_with_no_closed_files(self):
         """main's data/: an R-1 jobs.json (no closed, no hints, no id) and no closed_jobs.json / stages-beta.json."""
         prev = [{k: v for k, v in r.items() if k not in ("closed", "hints", "id")}
@@ -1061,6 +1199,26 @@ class BetaChannel(SyncTestCase):
         self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001])
         self.assertEqual(sorted(self.closed_out()), [150, 152, 153, 155, 156])
         self.assertIsNone(self.closed_out()[150]["id"], "no id yet: not refreshed, previous values kept")
+
+
+class JsTrimParity(unittest.TestCase):
+    """stage_key / clean_job_key trim like JavaScript String.prototype.trim (js/stages.js), not like str.strip()."""
+
+    def test_stage_key_and_job_key_use_the_js_whitespace_set(self):
+        self.assertEqual(S.stage_key(" PREP\u3000"), "prep")
+        self.assertEqual(S.stage_key("\ufeffbase\n"), "base")
+        for odd in ("prep\x1c", "prep\x1f", "\x85prep", "prep\x1d"):   # str.strip() strips these, JS trim() does not
+            self.assertIsNone(S.stage_key(odd), repr(odd))
+            self.assertEqual(S.stage_index(odd), 0, "unknown = Ready, like the app")
+        self.assertEqual(S.clean_job_key(" 684\u00a0"), "684")
+        self.assertEqual(S.clean_job_key("684\x85"), "")
+        self.assertEqual(S.clean_job_key("\x1c684"), "")
+
+    def test_same_whitespace_set_as_the_promote_tool(self):
+        sys.path.insert(0, str(HERE.parent / "tools"))
+        import promote_stages as P
+        self.assertEqual(S._JS_WS, P._JS_WS)
+        self.assertFalse(hasattr(S, "STAGES_BETA_RAW_URL"), "unused constant removed")
 
 
 if __name__ == "__main__":
