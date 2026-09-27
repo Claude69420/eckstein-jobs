@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-09-26T23:16:38+00:00",
+ "updated_utc": "2026-09-27T01:28:04+00:00",
  "total": 51,
  "mapped": 51,
  "failed": [],
@@ -15,9 +15,8 @@
  "geocode_api_calls": 0,
  "closed": 0,
  "stages_read": "ok",
- "stages_beta_read": "not found (no entries yet)",
+ "stages_beta_read": "not read (single-file mode)",
  "stage_entries": {
-  "stages.json": 31,
-  "stages-beta.json": 0
+  "stages.json": 33
  }
 }
