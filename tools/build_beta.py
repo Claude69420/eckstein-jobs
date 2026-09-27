@@ -150,8 +150,8 @@ def build_sw():
     for ref in re.findall(r"'((?:css|js|vendor)/[^']+)'", shell.group(1) if shell else ""):
         if ref not in APP_FILES:
             raise SystemExit("build_beta: sw.js SHELL lists %s, which is not in APP_FILES (tools/build_beta.py)" % ref)
-    out = sub_once(src, r"^const C = '[^']*';$", "const C = '%s';" % CACHE, "const C", flags=re.M)
-    out = sub_once(out, r"^const PREFIX = '[^']*';$", "const PREFIX = '%s';" % CONFIG["cachePrefix"], "const PREFIX", flags=re.M)
+    out = sub_once(src, r"^const C = '[^']*';(?=\r?$)", "const C = '%s';" % CACHE, "const C", flags=re.M)
+    out = sub_once(out, r"^const PREFIX = '[^']*';(?=\r?$)", "const PREFIX = '%s';" % CONFIG["cachePrefix"], "const PREFIX", flags=re.M)
     out = sub_once(out, r"\A[^\r\n]*", "// EJ Beta service worker (cache \"%s\"): GENERATED from the root sw.js by tools/build_beta.py." % CACHE,
                    "first line")
     # sanity: the cleanup must be prefix-scoped so the beta never deletes v1's caches
