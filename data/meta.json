@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-09-28T12:16:46+00:00",
+ "updated_utc": "2026-09-28T17:15:35+00:00",
  "total": 52,
  "mapped": 52,
  "failed": [],
@@ -17,6 +17,6 @@
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
  "stage_entries": {
-  "stages.json": 34
+  "stages.json": 38
  }
 }
