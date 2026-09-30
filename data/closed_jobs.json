@@ -14,6 +14,11 @@
   "lat": 49.910029,
   "lon": -97.190319,
   "ok": true,
-  "closed": true
+  "closed": true,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "id": null
  }
 ]
