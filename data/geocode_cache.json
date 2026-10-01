@@ -1266,5 +1266,41 @@
   "1551 Pembina Hwy, Winnipeg, MB, Canada": [
     49.8328637,
     -97.1517066
+  ],
+  "Lemay Ave and Lord Ave, Winnipeg, MB, Canada": [
+    49.769373,
+    -97.141626
+  ],
+  "Pembina Hwy & Adamar Rd, Winnipeg, MB, Canada": [
+    49.8245479,
+    -97.1526302
+  ],
+  "Pembina Hwy & Plaza Dr, Winnipeg, MB, Canada": [
+    49.822876,
+    -97.1527019
+  ],
+  "Main St & 1st St NW, Altona, MB, Canada": [
+    49.105327,
+    -97.559334
+  ],
+  "Main St & Railway St S, Altona, MB, Canada": [
+    49.096083,
+    -97.559629
+  ],
+  "Colony St & Portage Av, Winnipeg, MB, Canada": [
+    49.891043,
+    -97.150789
+  ],
+  "Colony St & Webb Pl, Winnipeg, MB, Canada": [
+    49.892754,
+    -97.151825
+  ],
+  "Portage Ave & Lipton St, Winnipeg, MB, Canada": [
+    49.8848234,
+    -97.1737496
+  ],
+  "Portage Ave & Lenore St, Winnipeg, MB, Canada": [
+    49.8850194,
+    -97.1714853
   ]
 }
