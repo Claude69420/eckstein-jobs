@@ -62,7 +62,7 @@ APP_TITLE = "EJ Beta"
 # copied: --check reports it, so a new app file has to be added here on purpose.
 APP_FILES = (
     "css/tokens.css", "css/glass.css", "css/components.css",
-    "js/tsp.js", "js/stages.js", "js/prices.js", "js/ui.js", "js/app.js",
+    "js/tsp.js", "js/stages.js", "js/prices.js", "js/routes.js", "js/ui.js", "js/app.js",   # js/routes.js: R-3
     "vendor/hyalite.js", "vendor/hyalite.LICENSE",
 )
 COPY_DIRS = ("css", "js", "vendor")

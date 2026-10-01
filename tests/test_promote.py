@@ -574,6 +574,22 @@ class Repair(unittest.TestCase):
         with self.assertRaises(P.PromoteError): P.repair(self.v2, self.v2)
         with self.assertRaises(P.PromoteError): P.repair(self.stale, V1_TEXT)
 
+    def test_r3_overrides_survive_the_tool_and_the_sync(self):
+        """R-3 keeps job name / loc in the top-level "overrides" object (js/stages.js serializeDoc), never inside the
+        stage entries, so this tool (top-level fields kept) and the sync (reads "stages" only) leave them alone."""
+        ovr = {"700": {"name": "Portage Ave & Lipton St", "loc": {"lat": 49.8812, "lon": -97.1834},
+                       "at": "2026-09-30T20:00:00Z", "by": "Office PC"}}
+        d = json.loads(self.v2); d["overrides"] = ovr
+        v2o = json.dumps(d, indent=2) + "\n"
+        m, extras, ver, dropped = P.sanitize_doc(json.loads(v2o))
+        self.assertEqual(extras["overrides"], ovr)
+        self.assertEqual(json.loads(P.serialize_doc(m, extras))["overrides"], ovr, "written back")
+        res = P.repair(r1_rewrite(v2o, R1_MOVES), v2o)
+        self.assertEqual(json.loads(res["text"])["overrides"], ovr, "a repair keeps the overrides")
+        entries, why = S.parse_stages_text(v2o)
+        self.assertEqual(why, "ok")
+        self.assertNotIn("name", json.dumps(entries.get("700") or {}))
+
     def history(self, *extra):
         return list(extra) + [("c3" + "0" * 38, "stage: #104 Somewhere -> prep", self.stale),
                               ("c2" + "0" * 38, P.COMMIT_MESSAGE, self.v2),

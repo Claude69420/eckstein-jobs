@@ -217,7 +217,7 @@ class RetiredBeta(unittest.TestCase):
         """New index.html must never pick up an HTTP-cached older app file (Pages: max-age=600) after a deploy."""
         html = read(os.path.join(REPO, "index.html"))
         refs = re.findall(r'<(?:script[^>]*\ssrc|link[^>]*rel="stylesheet"[^>]*\shref)="((?:css|js|vendor)/[^"]+)"', html)
-        self.assertEqual(len(refs), 8, refs)
+        self.assertEqual(len(refs), 9, refs)   # R-3 added js/routes.js
         ids = {r.partition("?")[2] for r in refs}
         self.assertEqual(len(ids), 1, "one build id for all: " + repr(ids))
         self.assertRegex(ids.pop(), r"^v=[0-9A-Za-z.\-]+$")
@@ -227,7 +227,7 @@ class RetiredBeta(unittest.TestCase):
 
     def test_root_worker_never_deletes_beta_caches(self):
         sw = read(os.path.join(REPO, "sw.js"))
-        self.assertIn("const C = 'ej-v3';", sw)
+        self.assertIn("const C = 'ej-v4';", sw)   # R-3 (Rule 14)
         self.assertIn("const PREFIX = 'ej-';", sw)
         self.assertIn("k.indexOf(PREFIX) === 0 && k !== C", sw)
         self.assertFalse("ejb-v1".startswith("ej-"), "the root prefix cannot match the beta caches")

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Eckstein Jobs">
 <meta name="theme-color" content="#EFEFEF">
-<meta name="description" content="Eckstein Repair jobs: map, stages, route maps and a route planner.">
+<meta name="description" content="Eckstein Repair jobs: map, stages and routes.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -49,9 +49,9 @@
 </script>
 <!-- ?v=: build id on every local css/js URL (bump it on each release). GitHub Pages sends max-age=600, so a new
      index.html must never pick up an HTTP-cached older app file; sw.js stores and matches them without the query. -->
-<link rel="stylesheet" href="css/tokens.css?v=r2.0">
-<link rel="stylesheet" href="css/glass.css?v=r2.0">
-<link rel="stylesheet" href="css/components.css?v=r2.0">
+<link rel="stylesheet" href="css/tokens.css?v=r3.0">
+<link rel="stylesheet" href="css/glass.css?v=r3.0">
+<link rel="stylesheet" href="css/components.css?v=r3.0">
 </head>
 <body>
 <div id="jmap" aria-label="Job map"></div>
@@ -87,11 +87,12 @@
   </div>
 </div>
 
+<!-- R-3: two tabs, Jobs · Route (the R-2 "Plan" view renamed; the published-routes view retired: Settings -> Routes ->
+     "Old route maps"). Settings stays in the control capsule. -->
 <nav class="tabbar glass glass--sm" id="tabs" role="tablist" aria-label="Views" style="--i:0">
   <span class="tab-blob" aria-hidden="true"></span>
   <button type="button" class="tab pressable on" role="tab" aria-selected="true" data-v="jobs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-10.8a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.3"/></svg><span>Jobs</span></button>
-  <button type="button" class="tab pressable" role="tab" aria-selected="false" data-v="routes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/></svg><span>Routes</span></button>
-  <button type="button" class="tab pressable" role="tab" aria-selected="false" data-v="plan"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg><span>Plan</span></button>
+  <button type="button" class="tab pressable" role="tab" aria-selected="false" data-v="route"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg><span>Route</span></button>
 </nav>
 
 <div class="scrim" id="scrim"></div>
@@ -103,8 +104,7 @@
       <h2 class="sheet-title">Jobs</h2>
       <div class="panel-views desktop-only" role="toolbar" aria-label="Views">
         <button type="button" class="icon-btn pressable" data-v="jobs" aria-label="Jobs" title="Jobs" aria-pressed="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-10.8a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.2" r="2.3"/></svg></button>
-        <button type="button" class="icon-btn pressable" data-v="routes" aria-label="Routes" title="Published routes" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
-        <button type="button" class="icon-btn pressable" data-v="plan" aria-label="Plan a route" title="Plan a route" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg></button>
+        <button type="button" class="icon-btn pressable" data-v="route" aria-label="Route" title="Route" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/></svg></button>
         <button type="button" class="icon-btn pressable" data-v="settings" aria-label="Settings" title="Settings" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg></button>
       </div>
       <button type="button" class="close-btn pressable phone-only" data-act="collapse" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -112,21 +112,20 @@
     <div class="sheet-sub"><span id="upd">loading…</span> · <a href="https://github.com/Claude69420/eckstein-jobs/actions/workflows/sync.yml" target="_blank" rel="noopener" title="Pull fresh from Jobber now: tap 'Run workflow' on the page that opens (~1 min), then reload">Sync</a></div>
     <!-- #filterbar lands here in the Jobs view (always on desktop; while the sheet is open on iPhone) -->
     <input class="search" id="q" type="search" placeholder="Search jobs, clients, permits" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search jobs">
-    <!-- R-2 route editor header (Plan view only, hidden while the route is empty): totals + caption, Re-optimize.
+    <!-- R-2 route editor header (Route view only, hidden while the route is empty): totals + caption, Re-optimize.
          "Return to shop" is a labelled switch row at the end of the stop list (built by app.js). -->
     <div class="ed-head" id="edHead" hidden>
       <div class="ed-sum"><div class="ed-total" id="edTotal"></div><div class="ed-cap" id="edCap"></div></div>
-      <button type="button" class="btn btn--sm btn--tinted pressable" id="edOpt" title="Find the shortest order for the included stops (the shop stays first)">Re-optimize</button>
+      <button type="button" class="btn btn--sm btn--tinted pressable" id="edOpt" title="Find the shortest order for the included stops (the start stays first)">Re-optimize</button>
     </div>
   </header>
   <div class="sheet-body">
     <div class="view on" id="v-jobs"><div class="job-list" id="jlist" role="list"></div></div>
 
-    <div class="view" id="v-routes"><div id="rlist" class="muted">loading…</div></div>
-
-    <!-- R-2 route editor (builder B): ONE editor for the one-click stage route and manual planning. Header (#edHead) sits in
-         the sheet head so it never scrolls away; the stop list, footer, add box and saved routes scroll. Rows are built by app.js. -->
-    <div class="view" id="v-plan">
+    <!-- Route view (R-2 editor; R-3: renamed from "Plan", start switch + "Start from my location", synced saved routes).
+         ONE editor for the one-click stage route and manual planning. Header (#edHead) sits in the sheet head so it never
+         scrolls away; the stop list, footer, add box and saved routes scroll. Rows are built by app.js. -->
+    <div class="view" id="v-route">
       <div class="ed-list" id="edList" role="list" aria-label="Route stops" aria-describedby="edHint"></div>
       <p class="sr-only" id="edHint">Drag a stop by its handle, or focus a stop and press Alt with the Up or Down arrow to move it.</p>
       <div class="ed-foot" id="edFoot">
@@ -141,8 +140,11 @@
         <div class="ed-sugg" id="edSugg" role="listbox" aria-label="Suggestions"></div>
       </div>
       <p class="sr-only" id="edLive" role="status" aria-live="polite"></p>
+      <!-- R-3: saved routes shared through routes.json in eckstein-jobs-state (js/routes.js): Mine, then Team (owner shown),
+           then routes kept on this device (no edit key, or saved before R-3: the one-time "Sync my N saved routes"). -->
       <div class="group-title">Saved routes</div>
-      <div id="savedlist" class="muted">none yet</div>
+      <p class="set-note sr-status" id="srStatus" role="status"></p>
+      <div id="savedlist" class="sr-list"></div>
     </div>
 
     <div class="view" id="v-settings">
@@ -212,6 +214,25 @@
         </div>
       </section>
 
+      <!-- R-3: Your name (owner of the routes this device saves) and the old published route maps (read-only list) -->
+      <section class="set-group" aria-labelledby="setRtH">
+        <h3 id="setRtH">Routes</h3>
+        <div class="set-box" id="rtNameBox">
+          <div class="set-field" style="margin-top:0">
+            <label for="rtName">Your name (routes you save show as yours)</label>
+            <input id="rtName" type="text" maxlength="40" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="First name">
+          </div>
+          <p class="set-note">Saved routes are public (anyone with the app link can see the stops and your name), so a first name or initials is enough. Yours are listed first; the rest are under Team.</p>
+        </div>
+        <div class="set-box" id="omBox" hidden>
+          <button type="button" class="set-disc" id="omTgl" aria-expanded="false" aria-controls="omPane"><span>Old route maps</span><span class="n" id="omN"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <div id="omPane" hidden>
+            <div class="om-list" id="omList"></div>
+            <p class="set-note">Route maps published before this update (read-only).</p>
+          </div>
+        </div>
+      </section>
+
       <section class="set-group" aria-labelledby="setDataH">
         <h3 id="setDataH">Data</h3>
         <div class="set-box">
@@ -222,12 +243,21 @@
           </div>
           <p class="set-note">Sync opens GitHub: tap “Run workflow”, wait about a minute, then reload.</p>
         </div>
+        <!-- R-3: jobs removed from the app (Completed) in the last 60 days: data/closed_archive.json + removed jobs still in
+             data/closed_jobs.json. Restore = patch {removed: null}. Rows built by app.js. -->
+        <div class="set-box rr" id="rrBox">
+          <button type="button" class="set-disc" id="rrTgl" aria-expanded="false" aria-controls="rrPane"><span>Recently removed</span><span class="n" id="rrN"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <div id="rrPane" hidden>
+            <div class="rr-list" id="rrList"></div>
+            <p class="set-note" id="rrNote"></p>
+          </div>
+        </div>
       </section>
 
       <section class="set-group" aria-labelledby="setAboutH">
         <h3 id="setAboutH">About</h3>
         <div class="set-box">
-          <p class="set-status" id="aboutVer">Eckstein Jobs · version R-2</p>
+          <p class="set-status" id="aboutVer">Eckstein Jobs · version R-3</p>
           <ul class="notices">
             <li>Glass material adapted from sohumsuthar/liquid-glass (MIT, © 2026 Sohum Suthar); full notice in css/glass.css.</li>
             <li>Desktop refraction: hyalite v0.5.0 (MIT, © 2026 VII-Cae), shipped unmodified in vendor/ with its LICENSE.</li>
@@ -245,10 +275,29 @@
     <div class="grabber" aria-hidden="true"></div>
     <div class="detail-head">
       <div><h2 class="detail-title" id="dTitle">Job</h2><p class="detail-sub" id="dSub"></p><p class="detail-price" id="dPrice" hidden></p><div class="detail-tags" id="dTags"></div></div>
-      <button type="button" class="close-btn pressable" data-act="close-detail" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div class="detail-btns">
+        <!-- R-3: rename / move the pin (writable devices only) -->
+        <button type="button" class="close-btn edit-btn pressable" id="dEditBtn" aria-label="Edit name and location" title="Edit name &amp; location" aria-expanded="false" aria-controls="dEdit" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4.2L16.2 4.6a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/><path d="M14.5 6.3l3.2 3.2"/></svg></button>
+        <button type="button" class="close-btn pressable" data-act="close-detail" aria-label="Close details"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
     </div>
   </header>
   <div class="sheet-body">
+    <!-- R-3 "Edit name & location" (js/app.js): name override + a pin from the Esri geocoder, saved in the job's stage entry
+         (name, loc) and shared with every device. While it is open the other detail cards are hidden (#detail.is-editing). -->
+    <section class="card edit" id="dEdit" aria-labelledby="dEditH" hidden>
+      <h3 class="edit-h" id="dEditH">Edit name &amp; location</h3>
+      <label class="edit-field"><span>Name</span><input id="eName" type="text" maxlength="80" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"></label>
+      <div class="edit-field"><label for="eAddr">Map pin</label>
+        <div class="field"><input id="eAddr" type="search" placeholder="Address or intersection" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"><button type="button" class="btn pressable" id="eFind">Find</button></div>
+      </div>
+      <p class="edit-loc" id="eLoc" role="status"></p>
+      <div class="edit-btns">
+        <button type="button" class="ed-clear pressable" id="eReset" title="Use the name and pin from Jobber again">Reset to Jobber</button>
+        <button type="button" class="btn pressable" id="eCancel">Cancel</button>
+        <button type="button" class="btn btn--prominent pressable" id="eSave">Save</button>
+      </div>
+    </section>
     <div class="card">
       <!-- R-2: ticks, labels and "of N" are generated from Stages.STAGES by UI.StageSlider (7 stops) -->
       <div class="stage" id="dStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuenow="1" aria-valuetext="Ready to start">
@@ -275,8 +324,8 @@
     <div class="card" id="dInfo"></div>
     <!-- R-2: only for jobs closed in Jobber (kept because field work remains) -->
     <div class="remove-box" id="dRemoveBox" hidden>
-      <button type="button" class="btn btn--sm btn--danger pressable" id="dRemove">Remove from app</button>
-      <p class="set-note">Closed in Jobber. Removing hides it on every device; use it for a job that was cancelled.</p>
+      <button type="button" class="btn btn--sm btn--danger pressable" id="dRemove">Completed — remove from app</button>
+      <p class="set-note">Closed in Jobber. Removing hides it on every device; Settings → Data → Recently removed brings it back for 60 days.</p>
     </div>
   </div>
 </section>
@@ -299,13 +348,26 @@
   </div>
 </div>
 
+<!-- R-3: "Closed in Jobber" confirmation on app open (writable devices). Glass, a direct child of <body>; its scrim is a
+     sibling (never an ancestor). Rows are content (fills only). -->
+<div class="pop-scrim" id="popScrim" hidden></div>
+<section class="pop glass" id="closedPop" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="popH" aria-describedby="popSub" hidden>
+  <header class="pop-head">
+    <h2 class="pop-title" id="popH">Closed in Jobber</h2>
+    <p class="pop-sub" id="popSub">Confirm they’re done. <b>Completed</b> removes a job from the app on every device.</p>
+  </header>
+  <div class="pop-list" id="popList" role="list"></div>
+  <div class="pop-foot"><button type="button" class="btn pressable" id="popLater">Later</button></div>
+</section>
+
 <div class="toast glass glass--sm" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="btn pressable" hidden>Undo</button></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="js/tsp.js?v=r2.0"></script>
-<script src="js/stages.js?v=r2.0"></script>
-<script src="js/prices.js?v=r2.0"></script>
-<script src="js/ui.js?v=r2.0"></script>
-<script src="js/app.js?v=r2.0"></script>
+<script src="js/tsp.js?v=r3.0"></script>
+<script src="js/stages.js?v=r3.0"></script>
+<script src="js/prices.js?v=r3.0"></script>
+<script src="js/routes.js?v=r3.0"></script>
+<script src="js/ui.js?v=r3.0"></script>
+<script src="js/app.js?v=r3.0"></script>
 </body>
 </html>

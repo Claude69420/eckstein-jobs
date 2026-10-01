@@ -109,12 +109,12 @@ input, select, textarea{ font:inherit; color:inherit; }
 
 /* ---------- Tab bar (glass glass--sm) ---------- */
 .tabbar{ position:fixed; z-index:50; left:calc(var(--inset) + var(--safe-l)); right:calc(var(--inset) + var(--safe-r)); bottom:var(--tabbar-b); height:var(--tabbar-h);
-  padding:4px; border-radius:var(--r-pill); display:grid; grid-template-columns:repeat(3, 1fr); }
+  padding:4px; border-radius:var(--r-pill); display:grid; grid-template-columns:repeat(2, 1fr); }   /* R-3: Jobs · Route */
 .tab{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   border-radius:var(--r-pill); color:var(--label); font:var(--t-tab); }
 .tab .ico{ width:24px; height:24px; }
 .tab[aria-selected="true"]{ color:var(--accent); }
-.tab-blob{ position:absolute; z-index:0; top:4px; bottom:4px; left:4px; width:calc((100% - 8px) / 3);
+.tab-blob{ position:absolute; z-index:0; top:4px; bottom:4px; left:4px; width:calc((100% - 8px) / 2);
   border-radius:var(--r-pill); background:var(--fill-3);
   translate:calc(100% * var(--i)) 0; transition:translate var(--d-snappy) var(--spring-snappy); }
 .tabbar.no-tab .tab-blob{ visibility:hidden; }
@@ -218,9 +218,9 @@ a.card, .card.is-link{ cursor:pointer; }
 .lock-note button{ color:var(--accent); font-weight:600; white-space:nowrap; }
 .lock-note span{ min-width:0; }
 
-/* ---------- Plan view basics (the R-2 route editor block is further down) ---------- */
+/* ---------- Route view basics (the R-2 route editor block is further down) ---------- */
 .group-title{ margin:14px 8px 6px; font:var(--t-footnote); font-weight:600; color:var(--label-2); text-transform:uppercase; letter-spacing:.02em; }
-#v-plan, #v-routes, #v-settings{ padding:0 4px; }
+#v-route, #v-settings{ padding:0 4px; }
 .field{ display:flex; gap:8px; margin:8px 0; }
 .field input, .set-field input{ flex:1; min-width:0; height:44px; padding:0 12px; border:0; border-radius:12px;
   background:var(--fill-3); color:var(--label); font:var(--t-body); -webkit-appearance:none; appearance:none; }
@@ -472,10 +472,10 @@ a.card, .card.is-link{ cursor:pointer; }
 .rm-item .dot--list{ box-shadow:none; }
 
 /* =====================================================================================================
- * R-2 (builder B "route-editor"): the ONE route editor in the Plan view (header in the sheet head; stop list, footer,
+ * R-2 (builder B "route-editor"): the ONE route editor in the Route view (header in the sheet head; stop list, footer,
  * add box and saved routes in the body). Content only: fills, no glass, no popovers (so never glass on glass).
  * ===================================================================================================== */
-.sheet[data-view="plan"] .sheet-sub, .sheet:not([data-view="plan"]) .ed-head{ display:none; }
+.sheet[data-view="route"] .sheet-sub, .sheet:not([data-view="route"]) .ed-head{ display:none; }
 .ed-head{ display:flex; align-items:center; gap:8px; margin:2px 0 0; min-height:var(--hit); }
 .ed-sum{ flex:1; min-width:0; }
 .ed-total{ font:var(--t-headline); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -578,6 +578,137 @@ a.card, .card.is-link{ cursor:pointer; }
 /* Desktop hover card: total on the title line */
 .map-card .mc-price{ padding-top:2px; font:var(--t-subhead-em); color:var(--label-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
+/* =====================================================================================================
+ * R-3 (builder "ui-part-1"): selection total, chip-row touch, "Edit name & location", the "Closed in Jobber" dialog,
+ * Settings -> Recently removed. Content = fills only; the dialog is the one new glass element (a direct child of <body>).
+ * ===================================================================================================== */
+/* Count: "12 jobs" and, with prices shown, the Jobber total of every shown job, stacked under it (iPhone and the desktop
+ * panel alike: on one line "Route 23" leaves too little room and a clipped total reads as a wrong number). The count
+ * never shrinks below its text; each line ellipsizes on its own if it ever must. */
+.filterbar .count{ display:flex; flex-direction:column; align-items:flex-end; justify-content:center; line-height:1.2; flex:none; max-width:40%; }
+.count .c-n, .count .c-v{ max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.count .c-v{ font:var(--t-caption-em); color:var(--label); }
+/* Chip rows scroll sideways from ANY start point: the row, its chips, their parts (and hit areas) all say pan-x */
+.chips .chip, .chips .chip *, .chips .chip::after, .chips .chip-set, .chips .chip-div{ touch-action:pan-x; }
+
+/* Job sheet: pencil next to the close button; the inline edit card */
+.detail-btns{ display:flex; gap:10px; }
+.edit-btn .ico{ width:15px; height:15px; stroke-width:2.2; }
+.edit-btn[aria-expanded="true"]{ background:var(--accent-soft); color:var(--accent); }
+#detail.is-editing .sheet-body > :not(#dEdit){ display:none; }
+.edit{ padding:14px 14px 12px; }
+.edit-h{ margin:0 0 2px; font:var(--t-headline); }
+.edit-field{ display:grid; gap:6px; margin-top:12px; font:var(--t-footnote); color:var(--label-2); }
+.edit-field > input{ width:100%; min-width:0; height:44px; padding:0 12px; border:0; border-radius:12px; background:var(--fill-3);
+  color:var(--label); font:var(--t-body); -webkit-appearance:none; appearance:none; }
+.edit-field > input::placeholder{ color:var(--label-2); }
+.edit .field{ margin:0; }
+.edit-loc{ margin:8px 2px 0; font:var(--t-footnote); color:var(--label-2); overflow-wrap:anywhere; }
+.edit-loc.is-err{ color:var(--danger); }
+.edit-btns{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px; }
+.edit-btns .ed-clear{ margin-left:0; padding:0 4px; }
+#eCancel{ margin-left:auto; }
+.info-ov{ font:var(--t-footnote); }
+/* Preview pin while editing: accent disc with a soft pulse (content on the map, no glass, no filters) */
+.pv-pin{ position:relative; width:30px; height:30px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 0 3px var(--pin-ring), 0 2px 8px rgba(0,0,0,.35); }
+.pv-pin::after{ content:""; position:absolute; inset:10px; border-radius:50%; background:#fff; }
+.pv-pin::before{ content:""; position:absolute; inset:-9px; border-radius:50%; border:2px solid var(--accent); animation:ej-pulse 1.6s var(--ease-out) infinite; }
+@keyframes ej-pulse{ 0%{ scale:.6; opacity:.9; } 100%{ scale:1.35; opacity:0; } }
+
+/* "Closed in Jobber — confirm they're done": an iOS-style alert, centred; scrim is a sibling (never an ancestor) */
+.pop-scrim{ position:fixed; inset:0; z-index:64; background:var(--scrim); opacity:0; transition:opacity 240ms var(--ease-quick); }
+.pop-scrim.is-on{ opacity:1; }
+.pop{ position:fixed; z-index:66; left:50%; top:50%; display:flex; flex-direction:column;
+  width:min(420px, calc(100% - 32px - var(--safe-l) - var(--safe-r)));
+  max-height:calc(100dvh - 48px - var(--safe-t) - var(--safe-b)); padding:18px 12px 12px; border-radius:var(--r-lg);
+  translate:-50% -50%; scale:.92; visibility:hidden; }
+.pop.is-open{ visibility:visible; scale:1; transition:scale var(--d-snappy) var(--spring-snappy); }
+/* closing: glass never takes opacity<1 (ADR-17), so the card scales away while its scrim fades (app.js hides it after) */
+.pop.is-closing{ visibility:visible; scale:.9; transition:scale 180ms var(--ease-quick); }
+.pop:focus{ outline:none; }                                  /* focused on open (the safe default), like an iOS alert */
+.pop > *{ position:relative; z-index:1; }
+.pop-head{ flex:none; padding:0 8px 12px; text-align:center; border-radius:10px; }
+.pop-title{ margin:0; font:var(--t-headline); }
+.pop-sub{ margin:4px 0 0; font:var(--t-footnote); color:var(--label-2); }
+.pop-sub b{ font-weight:600; color:var(--label); }
+.pop-list{ flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+.pop-list::-webkit-scrollbar{ display:none; }
+.pop-row{ padding:10px 12px; border-radius:var(--r-md); background:var(--fill-4);
+  transition:opacity 200ms var(--ease-out), scale 200ms var(--ease-out), height 260ms var(--ease-out),
+    padding 260ms var(--ease-out), margin 260ms var(--ease-out); }
+.pop-row + .pop-row{ margin-top:8px; }
+.pop-row.is-gone{ opacity:0; scale:.96; overflow:hidden; padding-top:0; padding-bottom:0; margin-top:0; }
+.pop-tx .t{ font:var(--t-subhead-em); overflow-wrap:anywhere; }
+.pop-tx .s{ font:var(--t-footnote); color:var(--label-2); font-variant-numeric:tabular-nums; }
+.pop-acts{ display:flex; gap:8px; margin-top:10px; }
+.pop-acts .btn{ flex:1 1 0; min-width:0; padding:0 10px; }
+.btn--ok{ background:var(--ok-thumb); color:var(--ok-thumb-ink); }
+.pop-foot{ flex:none; display:flex; justify-content:center; padding-top:12px; }
+.pop-foot .btn{ min-width:132px; }
+
+/* Settings -> Data -> Recently removed: a disclosure row, then one row per job (Restore or "Comes back at the next sync") */
+.set-disc{ display:flex; align-items:center; gap:8px; width:100%; min-height:44px; margin:-6px 0; font:var(--t-subhead); text-align:left; }
+.set-disc .n{ margin-left:auto; font:var(--t-subhead); color:var(--label-2); font-variant-numeric:tabular-nums; }
+.set-disc .ico{ width:16px; height:16px; color:var(--label-3); transition:rotate var(--d-snappy) var(--spring-snappy); }
+.set-disc[aria-expanded="true"] .ico{ rotate:90deg; }
+.rr-list{ margin-top:10px; }
+.rr-row{ display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; column-gap:10px; min-height:52px; padding:4px 0; }
+.rr-row + .rr-row{ box-shadow:inset 0 .5px 0 var(--separator); }
+.rr-tx{ min-width:0; }
+.rr-tx .t{ font:var(--t-subhead-em); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rr-tx .s{ font:var(--t-footnote); color:var(--label-2); }
+.rr-state{ max-width:9.5em; font:var(--t-caption); color:var(--label-2); text-align:right; }
+
+/* =====================================================================================================
+ * R-3 (builder "ui-part-2", r3-plan B + F): the route's start (shop switch, "Me"), the synced saved routes list and
+ * Settings -> Routes. Content only: fills, no glass.
+ * ===================================================================================================== */
+/* "Me": a round accent pin with the location arrow (stops stay rounded squares; the shop stays "S") */
+.rpin.is-me{ display:grid; place-items:center; border-radius:50%; }
+.rpin.is-me .ico{ width:14px; height:14px; fill:currentColor; stroke:none; translate:-1px 1px; }
+.rpin.is-me.is-skip{ background:var(--fill-1); color:var(--label-2); }
+/* Start row: [pin] [name / start] [shop switch] [location arrow in the handle's column] */
+.ed-loc{ position:relative; width:44px; height:44px; margin-right:-8px; display:grid; place-items:center; border-radius:10px; color:var(--accent); }
+.ed-loc .ico{ width:20px; height:20px; }
+.ed-loc.is-on .ico{ fill:currentColor; }
+.ed-loc .spinner{ width:16px; height:16px; }
+@media (hover:hover){ .ed-loc:hover{ background:var(--fill-4); } }
+.ed-row.is-start.is-skip .t{ font-weight:500; }
+.ed-tx .s.is-err{ color:var(--danger); white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+
+/* Saved routes: Mine / Team / On this device; a row = open (name + details) and a trash button */
+.sr-status{ margin:-2px 8px 6px; }
+.sr-list{ padding:0 4px; }
+.sr-h{ margin:10px 4px 4px; font:var(--t-footnote); font-weight:600; color:var(--label-2); }
+.sr-box{ border-radius:var(--r-md); background:var(--fill-4); overflow:hidden; }
+.sr-row{ display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; }
+.sr-row + .sr-row{ box-shadow:inset 0 .5px 0 var(--separator); }
+.sr-open{ display:grid; gap:1px; min-width:0; min-height:56px; padding:8px 4px 8px 14px; text-align:left; }
+.sr-open .t{ font:var(--t-subhead-em); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sr-open .s{ font:var(--t-footnote); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.sr-row.is-current .sr-open .t{ color:var(--accent); }
+.sr-row.is-pending .sr-open .s{ font-style:italic; }        /* "waiting to sync": the word is the cue (label-3 was too faint) */
+.sr-open:active{ background:var(--fill-3); }                 /* list-row feedback (no scale: a row inside a scrolling sheet) */
+@media (hover:hover){ .sr-open:hover, .sr-del:hover{ background:var(--fill-3); } }
+.sr-del{ width:44px; height:44px; margin-right:6px; display:grid; place-items:center; border-radius:10px; color:var(--label-2); }
+.sr-del .ico{ width:18px; height:18px; }
+@media (hover:hover){ .sr-del:hover{ color:var(--danger); } }
+.sr-banner{ display:grid; gap:8px; justify-items:start; margin:4px 0 8px; padding:12px 14px; border-radius:var(--r-md); background:var(--accent-soft); }
+.sr-banner p{ margin:0; font:var(--t-footnote); color:var(--label); }
+.sr-empty{ padding:6px 4px 12px; }
+
+/* Settings -> Routes -> Old route maps: link rows */
+.om-list{ margin-top:10px; }
+.om-row{ display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; column-gap:10px; min-height:52px; padding:4px 0;
+  color:var(--label); text-decoration:none; }
+.om-row + .om-row{ box-shadow:inset 0 .5px 0 var(--separator); }
+.om-tx{ display:grid; min-width:0; }
+.om-tx .t{ font:var(--t-subhead-em); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.om-tx .s{ font:var(--t-footnote); color:var(--label-2); }
+.om-row .ico{ width:16px; height:16px; color:var(--label-3); }
+@media (hover:hover){ .om-row:hover .om-tx .t{ color:var(--accent); } }
+
 /* ---------- Leaflet ---------- */
 .leaflet-control-attribution{ background:none !important; margin:0 7px 0 0 !important; max-width:calc(100vw - 32px);
   font:10px/1.3 var(--font); color:var(--label-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -634,4 +765,5 @@ a.card, .card.is-link{ cursor:pointer; }
   .pressable.is-pressed, .stage.is-dragging .stage-thumb, .jpin.is-selected{ scale:1 !important; }
   .ed-row.is-lifted, .ed-row.is-lifted.is-dropping{ transition-duration:.01ms !important; scale:1 !important; }
   .spinner, .is-spinning .ico{ animation-duration:1.5s !important; }
+  .pv-pin::before{ animation:none !important; opacity:.5; }
 }

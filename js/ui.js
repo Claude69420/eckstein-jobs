@@ -19,25 +19,49 @@
       filterbar = document.getElementById('filterbar'),
       listEl = document.getElementById('sheet'), detailEl = document.getElementById('detail'),
       toastEl = document.getElementById('toast');
-  var TITLES = { jobs: 'Jobs', routes: 'Routes', plan: 'Plan a Route', settings: 'Settings' };
-  var TAB_ORDER = ['jobs', 'routes', 'plan'];
+  // R-3: two tabs, Jobs · Route. The R-2 "Plan" view is now "Route"; the published-routes view is retired (its list is
+  // Settings -> Routes -> "Old route maps"). An old view name (a stale call) falls back to Jobs.
+  var TITLES = { jobs: 'Jobs', route: 'Route', settings: 'Settings' };
+  var TAB_ORDER = ['jobs', 'route'];
   var activeSheet = null, returnTo = null;
 
   /* ---------------- Press, glow and scale ---------------- */
+  /* R-3 (r3-plan D): a touch on a chip inside the sideways-scrolling chip row changes NOTHING at touchstart (no scale,
+   * no glass glow, no custom-property write on the accessory): like iOS's delaysContentTouches, the press shows after
+   * ~110 ms, or as a short flash on a quick tap, and never once the finger has moved (a swipe scrolls the row). */
+  var PRESS_DELAY = 110;
   document.addEventListener('pointerdown', function (e) {
     var t = e.target.closest && e.target.closest('.pressable'); if (!t || t.disabled) return;
     var g = t.closest('.glass'); if (g && g.classList.contains('sheet')) g = null;   // no glow on big sheets
-    if (g) {
-      var r = g.getBoundingClientRect();
-      g.style.setProperty('--px', (e.clientX - r.left) + 'px'); g.style.setProperty('--py', (e.clientY - r.top) + 'px');
-      g.classList.add('is-lit');
+    var lazy = e.pointerType === 'touch' && !!t.closest('.chips'), x0 = e.clientX, y0 = e.clientY, timer = 0, on = false;
+    function press() {
+      timer = 0; on = true;
+      if (g) {
+        var r = g.getBoundingClientRect();
+        g.style.setProperty('--px', (x0 - r.left) + 'px'); g.style.setProperty('--py', (y0 - r.top) + 'px');
+        g.classList.add('is-lit');
+      }
+      t.classList.add('is-pressed');
     }
-    t.classList.add('is-pressed');
+    function release() { on = false; t.classList.remove('is-pressed'); if (g) g.classList.remove('is-lit'); }
+    function done() {
+      removeEventListener('pointerup', up, true); removeEventListener('pointercancel', cancel, true);
+      removeEventListener('pointermove', move, true);
+    }
     function up() {
-      t.classList.remove('is-pressed'); if (g) g.classList.remove('is-lit');
-      removeEventListener('pointerup', up, true); removeEventListener('pointercancel', up, true);
+      done();
+      if (timer) { clearTimeout(timer); press(); setTimeout(release, 130); return; }   // quick tap: a short flash
+      release();
     }
-    addEventListener('pointerup', up, true); addEventListener('pointercancel', up, true);
+    function cancel() { done(); clearTimeout(timer); timer = 0; release(); }
+    function move(ev) {                                       // the finger moved: it is a swipe, not a press
+      var mx = ev.clientX - x0, my = ev.clientY - y0;           // iOS-like tap slop: 10 px in a straight line
+      if (ev.pointerId !== e.pointerId || mx * mx + my * my < 100) return;
+      cancel();
+    }
+    if (lazy) { timer = setTimeout(press, PRESS_DELAY); addEventListener('pointermove', move, true); }
+    else press();
+    addEventListener('pointerup', up, true); addEventListener('pointercancel', cancel, true);
   }, { passive: true });
 
   /* ---------------- Views ---------------- */
@@ -65,8 +89,8 @@
   if (window.ResizeObserver) new ResizeObserver(measureAcc).observe(acc);
 
   function currentView() { return listEl.dataset.view || 'jobs'; }
-  function showView(v) {                                     // v = jobs | routes | plan | settings
-    if (!TITLES[v]) v = 'jobs';
+  function showView(v) {                                     // v = jobs | route | settings
+    if (!Object.prototype.hasOwnProperty.call(TITLES, v)) v = 'jobs';
     listEl.dataset.view = v; listEl.setAttribute('aria-label', TITLES[v]);
     listEl.querySelector('.sheet-title').textContent = TITLES[v];
     listEl.querySelectorAll('.sheet-body > .view').forEach(function (n) { n.classList.toggle('on', n.id === 'v-' + v); });
@@ -203,10 +227,10 @@
       /* zoom-in / zoom-out / locate / reload are handled in app.js */
     }
   });
-  function openSettings(section) {                          // section 'stages' / 'pricing' scrolls to that Settings group
+  function openSettings(section) {                          // section 'stages' / 'pricing' / 'routes' scrolls to that Settings group
     if (DESK.matches) { if (!detailEl.hidden) closeDetail(); showView('settings'); }
     else openList('settings', 'large');
-    var hd = { stages: 'setStH', pricing: 'setPrH' }[section];
+    var hd = { stages: 'setStH', pricing: 'setPrH', routes: 'setRtH' }[section];
     hd = hd && document.getElementById(hd);
     if (!hd) return;
     requestAnimationFrame(function () {                       // scroll the sheet body only (never the page: iOS would pan)
@@ -225,6 +249,10 @@
   listEl.addEventListener('pointerdown', function (e) {
     if (DESK.matches || !e.target.closest || !e.target.closest(TEXT_SEL)) return;
     if (listSheet.isOpen() && listEl.dataset.detent !== 'large') listSheet.snap('large', true);
+  }, true);
+  detailEl.addEventListener('pointerdown', function (e) {    // R-3: the "Edit name & location" fields in the job sheet
+    if (DESK.matches || !e.target.closest || !e.target.closest(TEXT_SEL)) return;
+    if (detailSheet.isOpen() && detailEl.dataset.detent !== 'large') detailSheet.snap('large', true);
   }, true);
   document.getElementById('q').addEventListener('focus', function () { if (!DESK.matches && listSheet.isOpen()) listSheet.snap('large'); });
   document.addEventListener('focusout', function (e) {       // clear any pan iOS left behind once the keyboard closes
@@ -550,7 +578,9 @@
     collapse: function () { if (!DESK.matches && listSheet.isOpen()) listSheet.close(); },
     /* R-2 route editor: jump the iPhone list sheet to the large detent (no spring) before a text field takes focus */
     sheetLarge: function () { if (!DESK.matches && listSheet.isOpen() && listEl.dataset.detent !== 'large') listSheet.snap('large', true); },
-    listSheetOpen: function () { return DESK.matches ? !listEl.hidden : listSheet.isOpen(); }
+    listSheetOpen: function () { return DESK.matches ? !listEl.hidden : listSheet.isOpen(); },
+    /* R-3: iPhone job sheet detent ('medium' shows the map above it: the edit preview pin; 'large' before a text field) */
+    detailDetent: function (name, instant) { if (!DESK.matches && detailSheet.isOpen() && detailEl.dataset.detent !== name) detailSheet.snap(name, !!instant); }
   };
   window.openDetail = openDetail; window.closeDetail = closeDetail; window.toast = toast;
 })();

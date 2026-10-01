@@ -926,7 +926,10 @@ test('remote at/by are one line, bounded and free of bidi overrides', async () =
 /* ======================================= R-2 (v2) tests ======================================= */
 function docText2(stages, extra) { return JSON.stringify(Object.assign({ version: 2, stages: stages || {} }, extra || {}), null, 2) + '\n'; }
 const eff = (entry, hints) => Stages.effective(entry, hints);
-const DEFAULT_EFF = { stage: 'ready', assess: 'no', lane: { s: 'na' }, cut: 'na', asphalt: 'na', pavers: 'na', cleanup: 'todo', removed: false };
+const DEFAULT_EFF = { stage: 'ready', assess: 'no', lane: { s: 'na' }, cut: 'na', asphalt: 'na', pavers: 'na', cleanup: 'todo', removed: false,
+  name: null, loc: null };
+// The shared vectors (sync_jobs.py twin) predate R-3's name / loc, which the sync ignores: the app adds them as null.
+const withR3 = (e) => Object.assign({}, e, { name: null, loc: null });
 
 test('v2: ITEMS and LISTS definitions (keys, labels, values, value labels) and they are frozen', async () => {
   const I = Stages.ITEMS;
@@ -980,7 +983,7 @@ test('v2: effective() applies defaults, hints, and a stored value (even "na") al
   const full = { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
     asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, at: 'a', by: 'b' };
   assert.deepStrictEqual(eff(full), { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' },
-    cut: 'req', asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true });
+    cut: 'req', asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, name: null, loc: null });
   const e = eff(full);
   e.lane.s = 'na';
   assert.strictEqual(full.lane.s, 'booked', 'effective() returns copies');
@@ -1594,10 +1597,10 @@ test('v2: contract vectors (tests/fixtures/contract_vectors.json): effective, fi
   const doc = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'contract_vectors.json'), 'utf8'));
   assert.ok(doc.vectors.length >= 30, 'vectors loaded');
   assert.deepStrictEqual(Stages.LISTS.map((l) => l.key), ['unassessed', 'booklane', 'streetcuts', 'cleanup', 'asphalt', 'pavers']);
-  assert.deepStrictEqual(eff(null, null), doc.defaults);
+  assert.deepStrictEqual(eff(null, null), withR3(doc.defaults));
   for (const v of doc.vectors) {
     const e = eff(v.entry, v.hints);
-    assert.deepStrictEqual(e, v.effective, v.name + ': effective');
+    assert.deepStrictEqual(e, withR3(v.effective), v.name + ': effective');
     assert.strictEqual(Stages.fieldWorkDone(e), v.fieldWorkDone, v.name + ': fieldWorkDone');
     assert.strictEqual(Stages.keepWhenClosed(e), v.keepWhenClosed, v.name + ': keepWhenClosed');
     assert.deepStrictEqual(Stages.LISTS.filter((l) => l.predicate(e)).map((l) => l.key), v.lists, v.name + ': lists');
@@ -2063,13 +2066,13 @@ test('beta: shared overlay vectors (tests/fixtures/overlay_vectors.json; sync_jo
     const from = Stages._util.overlayWins(state, ov) ? 'overlay' : (state ? 'state' : 'none');
     assert.strictEqual(eff.stage, v.stage, v.name + ': stage');
     assert.strictEqual(from, v.stageFrom, v.name + ': stageFrom');
-    assert.deepStrictEqual(eff, v.effective, v.name + ': effective');
+    assert.deepStrictEqual(eff, withR3(v.effective), v.name + ': effective');
     assert.strictEqual(Stages.keepWhenClosed(eff), v.keepWhenClosed, v.name + ': keepWhenClosed');
     // The whole store agrees (read-only beta, both files served).
     const files = { 'stages-beta.json': v2Doc(v.state === null ? {} : { 1: v.state }), 'stages.json': v1Doc(v.overlay === null ? {} : { 1: v.overlay }) };
     const t = setupBeta({ files });
     const m = await t.store.load();
-    assert.deepStrictEqual(Stages.effective(m['1'] || null, null), v.effective, v.name + ': store view');
+    assert.deepStrictEqual(Stages.effective(m['1'] || null, null), withR3(v.effective), v.name + ': store view');
   }
 });
 
@@ -2586,6 +2589,182 @@ test('promotion: a version remembered from an earlier read never refuses a save 
   assert.deepStrictEqual(p.value, { status: 'saved' }, 'the FIRST move after the conversion saves');
   assert.strictEqual(puts(s.srv).length, 1);
   assert.strictEqual(JSON.parse(s.srv.text).stages['684'].stage, 'base');
+});
+
+/* ================================ R-3: name / loc, awaitingOk ================================ */
+const LOC = { lat: 49.8812, lon: -97.1834 };
+const LOC2 = { lat: 49.8815, lon: -97.1790 };
+/** The file as this app reads it (stage entries + top-level overrides merged). */
+const fileView = (srv) => Stages._util.parseDocText(srv.text).map;
+
+test('R-3: name / loc are sanitized from the file (one line <= 80; finite lat/lon inside Manitoba) and are content', async () => {
+  const clean = (v) => Stages._util.cleanEntry(v);
+  assert.deepStrictEqual(clean({ name: '  Portage\n& \u202eLipton ', loc: { lat: 49.8812, lon: -97.1834, alt: 5 }, at: 'a', by: 'b' }),
+    { name: 'Portage & Lipton', loc: LOC, at: 'a', by: 'b' });
+  assert.strictEqual(clean({ name: 'n'.repeat(200), at: 'a' }).name.length, 80);
+  assert.deepStrictEqual(Object.keys(clean({ loc: LOC, name: 'x', stage: 'base' })), ['stage', 'name', 'loc', 'at', 'by'], 'file key order');
+  for (const bad of [{ name: 5 }, { name: '' }, { name: ' \n\t ' }, { name: null }, { name: ['x'] }, { loc: null }, { loc: 'x' }, { loc: [49.9, -97.1] },
+    { loc: { lat: '49.9', lon: -97.1 } }, { loc: { lat: 49.9 } }, { loc: { lat: NaN, lon: -97.1 } }, { loc: { lat: 49.9, lon: -Infinity } },
+    { loc: { lat: 51, lon: -97.1 } }, { loc: { lat: 48.89, lon: -97.1 } }, { loc: { lat: 49.9, lon: -99.81 } }, { loc: { lat: 49.9, lon: -95.29 } },
+    { loc: { lat: 0, lon: 0 } }]) {
+    assert.strictEqual(clean(Object.assign({ at: 'a', by: 'b' }, bad)), null, JSON.stringify(bad));
+  }
+  assert.ok(clean({ loc: { lat: 48.9, lon: -99.8 } }) && clean({ loc: { lat: 50.9, lon: -95.3 } }), 'the box edges are inside');
+  const doc = Stages._util.parseDocText(JSON.stringify({ version: 2, stages: { 700: { name: 'Portage & Lipton', loc: LOC, at: 'x', by: 'y' },
+    701: { name: { toString: 1 }, loc: { lat: 99, lon: 0 } } } }));
+  assert.deepStrictEqual(Object.keys(doc.map), ['700'], 'an entry left with nothing is dropped');
+});
+
+test('R-3: effective() exposes name and loc (null by default, copies); gates and lists ignore them', async () => {
+  const e = Stages.effective({ name: 'Portage & Lipton', loc: LOC });
+  assert.strictEqual(e.name, 'Portage & Lipton');
+  assert.deepStrictEqual(e.loc, LOC);
+  const entry = { loc: { lat: LOC.lat, lon: LOC.lon } };
+  Stages.effective(entry).loc.lat = 1;
+  assert.strictEqual(entry.loc.lat, LOC.lat, 'effective() returns a copy');
+  assert.strictEqual(Stages.effective(null).name, null);
+  assert.strictEqual(Stages.effective(null).loc, null);
+  assert.strictEqual(Stages.effective({ name: 5, loc: { lat: 60, lon: 0 } }).name, null);
+  const named = Stages.effective({ name: 'X', loc: LOC });
+  assert.strictEqual(Stages.keepWhenClosed(named), false, 'a rename alone never keeps a closed job');
+  assert.strictEqual(Stages.fieldWorkDone(named), false);
+  assert.deepStrictEqual(Stages.canSetItem(null, 'name', 'X'), { ok: true });
+  assert.deepStrictEqual(Stages.canSetItem(null, 'loc', LOC), { ok: true });
+  assert.strictEqual(Stages.canSetItem(null, 'loc', { lat: 60, lon: -97 }).reason, 'invalid');
+  assert.ok(Stages.inManitoba(49.9, -97.1) && !Stages.inManitoba(49.9, -94));
+  assert.deepStrictEqual(Stages.MB_BOX, { latMin: 48.9, latMax: 50.9, lonMin: -99.8, lonMax: -95.3 });
+});
+
+test('R-3: awaitingOk(eff, job) = closed && !removed && !keepWhenClosed', async () => {
+  const E = (x) => Stages.effective(x);
+  const closed = { jobNumber: 700, closed: true }, open = { jobNumber: 700 };
+  assert.strictEqual(Stages.awaitingOk(E(null), closed), true, 'closed, nothing outstanding');
+  assert.strictEqual(Stages.awaitingOk(E({ stage: 'poured', cleanup: 'done' }), closed), true, 'field work done');
+  assert.strictEqual(Stages.awaitingOk(E(null), open), false, 'still active in Jobber');
+  assert.strictEqual(Stages.awaitingOk(E({ removed: true }), closed), false, 'already removed');
+  assert.strictEqual(Stages.awaitingOk(E({ stage: 'poured', cleanup: 'done', pavers: 'req' }), closed), false, 'pavers outstanding');
+  assert.strictEqual(Stages.awaitingOk(E({ stage: 'base' }), closed), false, 'work in progress');
+  assert.strictEqual(Stages.awaitingOk(Stages.effective(null, { asphalt: true }), closed), false, 'asphalt hint outstanding');
+  assert.strictEqual(Stages.awaitingOk(E({ name: 'Renamed' }), closed), true, 'a name alone changes nothing');
+  assert.strictEqual(Stages.awaitingOk(E(null), { closed: 'yes' }), true, 'truthy like the contract (!!job.closed)');
+  assert.strictEqual(Stages.awaitingOk(E(null), null), false);
+  assert.strictEqual(Stages.awaitingOk(null, closed), false);
+});
+
+test('R-3: set name / loc: commit parts name -> "...", loc -> moved / cleared; null clears; no-op makes no commit', async () => {
+  const { store, srv, clock } = setup({ key: true, stages: { '700': entry('base') } });
+  await store.load();
+  const a = track(store.set(700, { name: '  Portage & Lipton\n', loc: LOC }, { label: 'Portage Ave' }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(a.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[0].message, 'job #700 Portage Ave: name -> "Portage & Lipton", loc -> moved');
+  assert.deepStrictEqual(srv.stages()['700'], { stage: 'base', at: '2026-09-26T15:00:00Z', by: 'PC' }, 'no name / loc inside stage entries');
+  assert.deepStrictEqual(JSON.parse(srv.text).overrides, { '700': { name: 'Portage & Lipton', loc: LOC, at: '2026-09-26T15:00:00Z', by: 'PC' } });
+  assert.deepStrictEqual(fileView(srv)['700'], { stage: 'base', name: 'Portage & Lipton', loc: LOC, at: '2026-09-26T15:00:00Z', by: 'PC' });
+  assert.strictEqual(Stages.effective(store.peek()['700']).name, 'Portage & Lipton');
+  // the same values again: no commit
+  assert.deepStrictEqual(await store.set(700, { name: 'Portage & Lipton', loc: { lat: LOC.lat, lon: LOC.lon } }), { status: 'saved' });
+  assert.strictEqual(srv.commits.length, 1);
+  // a move to another point is still "moved"
+  const b = track(store.set(700, { loc: LOC2 }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(b.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[1].message, 'job #700: loc -> moved');
+  assert.deepStrictEqual(fileView(srv)['700'].loc, LOC2);
+  // Reset to Jobber: both null
+  const c = track(store.set(700, { name: null, loc: null }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(c.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[2].message, 'job #700: name -> cleared, loc -> cleared');
+  assert.deepStrictEqual(Object.keys(srv.stages()['700']), ['stage', 'at', 'by']);
+  assert.ok(!('overrides' in JSON.parse(srv.text)), 'no empty overrides object is written');
+  // a job whose only content is a name: stored; a blank name clears it and the entry goes
+  const d = track(store.set(701, { name: 'Lenore St' }));
+  await clock.advance(3000);
+  assert.ok(!('701' in srv.stages()), 'a name-only job has no stage entry');
+  assert.deepStrictEqual(JSON.parse(srv.text).overrides['701'], { name: 'Lenore St', at: '2026-09-26T15:00:09Z', by: 'PC' });
+  const e = track(store.set(701, { name: '   ' }));
+  await clock.advance(3000);
+  assert.strictEqual(d.state, 'resolved'); assert.strictEqual(e.state, 'resolved');
+  assert.ok(!('701' in fileView(srv)));
+  assert.strictEqual(srv.commits[4].message, 'job #701: name -> cleared');
+});
+
+test('R-3: invalid name / loc patches reject and never reach GitHub', async () => {
+  const { store, srv, clock } = setup({ key: true });
+  await store.load();
+  for (const p of [{ name: 5 }, { name: {} }, { name: ['x'] }, { loc: 'here' }, { loc: [49.9, -97.1] }, { loc: { lat: '49.9', lon: -97.1 } },
+    { loc: { lat: 49.9 } }, { loc: { lat: 60, lon: -97.1 } }, { loc: { lat: 49.9, lon: -97.1e9 } }, { loc: { lat: NaN, lon: NaN } }, { loc: true }]) {
+    await assert.rejects(store.set(700, p), (e) => e.code === 'http', JSON.stringify(p));
+  }
+  await clock.advance(5000);
+  assert.strictEqual(puts(srv).length, 0);
+});
+
+test('R-3: name / loc survive the offline queue and merge per field with another device\'s stage move', async () => {
+  const s = setup({ key: true, stages: { '700': entry('base') } });
+  await s.store.load();
+  s.srv.offline = true;
+  const p = track(s.store.set(700, { name: 'Portage & Lipton', loc: LOC }));
+  await s.clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'queued' });
+  const q = queueOf(s.storage);
+  assert.deepStrictEqual(q.changes['700'].fields, { name: 'Portage & Lipton', loc: LOC });
+  s.store.stop();
+  // restart from storage; another device moved the stage meanwhile
+  s.srv.offline = false;
+  s.srv.commitFile(docText({ '700': entry('prep', '2026-09-26T15:01:00Z', 'iPhone app') }, { version: 2 }), 'other device');
+  const s2 = Stages.createStore({ fetch: s.srv.fetch, storage: s.storage, now: s.clock.now, hostname: LIVE_HOST,
+    setTimeout: s.clock.setTimeout, clearTimeout: s.clock.clearTimeout, document: s.document, window: s.window, navigator: s.navigator });
+  assert.strictEqual(Stages.effective(s2.peek()['700']).name, 'Portage & Lipton', 'shown before it is saved');
+  await s2.load();
+  await s.clock.advance(10);
+  const st = fileView(s.srv)['700'];
+  assert.strictEqual(st.stage, 'prep', 'the other device\'s stage stays');
+  assert.strictEqual(st.name, 'Portage & Lipton');
+  assert.deepStrictEqual(st.loc, LOC);
+  assert.strictEqual(s2.status().pending, 0);
+});
+
+test('R-3: local mode stores name / loc; the beta overlay never touches them', async () => {
+  const l = setup({ hostname: 'localhost' });
+  assert.strictEqual(l.store.mode, 'local');
+  await l.store.set(700, { name: 'Local name', loc: LOC });
+  assert.deepStrictEqual(JSON.parse(l.storage.getItem('ej_stages')).overrides['700'].loc, LOC);
+  assert.deepStrictEqual(Stages.effective(l.store.peek()['700']).loc, LOC);
+  const merged = Stages.mergeEntry({ stage: 'base', name: 'Kept', loc: LOC, at: '2026-09-26T10:00:00Z', by: 'b' },
+    { stage: 'prep', at: '2026-09-26T12:00:00Z', by: 'v1' });
+  assert.deepStrictEqual([merged.stage, merged.name, merged.loc], ['prep', 'Kept', LOC]);
+});
+
+test('R-3: an R-2 page still open after the update keeps every name / loc when it saves a stage (overrides are top-level)', async () => {
+  // tests/fixtures/stages_r2.js = js/stages.js as shipped in R-2 (main @ bb19494): the code a resumed iPhone app or an
+  // open PC tab still runs on update day. Its cleanEntry drops unknown entry fields, but it keeps top-level fields.
+  const R2 = require(path.join(__dirname, 'fixtures', 'stages_r2.js'));
+  const r3text = Stages._util.serializeDoc({
+    '700': { name: 'Portage Ave & Lipton St', loc: LOC, at: '2026-09-26T14:00:00Z', by: 'Riley' },
+    '701': { stage: 'base', name: 'Renamed', at: '2026-09-26T14:01:00Z', by: 'Riley' } });
+  const srv = makeServer({});
+  srv.commitFile(r3text, 'R-3 device');
+  const clock = makeClock();
+  const storage = makeStorage({ ej_gh_token: KEY });
+  const r2 = R2.createStore({ fetch: srv.fetch, storage, now: clock.now, hostname: LIVE_HOST, setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout, document: makeTarget({ visibilityState: 'visible' }), window: makeTarget(),
+    navigator: { userAgent: 'iPhone', storage: { persist: () => Promise.resolve(true) } } });
+  await r2.load();
+  const p = track(r2.set(702, 'setup'));
+  await clock.advance(3000);
+  assert.deepStrictEqual(p.value, { status: 'saved' }, 'the R-2 page saved');
+  assert.ok(srv.commits.length >= 2 && puts(srv).length === 1);
+  const after = fileView(srv);
+  assert.strictEqual(after['702'].stage, 'setup');
+  assert.deepStrictEqual([after['700'].name, after['700'].loc], ['Portage Ave & Lipton St', LOC], 'a name-only job keeps its override');
+  assert.deepStrictEqual([after['701'].stage, after['701'].name], ['base', 'Renamed']);
+  r2.stop();
+  // and R-3 reads legacy inline name / loc (a local-mode file from before this change); overrides win over them
+  const legacy = Stages._util.parseDocText(JSON.stringify({ version: 2, stages: { 700: { stage: 'base', name: 'Inline', loc: LOC2, at: '2026-09-26T10:00:00Z', by: 'a' } },
+    overrides: { 700: { name: 'Override', at: '2026-09-26T11:00:00Z', by: 'b' }, 703: 'junk', 704: { loc: { lat: 60, lon: 0 } } } })).map;
+  assert.deepStrictEqual(legacy, { '700': { stage: 'base', name: 'Override', loc: LOC2, at: '2026-09-26T11:00:00Z', by: 'b' } });
 });
 
 /* ---------- run ---------- */

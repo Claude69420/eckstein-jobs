@@ -16,8 +16,9 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
     used to derive jobs.json `hints: {asphalt, pavers}`; it is never written anywhere.
   * THROTTLED / 429 responses are retried with backoff (Jobber's leaky bucket); if the job list still
     cannot be read completely the run FAILS, so a partial list never overwrites jobs.json.
-  * Carry-forward: a job that left Jobber's active list is kept (`closed: true`) when its stage entry says
-    work has started and field work is not done (keepWhenClosed). Kept jobs are written to
+  * Carry-forward: a job that left Jobber's active list is kept (`closed: true`); R-2 kept it only when its stage
+    entry said work had started and field work was not done (keepWhenClosed); since R-3 it is kept until removed in
+    the app (see R-3 below). Kept jobs are written to
     data/closed_jobs.json, NOT to jobs.json: jobs.json keeps exactly the R-1 membership (active + pending), so
     an R-1 client that never reads closed_jobs.json is unaffected; the R-2 app reads both (r2-plan §9).
     Single-file mode (DEFAULT since the version 2 promotion, BETA_STATE_FILE = None; r2-plan §9 "Promotion"):
@@ -32,8 +33,8 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
     than `sat`). A 404 on the beta file = no beta entries yet. If either file cannot be read (or looks reset:
     no entries at all while closed jobs were kept last run / the beta file had entries last run), every such
     job is kept.
-    Safety net beyond r2-plan §2a: an entry value this sync does not understand keeps the job when it could
-    have changed the decision (_UNCLEAR_CAN_KEEP), also for a v1 stage that would have won the merge.
+    Safety net beyond r2-plan §2a (R-2): an entry value this sync does not understand kept the job when it could
+    have changed the decision; since R-3 only removed: true drops a job, so such a value only names the log reason.
     Previous closed jobs come from the previous closed_jobs.json; `closed: true` records still in a previous
     jobs.json (the first R-2 build wrote them there) are migrated. An unreadable previous closed_jobs.json
     never stops the job sync: closed_jobs.json, closed_archive.json and prices.json are then left untouched. The
@@ -49,8 +50,8 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
     unreadable or reset-looking file keeps its previous count, so the reset guard stays armed on later runs.
   * Dropped jobs go to closed_archive.json for ARCHIVE_DAYS days (public data only, same fields as
     jobs.json + droppedAt/droppedWhy) and are re-evaluated every run, so fixing a mistaken stages.json
-    entry (an accidental "Remove from app" or slide back to Ready, a reset store) brings the job back.
-    A dropped job that was closed in Jobber is logged as a ::warning::.
+    entry (an accidental "Completed" / "Remove from app", a reset store) brings the job back.
+    Every dropped job is logged (a plain line since R-3: only a confirmed removal drops a job).
   * Line items missing for a job (query refused, lineItems null, or its page had errors): the previous
     run's hints are OR-ed in, so a degraded read never clears a hint.
   * Prices: env PRICE_KEY (base64 of 32 bytes) -> prices.json = AES-256-GCM ciphertext of
@@ -59,6 +60,23 @@ R-2 (docs/r2-plan.md §2a, §5, §6):
     carries its own `at` time, so the app can show its age) and one "prices: skipped (...)" line is logged,
     as a ::warning:: annotation whenever PRICE_KEY is set (so stale prices show in the Actions UI).
     The sync never fails because of prices.
+
+R-3 (docs/r3-plan.md A, E):
+  * Keep rule (replaces the R-2 keepWhenClosed drop above): a job that left Jobber's active list (not a pending
+    manual job) stays in closed_jobs.json (`closed: true`) until its stage entry has `removed: true` (the app's
+    "Completed" in the "Closed in Jobber — confirm they're done" popup, or "Completed — remove from app"). A
+    removed job goes to closed_archive.json (droppedWhy "removed in app", ARCHIVE_DAYS days); an archived job whose
+    entry is no longer removed (Settings -> Recently removed -> Restore) is restored at the next sync. keepWhenClosed
+    only names the log reason now ("work started, field work not done" vs "waiting for Completed in the app (...)").
+    Every read-failure / reset guard above still applies (unreadable or reset-looking stage file: keep every
+    candidate, archived jobs stay archived). Entry fields this sync does not use (`name`, `loc`, `at`, `by`, ...)
+    are ignored; an unknown `removed` value reads as not removed, so it can never drop a job.
+  * Range streets: a Jobber street WITHOUT a house number followed by "(A to B)" or "[A to B]" (e.g. "Portage Ave
+    (Lipton St to Lenore St)") becomes `street` "Main & A" plus `range` "A to B" (the key is only present on such
+    jobs). The pin is the midpoint of the geocoded "Main & A" and "Main & B" when both are found within RANGE_MAX_KM,
+    else "Main & A" (else "Main & B"). Geocode-cache keys keep the usual "<street>, <city>, MB, Canada" format;
+    street_overrides.json still wins (no range then). Streets with a house number ("905 Portage Ave (Arlington St
+    to Burnell St)") are cleaned as before.
 
 CLI:  python sync_jobs.py [--out DIR] [--data DIR]
   --out   where jobs.json, closed_jobs.json, meta.json, geocode_cache.json, closed_archive.json and prices.json
@@ -586,28 +604,28 @@ def merge_entries(state: dict, overlay: dict) -> dict:
 
 def overlay_unclear(state_entry, overlay_entry) -> bool:
     """A v1 entry this sync does not understand that WOULD have supplied the stage (newer than sat, or no sat).
-    The merge ignores it (contract), but carry-forward keeps the job to be safe (a newer v1 app?)."""
+    The merge ignores it (contract); since R-3 such a job is kept anyway (only removed: true drops a job), so this
+    only names the reason in the log."""
     o_stage, o_at, has_stage = _overlay_parts(overlay_entry)
     if overlay_entry is None or o_stage is not None: return False
     if not isinstance(overlay_entry, (dict, str)): return True
     return has_stage and _overlay_is_newer(state_entry, o_at)
 
-# Safety net on top of keepWhenClosed (r2-plan §2a): when the contract says drop, but a field whose value this
-# sync does not understand could have turned that drop into a keep, the job is kept (a newer app may have
-# written a new stage or item state). Only these fields can flip each drop reason: an unknown stage or cleanup
-# reads as not done, so it can never hide "field work done"; assess and removed never add work.
-_UNCLEAR_CAN_KEEP = {"field work done": {"asphalt", "pavers"},
-                     "no work in progress": {"stage", "cut", "lane", "asphalt", "pavers"}}
+# R-3 keep rule (docs/r3-plan.md A): a job that left Jobber's active list stays in the app until someone confirms it
+# in the app ("Completed" sets removed: true). keepWhenClosed no longer decides the drop; it only names the reason
+# (work still outstanding) and, in the app, decides which closed jobs wait for that confirmation (Stages.awaitingOk).
+REMOVED_WHY = "removed in app"
+AWAITING_WHY = "waiting for Completed in the app"
 
 def keep_decision(entry, hints) -> tuple[bool, str]:
+    """(keep, reason) for a job that left Jobber's active list. Only removed: true drops it. A value this sync does
+    not understand (a newer app, a hand-edit typo) is read as a default, so it can never drop a job (an unknown
+    `removed` value reads as not removed)."""
     eff = effective(entry, hints)
-    if eff["removed"]: return False, "removed from app"
+    if eff["removed"]: return False, REMOVED_WHY
     if keep_when_closed(eff): return True, "work started, field work not done"
-    reason = "field work done" if field_work_done(eff) else "no work in progress"
-    unknown = unclear_fields(entry)
-    if "*" in unknown or unknown & _UNCLEAR_CAN_KEEP[reason]:
-        return True, "stage entry not understood (kept to be safe)"
-    return False, reason
+    if entry_unclear(entry): return True, "stage entry not understood (kept to be safe)"
+    return True, f"{AWAITING_WHY} ({'field work done' if field_work_done(eff) else 'nothing outstanding'})"
 
 def _job_number(v) -> int | None:
     if isinstance(v, bool): return None
@@ -642,7 +660,7 @@ def stage_decision(jk: str, hints: dict, stage_entries: dict, overlay: dict | No
     if overlay is None: return keep_decision(s, hints)
     o = overlay.get(jk)
     keep, why = keep_decision(merge_entry(s, o), hints)
-    if not keep and why != "removed from app" and overlay_unclear(s, o):
+    if keep and why.startswith(AWAITING_WHY) and overlay_unclear(s, o):   # the log names the odd v1 value
         return True, f"{STAGES_FILE} entry not understood (kept to be safe)"
     return keep, why
 
@@ -655,9 +673,10 @@ def carry_forward(prev_jobs: list, active_numbers: set, pending_numbers: set,
     overlay = v1's stages.json entries in dual-file mode, merged per contract rule 2 (None = no overlay, the
     single-file default: stage_entries are evaluated as they are, items included).
     stage_entries None = a stage file unreadable -> keep every candidate (never drop on a read failure).
+    R-3 rule (keep_decision): a candidate is kept unless its entry has removed: true ("Completed" in the app).
     archived = records from closed_archive.json (jobs dropped on an earlier run). One comes back as soon as
-    its stage entry says keep again (an accidental "Remove from app" or slide back to Ready undone in
-    the stage file, a reset store restored); while a stage file is unreadable they stay archived.
+    its stage entry is no longer removed (Settings -> Recently removed -> Restore, a hand fix in the stage file, or
+    a job an older sync dropped under the R-2 rule); while a stage file is unreadable they stay archived.
     Returns (kept records, [(jobNumber, reason) for jobs dropped this run from the previous records])."""
     kept, dropped, seen = [], [], set()
     cands = [(r, False) for r in prev_jobs or []] + [(r, True) for r in archived or []]
@@ -840,6 +859,55 @@ def clean_addr(s: str) -> str:
     s = re.sub(r"\b(Rear Lane|Lane)\b", "", s, flags=re.I)
     return re.sub(r"\s+", " ", s).strip(" -,")
 
+# ---- range streets (r3-plan E): "Portage Ave (Lipton St to Lenore St)" / "Colony St [Portage Av to Webb Pl]".
+# clean_addr alone strips the brackets and leaves a bare "Portage Ave" (a generic pin somewhere on a long street).
+RANGE_RE = re.compile(r"^(?P<main>[^()\[\]]*?)\s*(?:\((?P<a1>[^()\[\]]*?)\s+to\s+(?P<b1>[^()\[\]]*?)\)"
+                      r"|\[(?P<a2>[^()\[\]]*?)\s+to\s+(?P<b2>[^()\[\]]*?)\])", re.I)
+# A house number ("905", "12A", "10-12") but not a numbered street ("1st St NW", "2nd Ave").
+HOUSE_NO_RE = re.compile(r"^\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?(?=[\s,]|$)")
+INTERSECTION_RE = re.compile(r"&|\band\b", re.I)
+RANGE_MAX_KM = 2.0   # both ends geocoded this close together -> pin at the midpoint; else at "Main & A"
+
+def _one_line(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip(" -,")
+
+def parse_range_street(street_raw: str | None) -> tuple[str, str, str] | None:
+    """A Jobber street WITHOUT a house number followed by "(A to B)" or "[A to B]" -> (main, A, B), else None.
+    main is cleaned like clean_addr; a main street that is already an intersection ("X and Y (...)") or a range of
+    house numbers ("(100 to 200)") is not a range street (the old clean_addr result stands)."""
+    s = (street_raw or "").replace("&amp;", "&")
+    m = RANGE_RE.match(s)
+    if not m: return None
+    main = clean_addr(m.group("main"))
+    a, b = _one_line(m.group("a1") or m.group("a2")), _one_line(m.group("b1") or m.group("b2"))
+    if not (main and a and b): return None
+    if any(HOUSE_NO_RE.match(x) for x in (main, a, b)) or INTERSECTION_RE.search(main): return None
+    return main, a, b
+
+def distance_km(p: list | tuple, q: list | tuple) -> float:
+    """Great-circle distance between two [lat, lon] points in km."""
+    la1, lo1, la2, lo2 = map(math.radians, (p[0], p[1], q[0], q[1]))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 2 * 6371.0088 * math.asin(min(1.0, math.sqrt(h)))
+
+def geocode_range(cache: dict, main: str, a: str, b: str, city: str, key: str | None) -> tuple[list | None, str, int]:
+    """Pin of a range street -> (coords, how, api_calls). Both ends go through geocode() (same cache keys:
+    "Main & A, City, MB, Canada"). Midpoint of "Main & A" and "Main & B" when both are found within RANGE_MAX_KM;
+    else "Main & A"; else (A not found) "Main & B"; else (neither) the street itself ("Main"), so the job keeps a pin."""
+    ca, hit_a = geocode(cache, f"{main} & {a}", city, key)
+    cb, hit_b = geocode(cache, f"{main} & {b}", city, key)
+    calls = int(hit_a) + int(hit_b)
+    if ca and cb and distance_km(ca, cb) <= RANGE_MAX_KM:
+        return [round((ca[0] + cb[0]) / 2, 7), round((ca[1] + cb[1]) / 2, 7)], "midpoint", calls
+    if ca: return ca, (f"{main} & {a} ({b} end too far)" if cb else f"{main} & {a}"), calls
+    if cb: return cb, f"{main} & {b} ({a} end not found)", calls
+    # neither end: the street's own pin (what the job had before range streets), so it stays mapped and can still be
+    # corrected in the app (Edit name & location)
+    cm, hit_m = geocode(cache, main, city, key)
+    calls += int(hit_m)
+    if cm: return cm, f"{main} (range ends not found, street pin)", calls
+    return None, "not found", calls
+
 def extract_permit(title: str) -> str:
     t = (title or "").replace("&amp;", "&")
     perms = re.findall(r"\b(?:M\d{5,6}|TM\d{4,6}|CTR\d+|\d{5,6})\b", t)
@@ -931,7 +999,9 @@ def main(argv: list[str] | None = None) -> int:
         jn = int(j["jobNumber"])
         street_raw = addr.get("street1") or ""
         city = addr.get("city") or "Winnipeg"
-        street = overrides.get(jn) or clean_addr(street_raw)
+        override = overrides.get(jn)
+        rng = None if override else parse_range_street(street_raw)   # a street override wins wholesale
+        street = override or (f"{rng[0]} & {rng[1]}" if rng else clean_addr(street_raw))
         li_conn = j.get("lineItems")
         # line items complete for this job? Not when the query had to leave them out, when Jobber nulled
         # them, or when this job's page came back with errors.
@@ -952,7 +1022,12 @@ def main(argv: list[str] | None = None) -> int:
             ph = prev_hints.get(jn) or {}
             rec["hints"] = {k: bool(rec["hints"][k] or ph.get(k) is True) for k in ("asphalt", "pavers")}
         totals[jn] = (_num(j.get("total")), _num(j.get("uninvoicedTotal")))
-        if street:
+        if rng:
+            rec["range"] = f"{rng[1]} to {rng[2]}"
+            c, how, calls = geocode_range(cache, rng[0], rng[1], rng[2], city, tkey); api_calls += calls
+            if c: rec["lat"], rec["lon"], rec["ok"] = c[0], c[1], True
+            print(f"range: #{jn} {street} ({rec['range']}) -> pin {how}")
+        elif street:
             c, hit = geocode(cache, street, city, tkey); api_calls += int(hit)
             if c: rec["lat"], rec["lon"], rec["ok"] = c[0], c[1], True
         jobs.append(rec)
@@ -973,7 +1048,7 @@ def main(argv: list[str] | None = None) -> int:
                      "pending": True, "hints": compute_hints(p.get("title", "")),
                      "lat": c[0] if c else None, "lon": c[1] if c else None, "ok": bool(c)})
 
-    # ---- carry-forward: jobs that left Jobber's active list but still have field work (r2-plan §1, §6.3, §9)
+    # ---- carry-forward: jobs that left Jobber's active list, kept until removed in the app (r3-plan A; r2-plan §9)
     # jobs.json keeps exactly the R-1 membership (active + pending); kept closed jobs go to closed_jobs.json.
     active_numbers = {r["jobNumber"] for r in jobs}
     now = datetime.now(timezone.utc)
@@ -1028,13 +1103,12 @@ def main(argv: list[str] | None = None) -> int:
                     refreshed = f", refresh failed ({type(e).__name__}; previous values kept)"
             print(f"carry-forward: kept #{rec['jobNumber']} closed in Jobber ({why}{refreshed})")
         was_closed = {_job_number(r.get("jobNumber")) for r in prev_closed_recs}
+        # Only removed: true drops a job (someone confirmed "Completed" in the app), so this is a normal log line, not
+        # a ::warning:: any more; never silent, and the record stays in the archive (Settings -> Recently removed).
         for jn, why in dropped:
-            if jn in was_closed:   # a closed job leaves the app: make it visible in the run summary
-                print(f"::warning::carry-forward: dropped #{jn}, which was closed in Jobber ({why}); its record stays in "
-                      f"data/{ARCHIVE_NAME} for {ARCHIVE_DAYS} days and comes back on the next sync if its stage entry "
-                      "is restored")
-            else:
-                print(f"carry-forward: dropped #{jn} ({why})")
+            closed_note = ", which was closed in Jobber" if jn in was_closed else ""
+            print(f"carry-forward: dropped #{jn}{closed_note} ({why}); its record stays in data/{ARCHIVE_NAME} for "
+                  f"{ARCHIVE_DAYS} days and comes back on the next sync if it is restored in the app")
         archive = next_archive(archived, cands, dropped, closed, active_numbers, pending_numbers, now.date())
         closed.sort(key=lambda r: -r["jobNumber"])
 

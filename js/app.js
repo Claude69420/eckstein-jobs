@@ -1,8 +1,10 @@
-/* app.js — Eckstein Jobs app logic (R-1, R-2): data, stages + job items, Client|Stage filters (stage + list chips),
+/* app.js — Eckstein Jobs app logic (R-1, R-2, R-3): data, stages + job items, Client|Stage filters (stage + list chips),
  * pins, list, detail + hover card, stage moves and item switches (gated), one-click stage/list route, the route
- * planner on the single map, published routes, Jobber totals behind the pricing key ($ toggle) and Settings.
+ * editor on the single map (Route tab; start at the shop, a site or "Me"), synced saved routes, the old published
+ * route maps (Settings), Jobber totals behind the pricing key ($ toggle) and Settings.
  * Plain ES2017 script, no modules. Needs Leaflet (L), js/tsp.js (TSP), js/stages.js (Stages) and js/ui.js (UI);
- * js/prices.js (Prices) is optional (without it the app simply shows no prices).
+ * js/prices.js (Prices) and js/routes.js (SavedRoutes) are optional (without them: no prices; routes saved on the
+ * device only).
  * Every job/route/geocoder string reaches the DOM through textContent or esc(); never raw innerHTML.
  */
 (function () {
@@ -118,15 +120,42 @@
     var e = STAGEMAP[x.jobNumber] || null;
     x.eff = HAS_STAGES ? SG.effective(e, x.hints, x.jobNumber) : Object.assign({}, NO_EFF, { stage: normStage(e) });
     x.stage = x.eff.stage; x._hay = null;
+    applyOverrides(x, x.eff);
     return x.eff;
   }
+  /* R-3 (r3-plan E): a job's name / pin override (stage entry fields "name" and "loc", shared with every device) is
+   * written onto the job record itself, so EVERY reader (list, pins, detail, hover card, search, route stops, Google Maps
+   * links, copy address) uses it without knowing about overrides. x._j keeps what Jobber / the sync said
+   * ({street, lat, lon, ok}); "Reset to Jobber" (name: null, loc: null) puts those back. */
+  var MB_BOX = { s: 48.9, n: 50.9, w: -99.8, e: -95.3 };      // the contract's Manitoba box (js/stages.js validates too)
+  function inMB(lat, lon) { return typeof lat === 'number' && typeof lon === 'number' && isFinite(lat) && isFinite(lon) && lat >= MB_BOX.s && lat <= MB_BOX.n && lon >= MB_BOX.w && lon <= MB_BOX.e; }
+  function effName(e) { return e && typeof e.name === 'string' && e.name.trim() ? e.name.trim().slice(0, 80) : null; }
+  function effLoc(e) { var l = e && e.loc; return l && inMB(l.lat, l.lon) ? l : null; }
+  function applyOverrides(x, e) {
+    var j = x._j || (x._j = { street: x.street, lat: x.lat, lon: x.lon, ok: x.ok });
+    var nm = effName(e), loc = effLoc(e);
+    x.street = nm || j.street; x.renamed = !!nm;
+    if (loc) { x.lat = loc.lat; x.lon = loc.lon; x.ok = true; x.moved = true; }
+    else { x.lat = j.lat; x.lon = j.lon; x.ok = j.ok; x.moved = false; }
+  }
+  function jobberName(x) { return (x._j ? x._j.street : x.street) || x.title || ''; }
+  function jobName(x) { return x.street || x.title || '(no address)'; }   // display name (override included)
   function effOf(x) { return x.eff || refreshEff(x); }
   function canMoveX(x, key) { return HAS_STAGES ? SG.canMove(STAGEMAP[x.jobNumber] || null, key, x.hints) : { ok: true }; }
   function canSetX(x, item, v) { return HAS_STAGES ? SG.canSetItem(STAGEMAP[x.jobNumber] || null, item, v, x.hints) : { ok: true }; }
   function itemShownX(x, item) {                              // + a BOOKED lane stays visible (dates editable, red once late) until Poured
     if (!HAS_STAGES) return false;
     var e = effOf(x);
-    return SG.itemShown(e, item) || (item === 'lane' && !!e.lane && e.lane.s === 'booked' && e.stage !== 'poured');
+    return SG.itemShown(e, item) || (item === 'lane' && !!e.lane && e.lane.s === 'booked' && e.stage !== 'poured') ||
+      (!!x.closed && (item === 'asphalt' || item === 'pavers'));   // R-3: a closed job can always be marked "pavers / asphalt still to do"
+  }
+  /* R-3 (r3-plan A): closed in Jobber, not removed, nothing outstanding -> waits for someone to confirm it is done.
+   * Stages.awaitingOk is the shared contract; the same rule inline when an older js/stages.js is cached. */
+  function awaitingOk(x) {
+    if (!x || !x.closed || !HAS_STAGES) return false;
+    var e = effOf(x);
+    if (SG.awaitingOk) { try { return !!SG.awaitingOk(e, x); } catch (err) { return false; } }
+    return !e.removed && !SG.keepWhenClosed(e);
   }
   function fieldDone(x) { return HAS_STAGES && SG.fieldWorkDone(effOf(x)); }
   function isHidden(x) { return !!x.closed && effOf(x).removed === true; }   // closed in Jobber AND removed: gone everywhere
@@ -187,7 +216,7 @@
   /* ---------------- state ---------------- */
   // ALL = every job in jobs.json; JOBS = the ones shown anywhere (not closed-in-Jobber + removed). byNum covers ALL.
   var ALL = [], JOBS = [], byNum = {}, dataLoaded = false, firstFit = false, stagesLoaded = false;
-  function rebuildVisible() { JOBS = ALL.filter(function (x) { x._hidden = isHidden(x); return !x._hidden; }); paintUpd(); }
+  function rebuildVisible() { JOBS = ALL.filter(function (x) { x._hidden = isHidden(x); return !x._hidden; }); paintUpd(); renderRemoved(); }
   var STAGEMAP = (function () {                               // cached last good stages: the first render is already right
     try { return (store.peek && store.peek()) || {}; } catch (e) { return {}; }
   })();
@@ -220,6 +249,8 @@
   function hay(x) {                                           // reset by refreshEff (x._hay = null) on every stage/item change
     if (x._hay == null) {
       var st = stageOf(x), e = effOf(x), bits = [x.street, x.permit, x.jobNumber, x.title, x.city, x.client, clientLabel(x), st.label, st.short];
+      if (x.renamed && x._j && x._j.street) bits.push(x._j.street);                        // R-3: the Jobber name still finds it
+      if (typeof x.range === 'string') bits.push(x.range);                                   // R-3: "Lipton St to Lenore St" (range street)
       LISTS.forEach(function (l) { if (l.predicate(e)) bits.push(l.label); });              // "book lane", "street cuts", "asphalt"…
       ITEMS.forEach(function (it) { if (itemVal(e, it.key) === 'req') bits.push(it.label + ' required'); });
       if (e.lane && e.lane.s === 'booked') bits.push('lane booked');
@@ -297,6 +328,7 @@
   }
   function updatePin(x) {
     var m = markers[x.jobNumber]; if (!m) return;
+    var ll = m.getLatLng(); if (x.ok && (ll.lat !== x.lat || ll.lng !== x.lon)) m.setLatLng([x.lat, x.lon]);   // R-3: a moved pin
     var s = pinSig(x);
     if (m._sig !== s) { m._sig = s; m.setIcon(iconFor(x)); }
     labelMarker(m, x); markSelected(m);
@@ -416,7 +448,7 @@
   }
   function chipLabel(label, n, sm) { return label + ', ' + plural(n, 'job') + (sm && sm.n ? ', Jobber total ' + fmtP(sm.v) : ''); }
   function listChipTitle(k, sm) { return LIST[k].label + ' list' + (sm && sm.n ? ' · Jobber total ' + fmtP(sm.v) : ''); }
-  function revealSelectedChip() {
+  function revealSelectedChip() {                             // only when the row is (re)placed: first data, accessory <-> sheet
     var c = chipsEl.querySelector('.chip[aria-pressed="true"]:not([data-k=""])');
     if (!c || DESK.matches || chipsEl.scrollWidth <= chipsEl.clientWidth) return;
     var cb = c.getBoundingClientRect(), pb = chipsEl.getBoundingClientRect();
@@ -445,10 +477,20 @@
   function selTitle() {
     return sel().map(function (k) { return MODE === 'stage' ? keyLabel(k) : (LABEL[k] || k); }).join(' + ');
   }
+  /* R-3 (r3-plan C): "N jobs · $total" next to the count = every shown job (All, one chip or several, plus search), not
+   * one group: the per-chip / per-group totals only ever covered one stage, list or client. Prices shown only. */
+  function shownJobs() { return Object.keys(shownSet).map(function (jn) { return byNum[jn]; }).filter(Boolean); }
   function updateCount() {
     if (!dataLoaded) return;
-    var shown = Object.keys(shownSet).length;
-    countEl.textContent = plural(shown, 'job');
+    var list = shownJobs(), sm = sumPrices(list);
+    countEl.textContent = '';
+    countEl.appendChild(h('span', { class: 'c-n', text: plural(list.length, 'job') }));
+    if (sm.n) {                                               // stacked on screen; ", " keeps VoiceOver from running them together
+      countEl.appendChild(h('span', { class: 'sr-only', text: ', Jobber total ' }));
+      countEl.appendChild(h('span', { class: 'c-v', text: fmtPS(sm.v) }));
+    }
+    countEl.title = sm.n ? 'Jobber total ' + fmtP(sm.v) + ' (' + plural(sm.n, 'priced job') + ' of ' + list.length + ')' : '';
+    countEl.classList.toggle('has-v', !!sm.n);
     var c = routeCounts(currentJobs()), n = c.wpg || c.out;  // the number the route will actually contain
     var any = sel().length > 0;                               // nothing picked: the main half opens the stage menu too
     routeBtn.textContent = any ? 'Route ' + n : 'Route';
@@ -514,6 +556,7 @@
     var r = rows[x.jobNumber]; if (!r) return;
     r.replaceChild(rowLead(x), r.firstChild);
     var mid = r.children[1]; mid.replaceChild(rowSub(x), mid.lastChild);
+    mid.firstChild.textContent = jobName(x);                  // R-3: a rename shows at once
     r.replaceChild(rowTrail(x), r.lastChild);
     r.setAttribute('aria-label', rowAria(x));
   }
@@ -554,29 +597,111 @@
   });
 
   /* ---------------- render ---------------- */
-  function renderAll() {
+  /* Every scroll position of the chip row (and of the iPhone sheet's sideways band inside it) survives a re-render.
+   * opts.reveal: also bring the first selected chip into view (first data load only). R-3 (r3-plan D): a chip tap never
+   * re-renders the row at all (refilter), so the row never jumps back to the first selected chip. */
+  function chipScrolls() {
+    var band = chipsEl.querySelector('.chip-set--lists');
+    return [chipsEl.scrollLeft, band ? band.scrollLeft : 0];
+  }
+  function renderAll(opts) {
     var shown = currentJobs();
     shownSet = {}; shown.forEach(function (x) { shownSet[x.jobNumber] = true; });
-    var sl = chipsEl.scrollLeft;
+    var sl = chipScrolls();
     syncModeSeg(); renderChips(); syncMarkers(); renderList(shown); updateCount();
-    chipsEl.scrollLeft = sl; revealSelectedChip();
+    chipsEl.scrollLeft = sl[0];
+    var band = chipsEl.querySelector('.chip-set--lists'); if (band) band.scrollLeft = sl[1];
+    if (opts && opts.reveal) revealSelectedChip();
+  }
+  function paintChipStates() {                                // aria-pressed in place (no DOM rebuild, no scroll change)
+    var s = sel();
+    chipsEl.querySelectorAll('.chip[data-k]').forEach(function (c) {
+      var k = c.getAttribute('data-k');
+      c.setAttribute('aria-pressed', (k ? s.indexOf(k) >= 0 : !s.length) ? 'true' : 'false');
+    });
+  }
+  function refilter() {                                       // the selection changed: list, pins, count; chips updated in place
+    var shown = currentJobs();
+    shownSet = {}; shown.forEach(function (x) { shownSet[x.jobNumber] = true; });
+    syncMarkers(); renderList(shown); updateCount();
+    if (MODE === 'stage' && listChipKeys().join() !== listChipSig) renderAll();   // an empty list chip was switched off: it goes
+    else paintChipStates();
   }
   var qT = 0;
-  $('q').addEventListener('input', function () { cancelAnimationFrame(qT); qT = requestAnimationFrame(renderAll); });
+  $('q').addEventListener('input', function () { cancelAnimationFrame(qT); qT = requestAnimationFrame(function () { renderAll(); }); });
 
   function ensureJobsView() { if (UI.currentView() !== 'jobs') UI.showView('jobs'); }
   chipsEl.addEventListener('click', function (e) {
     var b = e.target.closest('.chip'); if (!b) return;
+    if (chipSwiped()) return;                                 // R-3: the finger swiped the row: never a toggle
     if (b.hasAttribute('data-q')) { $('q').value = ''; renderAll(); return; }   // clear the search
     var k = b.getAttribute('data-k'), s = SEL[MODE];
     if (!k) s.length = 0;                                     // All resets
     else { var i = s.indexOf(k); if (i >= 0) s.splice(i, 1); else s.push(k); }   // solo first (All -> [k]), then add/remove
-    saveFilter(); ensureJobsView(); renderAll(); fitVisible();
+    saveFilter(); ensureJobsView(); refilter(); fitVisible();
   });
+
+  /* R-3 (r3-plan D) iPhone: a sideways swipe that STARTS ON a chip scrolls the row, like iOS. The row scrolls natively
+   * (touch-action pan-x on the row, the chips and their parts, components.css); nothing changes at touchstart (the press
+   * shows late, js/ui.js). Belt and braces for WebKit: only if the finger has clearly moved sideways (24 px), the row is
+   * not at the end it is being pulled past (iOS rubber-bands there) and NO native scroll has happened since the touch
+   * began, this passive handler moves the row (with a short glide on release). A tap keeps iOS's slop (10 px, straight
+   * line); a touch that really swiped (the row scrolled, or 24 px sideways) never toggles a chip. */
+  var chipT = null, chipSwipeAt = 0, glideRaf = 0;
+  function chipSwiped() { return (chipT && chipT.swiped) || Date.now() - chipSwipeAt < 400; }
+  function hScroller(t) {                                     // the nearest sideways-scrollable box from the touch up to the row
+    for (var n = t; n && n.nodeType === 1; n = n.parentNode) {
+      if (n.scrollWidth > n.clientWidth + 1) { var ox = getComputedStyle(n).overflowX; if (ox === 'auto' || ox === 'scroll') return n; }
+      if (n === chipsEl) break;
+    }
+    return null;
+  }
+  function chipNativeScroll() { if (chipT && !chipT.js) chipT.native = true; }
+  chipsEl.addEventListener('touchstart', function (e) {
+    cancelAnimationFrame(glideRaf);
+    if (chipT && chipT.sc) chipT.sc.removeEventListener('scroll', chipNativeScroll);
+    if (e.touches.length !== 1) { chipT = null; return; }
+    var t = e.touches[0], sc = hScroller(e.target);
+    chipT = { x0: t.clientX, y0: t.clientY, sc: sc, sl0: sc ? sc.scrollLeft : 0, swiped: false, js: false, native: false, v: [{ x: t.clientX, t: e.timeStamp }] };
+    if (sc) sc.addEventListener('scroll', chipNativeScroll, { passive: true });
+  }, { passive: true });
+  chipsEl.addEventListener('touchmove', function (e) {
+    var c = chipT; if (!c || e.touches.length !== 1) return;
+    var t = e.touches[0], dx = t.clientX - c.x0, dy = t.clientY - c.y0;
+    if (!c.swiped && (Math.abs(dx) >= 24 || (c.sc && c.sc.scrollLeft !== c.sl0))) c.swiped = true;   // a real swipe (jitter is not)
+    if (c.swiped) chipSwipeAt = Date.now();
+    c.v.push({ x: t.clientX, t: e.timeStamp }); if (c.v.length > 5) c.v.shift();
+    var sc = c.sc; if (!sc) return;
+    if (!c.js && !c.native && Math.abs(dx) >= 24 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      var max = sc.scrollWidth - sc.clientWidth, atEnd = (dx > 0 && c.sl0 <= 0) || (dx < 0 && c.sl0 >= max - 1);
+      if (!atEnd) c.js = true;                                // native pan never started on this chip
+    }
+    if (c.js) sc.scrollLeft = c.sl0 - dx;
+  }, { passive: true });
+  function chipTouchEnd() {
+    var c = chipT; chipT = null; if (!c) return;
+    if (c.sc) c.sc.removeEventListener('scroll', chipNativeScroll);
+    if (c.swiped) chipSwipeAt = Date.now();
+    if (!c.js || c.v.length < 2) return;
+    var a = c.v[0], b = c.v[c.v.length - 1], v = -(b.x - a.x) / Math.max(8, b.t - a.t), sc = c.sc, last = performance.now();
+    function glide(now) {                                     // px/ms, decays like a light flick
+      var dt = Math.min(40, now - last); last = now;
+      var before = sc.scrollLeft; sc.scrollLeft = before + v * dt; v *= Math.pow(0.994, dt);
+      if (Math.abs(v) > 0.03 && sc.scrollLeft !== before) glideRaf = requestAnimationFrame(glide);
+    }
+    if (Math.abs(v) > 0.1) glideRaf = requestAnimationFrame(glide);
+  }
+  chipsEl.addEventListener('touchend', chipTouchEnd, { passive: true });
+  chipsEl.addEventListener('touchcancel', function () {
+    if (chipT && chipT.sc) chipT.sc.removeEventListener('scroll', chipNativeScroll);
+    if (chipT && chipT.swiped) chipSwipeAt = Date.now();
+    chipT = null;
+  }, { passive: true });
   modeEl.addEventListener('click', function (e) {
     var b = e.target.closest('[data-mode]'); if (!b || b.dataset.mode === MODE) return;
     MODE = b.dataset.mode === 'stage' ? 'stage' : 'client'; saveFilter();
     ensureJobsView(); renderAll();
+    chipsEl.scrollLeft = 0; revealSelectedChip();             // another set of chips: start at its beginning
     if (sel().length) fitVisible();
   });
 
@@ -601,34 +726,46 @@
     if (x && rows[x.jobNumber]) rows[x.jobNumber].classList.add('is-selected');
   }
   window.clearSelection = function (scrollToRow) {
-    var jn = selectedJn; detailJn = null; select(null); paintDetailPrice(null);   // no price text left in a closed sheet
+    var jn = selectedJn; closeEditor(); detailJn = null; select(null); paintDetailPrice(null);   // no price text left in a closed sheet
+    if (popResume) { popResume = false; setTimeout(resumePop, 350); }   // R-3: back from "Still needs work"
     if (scrollToRow && jn != null && rows[jn]) { rows[jn].classList.add('is-selected'); try { rows[jn].scrollIntoView({ block: 'nearest' }); } catch (e) {} setTimeout(function () { if (rows[jn] && selectedJn == null) rows[jn].classList.remove('is-selected'); }, 1200); }
   };
   function lockSliders() {
     var ro = !writable();
     detailSlider.lock(ro); cardSlider.lock(ro);
     $('dLock').hidden = !ro; $('mcLock').hidden = !ro;
+    $('dEditBtn').hidden = ro || !HAS_STAGES;                  // R-3: rename / move the pin needs the edit key
+    if (ro) closeEditor();
     if (detailJn != null && byNum[detailJn]) paintItems(byNum[detailJn]);
   }
   window.fillDetail = function (x) {                          // static parts once per open; live parts in refreshDetail
     var same = detailJn === x.jobNumber;                      // a data reload refills the job already shown
+    if (!same) closeEditor();                                 // R-3: an open "Edit name & location" belongs to the other job
     select(x); detailJn = x.jobNumber;
-    $('dTitle').textContent = x.street || x.title || '(no address)';
+    paintDetailPrice(x);
+    if (!same) itemsJn = null;                                // rebuild the item rows only for another job (never under a focused date)
+    refreshDetail(x); lockSliders();
+  };
+  /* Title, sub line, Directions / Add to route and the info lines: repainted on every refresh, so a rename or a moved
+   * pin (R-3, name / loc in the stage entry, from this device or another) shows at once. */
+  function paintDetailHead(x) {
+    $('dTitle').textContent = jobName(x);
     $('dSub').textContent = [clientLabel(x), '#' + x.jobNumber, x.permit ? 'Permit ' + x.permit : ''].filter(Boolean).join(' · ');
     var dir = $('dDir'), la = Number(x.lat), lo = Number(x.lon);
     if (x.ok && isFinite(la) && isFinite(lo)) { dir.href = 'https://www.google.com/maps/dir/?api=1&destination=' + la + ',' + lo; dir.removeAttribute('aria-disabled'); dir.removeAttribute('tabindex'); }
     else { dir.href = '#'; dir.setAttribute('aria-disabled', 'true'); dir.setAttribute('tabindex', '-1'); }
     $('dAdd').disabled = !mappedJob(x);
-    paintDetailPrice(x);
     var info = $('dInfo'); info.textContent = '';
     info.appendChild(h('div', { class: 'info-line', text: x.title || '' }));
     info.appendChild(h('div', { class: 'info-line', text: [x.street, x.city].filter(Boolean).join(', ') + (x.client ? ' · ' + x.client : '') }));
+    if (typeof x.range === 'string' && x.range) info.appendChild(h('div', { class: 'info-line', text: 'Along the street from ' + x.range.slice(0, 120) }));   // R-3: the job's extent (sync "range")
+    var ov = [x.renamed ? 'Renamed (Jobber: ' + (jobberName(x) || 'no address') + ')' : '', x.moved ? 'Pin moved in the app' : ''].filter(Boolean).join(' · ');
+    if (ov) info.appendChild(h('div', { class: 'info-line info-ov', text: ov }));
     info.appendChild(h('div', { class: 'info-line', id: 'dStageInfo' }));
-    if (!same) itemsJn = null;                                // rebuild the item rows only for another job (never under a focused date)
-    refreshDetail(x); lockSliders();
-  };
+  }
   function refreshDetail(x) {                                 // tags, slider, items, remove box, "Updated …": in place
     if (detailJn !== x.jobNumber) return;
+    paintDetailHead(x);
     var tags = $('dTags'); tags.textContent = '';
     if (x.pending) tags.appendChild(h('span', { class: 'tag pend', text: 'PENDING · not in Jobber yet' }));
     if (x.unscheduled) tags.appendChild(h('span', { class: 'tag uns', text: 'UNSCHEDULED' }));
@@ -797,7 +934,7 @@
     var r = key && itemRows[key]; if (!r || r.row.hidden) return;
     var body = $('detail').querySelector('.sheet-body');      // scroll the sheet body only (never the page: iOS would pan)
     var rb = r.row.getBoundingClientRect(), bb = body.getBoundingClientRect();
-    if (rb.bottom > bb.bottom - 12 || rb.top < bb.top) body.scrollTop = Math.max(0, body.scrollTop + rb.top - bb.top - Math.max(16, bb.height / 3));
+    if (rb.bottom > Math.min(bb.bottom, innerHeight) - 12 || rb.top < bb.top) body.scrollTop = Math.max(0, body.scrollTop + rb.top - bb.top - Math.max(16, bb.height / 3));
     flagEl(r.row);
   }
   function blockedMove(x, key, res) {
@@ -808,16 +945,17 @@
     toast(msg, function () { closeCard(true); openJob(x, false); setTimeout(function () { flagItem(item); }, DESK.matches ? 60 : 450); }, { action: 'Details' });
   }
   function focusJob(x, zoomIn) { if (x.ok) focusPoint(x.lat, x.lon, zoomIn); }
-  function focusPoint(lat, lon, zoomIn) {                     // bring a point into the part of the map not covered by glass
+  function focusPoint(lat, lon, zoomIn, close) {              // bring a point into the part of the map not covered by glass
+                                                              // close (R-3 edit preview): always centre it, street level
     if (!HAS_MAP) return;
     var ll = L.latLng(lat, lon), pad = UI.mapPadding(), size = map.getSize();
     var l = pad.paddingTopLeft[0], t = pad.paddingTopLeft[1], r = pad.paddingBottomRight[0], b = pad.paddingBottomRight[1];
     if (size.x - l - r < 40 || size.y - t - b < 40) { l = t = r = b = 0; }
     var cur = map.getZoom(), cp = map.latLngToContainerPoint(ll);
     var visible = cp.x >= l && cp.x <= size.x - r && cp.y >= t && cp.y <= size.y - b;
-    if (visible) return;                                      // never move (or zoom) the map under a visible pin
+    if (visible && !close) return;                            // never move (or zoom) the map under a visible pin
     // A pin tap keeps the zoom (Riley moves many jobs in a row); a list row whose pin is off-screen may zoom in.
-    var z = zoomIn && cur < 14 ? 15 : cur;
+    var z = close ? Math.max(cur, 16) : zoomIn && cur < 14 ? 15 : cur;
     var want = L.point((l + size.x - r) / 2, (t + size.y - b) / 2);           // centre of the visible area
     var c = map.project(ll, z).subtract(want.subtract(size.divideBy(2)));
     map.setView(map.unproject(c, z), z, { animate: true });
@@ -828,7 +966,7 @@
   }
   $('dAdd').addEventListener('click', function () {
     var x = byNum[detailJn]; if (!mappedJob(x)) return;
-    toast(addJobToRoute(x), function () { UI.openList('plan', 'medium'); }, { action: 'Open' });   // R-2: into the route editor
+    toast(addJobToRoute(x), function () { UI.openList('route', 'medium'); }, { action: 'Open' });   // R-2: into the route editor
   });
   $('dCopy').addEventListener('click', function () {
     var x = byNum[detailJn]; if (!x) return;
@@ -836,11 +974,11 @@
     copyText(text).then(function () { toast('Address copied'); }, function () { toast('Couldn’t copy', null, { error: true }); });
   });
   $('dDir').addEventListener('click', function (e) { if (this.getAttribute('aria-disabled') === 'true') e.preventDefault(); });
-  $('dRemove').addEventListener('click', function () {        // R-2: only offered for jobs closed in Jobber
+  $('dRemove').addEventListener('click', function () {        // R-2: only offered for jobs closed in Jobber; R-3 wording
     var x = byNum[detailJn]; if (!x || !x.closed) return;
     if (!writable()) { readOnlyToast(); return; }
-    if (!confirm('Remove “' + (x.street || x.title || '#' + x.jobNumber) + '” from the app? It is closed in Jobber; it disappears on every device.')) return;
-    changeJob(x, { removed: true }, { msg: 'Removed from app' });
+    if (!confirm('Mark “' + jobName(x) + '” completed and remove it from the app? It disappears on every device (Settings → Data → Recently removed can bring it back for 60 days).')) return;
+    changeJob(x, { removed: true }, { msg: 'Completed — removed from app' });
   });
   function copyText(t) {
     if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
@@ -849,6 +987,106 @@
         var ok = document.execCommand('copy'); document.body.removeChild(ta); if (ok) res(); else rej(new Error('copy')); } catch (e) { rej(e); }
     });
   }
+
+  /* ---------------- R-3 "Edit name & location" (r3-plan E) ----------------
+   * The pencil in the job sheet (writable devices) swaps the sheet's cards for one inline card: Name (<= 80 chars) and a
+   * map-pin search (the route editor's Esri geocoder, Manitoba extent) that previews the match on the map. Save stores
+   * {name, loc} in the job's stage entry through changeJob (optimistic, Undo, shared); Reset to Jobber stores
+   * {name: null, loc: null}. Only changed fields are sent. The override then shows everywhere (applyOverrides). */
+  var edJob = null, edLoc = null, pvMarker = null, findBusy = false;
+  function editorOpen() { return edJob != null; }
+  function normName(v) { return String(v || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80); }
+  function paintEditLoc(msg, kind) {
+    var el = $('eLoc'), x = byNum[edJob]; if (!x) return;
+    el.className = 'edit-loc' + (kind ? ' is-' + kind : '');
+    el.textContent = msg || (edLoc ? 'New pin: ' + (edLoc.match || edLoc.lat.toFixed(5) + ', ' + edLoc.lon.toFixed(5))
+      : x.moved ? 'Pin moved in the app' : x._j && x._j.ok ? 'Pin from Jobber' : 'No pin yet: search for the address');
+  }
+  function paintEditReset() {
+    var x = byNum[edJob], e = x ? STAGEMAP[x.jobNumber] : null;
+    $('eReset').hidden = !(effName(e) || effLoc(e));
+  }
+  function showPreview(lat, lon) {
+    if (!HAS_MAP) return;
+    var icon = L.divIcon({ html: '<div class="pv-pin"></div>', className: '', iconSize: [30, 30], iconAnchor: [15, 15] });
+    if (!pvMarker) pvMarker = L.marker([lat, lon], { icon: icon, interactive: false, keyboard: false, zIndexOffset: 3000 }).addTo(map);
+    else { pvMarker.setLatLng([lat, lon]); if (!map.hasLayer(pvMarker)) pvMarker.addTo(map); }
+  }
+  function hidePreview() { if (pvMarker && HAS_MAP && map.hasLayer(pvMarker)) map.removeLayer(pvMarker); }
+  function openEditor() {
+    var x = byNum[detailJn]; if (!x) return;
+    if (!writable()) { readOnlyToast(); return; }
+    edJob = x.jobNumber; edLoc = null;
+    $('eName').value = jobName(x);                            // the name shown now, ready to edit (unchanged = Jobber's)
+    $('eName').placeholder = jobberName(x) || 'Job name';
+    $('eAddr').value = ''; paintEditLoc(); paintEditReset();
+    $('detail').classList.add('is-editing'); $('dEdit').hidden = false;
+    $('dEditBtn').setAttribute('aria-expanded', 'true');
+    var body = $('detail').querySelector('.sheet-body'); if (body) body.scrollTop = 0;
+    if (FINE.matches) { try { $('eName').focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function closeEditor() {
+    if (edJob == null) return;
+    edJob = null; edLoc = null; hidePreview();
+    $('detail').classList.remove('is-editing'); $('dEdit').hidden = true;
+    $('dEditBtn').setAttribute('aria-expanded', 'false');
+    var a = document.activeElement; if (a && $('dEdit').contains(a)) try { a.blur(); } catch (e) {}
+  }
+  var PIN_TYPES = ['PointAddress', 'Subaddress', 'StreetAddress', 'StreetAddressExt', 'StreetInt', 'BuildingName', 'POI', 'ParcelAddress'];
+  function saveInView() {                                     // small iPhones: at the medium detent Save can sit below the screen
+    if (DESK.matches || edJob == null) return;
+    var body = $('detail').querySelector('.sheet-body'), btn = $('eSave'); if (!body || !btn) return;
+    var over = btn.getBoundingClientRect().bottom - (innerHeight - 12);
+    if (over > 0) body.scrollTop = body.scrollTop + over;
+  }
+  function findPin() {
+    var x = byNum[edJob], q = $('eAddr').value.trim(); if (!x || findBusy) return;
+    if (q.length < 3) { paintEditLoc('Type at least 3 letters of the address', 'err'); return; }
+    findBusy = true; $('eFind').disabled = true; paintEditLoc('Searching…');
+    geocode(q).then(function (g) {
+      if (edJob !== x.jobNumber) return;
+      if (!inMB(g.lat, g.lon)) throw new Error('outside');
+      // A pin must be a real place: a city / street-level fallback (the geocoder's answer to a typo, or to a street
+      // with no number) is the generic pin this editor exists to fix.
+      if (PIN_TYPES.indexOf(g.type) < 0 || g.score < 85) throw new Error('vague');
+      edLoc = { lat: +g.lat.toFixed(6), lon: +g.lon.toFixed(6), match: g.match || q };
+      paintEditLoc();
+      showPreview(edLoc.lat, edLoc.lon);
+      try { $('eAddr').blur(); } catch (e) {}                 // iPhone: keyboard down, sheet to medium so the map shows the pin
+      if (UI.detailDetent) UI.detailDetent('medium');
+      setTimeout(function () { if (edLoc) { focusPoint(edLoc.lat, edLoc.lon, true, true); saveInView(); } }, DESK.matches ? 0 : 420);
+    }).catch(function () {
+      if (edJob === x.jobNumber) paintEditLoc('Couldn’t find “' + q + '” — try a street address or an intersection (A St & B Ave)', 'err');
+    }).then(function () { findBusy = false; $('eFind').disabled = false; });
+  }
+  function saveEditor() {
+    var x = byNum[edJob]; if (!x) return;
+    var e = STAGEMAP[x.jobNumber] || null, patch = {}, nm = normName($('eName').value);
+    var want = !nm || nm === normName(jobberName(x)) || (!x.renamed && nm === normName(jobName(x))) ? null : nm;
+    if (want !== effName(e)) patch.name = want;
+    if (edLoc) patch.loc = { lat: edLoc.lat, lon: edLoc.lon };
+    var keys = Object.keys(patch);
+    closeEditor();
+    if (!keys.length) { toast('No changes'); return; }
+    changeJob(x, patch, { msg: keys.length > 1 ? 'Saved name & pin' : keys[0] === 'loc' ? 'Pin moved' : want ? 'Renamed' : 'Name back to Jobber’s' });
+  }
+  function resetEditor() {
+    var x = byNum[edJob]; if (!x) return;
+    var e = STAGEMAP[x.jobNumber] || null, patch = {};
+    if (effName(e)) patch.name = null;
+    if (effLoc(e)) patch.loc = null;
+    closeEditor();
+    if (!Object.keys(patch).length) return;
+    changeJob(x, patch, { msg: 'Back to Jobber’s name and pin' });
+  }
+  $('dEditBtn').addEventListener('click', function () { if (editorOpen()) closeEditor(); else openEditor(); });
+  $('eFind').addEventListener('click', findPin);
+  $('eAddr').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findPin(); } });
+  $('eName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); saveEditor(); } });
+  $('eSave').addEventListener('click', saveEditor);
+  $('eCancel').addEventListener('click', closeEditor);
+  $('eReset').addEventListener('click', resetEditor);
+  $('dEdit').addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeEditor(); $('dEditBtn').focus(); } });
 
   /* ---------------- desktop hover card (fine pointer only) ---------------- */
   var card = $('map-card'), cardJob = null, showT = 0, hideT = 0;
@@ -898,7 +1136,11 @@
     var el = $('mcPrice'), p = priceOf(x);
     el.textContent = p ? fmtP(p.t) : ''; el.hidden = !p; el.title = p ? 'Jobber total' : '';
   }
-  function refreshCard(x) { if (cardJob !== x) return; paintCardItems(x); cardSlider.set(x); cardH = card.offsetHeight || cardH; }
+  function refreshCard(x) {
+    if (cardJob !== x) return;
+    $('mcTitle').textContent = jobName(x);                    // R-3: a rename shows at once
+    paintCardItems(x); cardSlider.set(x); cardH = card.offsetHeight || cardH; placeCard();
+  }
   function closeCard(force) {
     clearTimeout(showT);
     if (!cardJob && !card.classList.contains('is-open')) return false;
@@ -940,13 +1182,15 @@
     if (v === undefined) delete o[f]; else o[f] = cloneVal(v);
     return Object.keys(o).some(function (k) { return k !== 'at' && k !== 'by'; }) ? o : null;
   }
+  function posSig(x) { return x.ok + '|' + x.lat + '|' + x.lon + '|' + x.street; }
   function refreshJob(x) {                                    // after STAGEMAP[jn] changed: everything that shows this job
-    var wasHidden = !!x._hidden;
+    var wasHidden = !!x._hidden, pos = posSig(x), wasOk = !!x.ok;
     refreshEff(x);
+    if (posSig(x) !== pos) { if (!!x.ok !== wasOk) syncMarkers(); followJobInRoute(x); }   // R-3: renamed / pin moved
     if (isHidden(x) !== wasHidden) {                          // removed from the app (or back): the visible set changes
       rebuildVisible();
       if (x._hidden) { if (detailJn === x.jobNumber) UI.closeDetail(); if (cardJob === x) closeCard(true); }
-      renderAll(); refreshOpenJob();
+      renderAll(); refreshOpenJob(); syncPopRows();
       return;
     }
     updatePin(x); patchRow(x); updateChipCounts(); updateGroupCounts(); updateCount();
@@ -989,7 +1233,7 @@
           if (!gm.ok) { blockedMove(j, to, gm); return; }
         }
         var bad = Object.keys(undoPatch).filter(function (f) {  // e.g. "Done" again after the job left Poured
-          return f !== 'stage' && f !== 'removed' && undoPatch[f] != null && !canSetX(j, f, undoPatch[f]).ok;
+          return f !== 'stage' && f !== 'removed' && f !== 'name' && f !== 'loc' && undoPatch[f] != null && !canSetX(j, f, undoPatch[f]).ok;
         })[0];
         if (bad) { toast(canSetX(j, bad, undoPatch[bad]).message || 'Can’t undo that now', null, { error: true }); return; }
         changeJob(j, undoPatch, { isUndo: true, stage: opts.stage, msg: opts.stage ? null : has(fields, 'removed') ? 'Back in the app' : 'Undone' });
@@ -1038,8 +1282,13 @@
   }
   store.onChange(function (m) {                               // poll result / replay rollback / key change: update IN PLACE
     STAGEMAP = m || {};
-    var changed = false;
-    ALL.forEach(function (x) { var hb = !!x._hidden; refreshEff(x); if (isHidden(x) !== hb) changed = true; });
+    var changed = false, moved = [];
+    ALL.forEach(function (x) {
+      var hb = !!x._hidden, ps = posSig(x); refreshEff(x);
+      if (isHidden(x) !== hb) changed = true;
+      if (posSig(x) !== ps) moved.push(x);                    // R-3: renamed / pin moved on another device
+    });
+    if (moved.length) { syncMarkers(); moved.forEach(followJobInRoute); }
     if (changed) {                                            // a job was removed (or restored) elsewhere
       rebuildVisible();
       var d = detailJn != null && byNum[detailJn];
@@ -1052,12 +1301,15 @@
     }
     if (detailJn != null && byNum[detailJn] && UI.isDetailOpen()) refreshDetail(byNum[detailJn]);
     if (cardJob) refreshCard(cardJob);
+    renderRemoved();                                          // R-3: restored / removed on another device
+    syncPopRows();                                            // R-3: the open "Closed in Jobber" dialog follows
   });
   var lastMode = store.mode;
   store.onStatus(function (st) {
     renderStageStatus(st);
     lockSliders();
     if (st && st.mode === 'invalid' && lastMode !== 'invalid') toast('Edit key rejected — Settings → Stages', openStageSettings, { error: true, action: 'Settings' });
+    renderRemoved(); maybeShowClosedPop();                    // R-3: Restore buttons follow write access; the open-time check
     lastMode = st && st.mode;
   });
 
@@ -1101,6 +1353,7 @@
     if (loading) return Promise.resolve();
     loading = true; $('rf').classList.add('is-spinning');
     if (!dataLoaded) countEl.textContent = 'Loading…';
+    armPop(); var loadAt = popArm.since;                     // R-3: the "Closed in Jobber" check of this load
     var metaP = getJSON(BASE + 'data/meta.json' + bust()).catch(function () { return null; });
     var jobsP = Promise.all([getJSON(BASE + 'data/jobs.json' + bust()), metaP, loadClosed()])
       .then(function (res) {
@@ -1111,7 +1364,7 @@
         byNum = {}; ALL.forEach(function (x) { byNum[x.jobNumber] = x; refreshEff(x); });
         dataLoaded = true; updFailed = false; lastMeta = res[1];
         rebuildVisible();                                      // R-2: closed-in-Jobber + removed jobs are hidden everywhere (+ header)
-        renderAll();
+        renderAll({ reveal: !firstFit });
         if (!firstFit) { firstFit = true; fitAll(); fitBeforeStages = !stagesLoaded; }
         refreshOpenJob();
       })
@@ -1121,8 +1374,10 @@
         if (window.console) console.error('jobs load failed', e && e.message);
       });
     loadPrices();                                             // R-2: in parallel, painted in place when it lands
+    loadArchive();                                            // R-3: Settings -> Data -> Recently removed
     var stagesP = Promise.resolve().then(function () { return store.load(); }).then(function (m) { return m || {}; }, function () { return STAGEMAP; });
-    var routesP = getJSON(BASE + 'routes/index.json' + bust()).then(renderRoutes, function () { renderRoutes([]); });
+    var routesP = getJSON(BASE + 'routes/index.json' + bust()).then(renderOldMaps, function () { renderOldMaps(null); });
+    loadSavedRoutes();                                        // R-3: the shared saved routes (js/routes.js), in parallel
     return Promise.all([jobsP, stagesP]).then(function (r) {
       var before = Object.keys(shownSet).join();
       var cur = null; try { cur = store.peek ? store.peek() : null; } catch (e) { cur = null; }
@@ -1134,6 +1389,9 @@
         fitBeforeStages = false;
       }
       renderStageStatus();
+      clearStaleRemoved(loadAt);
+      if (popArm && popArm.since === loadAt) popArm.loaded = true;
+      maybeShowClosedPop();                                   // R-3: after jobs AND stages of this load are known
     }).then(function () { return routesP; }).then(function () { loading = false; $('rf').classList.remove('is-spinning'); },
       function () { loading = false; $('rf').classList.remove('is-spinning'); });
   }
@@ -1150,6 +1408,25 @@
     if (cardJob) { var c = byNum[cardJob.jobNumber]; if (c && !c._hidden) openCard(c); else closeCard(true); }
   }
   function reloadData() { if (loading) return Promise.resolve(); setUpd('refreshing…'); return loadData(); }
+  /* R-3: removed: true is only ever set on a job closed in Jobber ("Completed"). If Jobber lists the job as active again
+   * (a return visit), that flag is stale: without this, the next time Jobber closes it the sync would drop it with no
+   * confirmation. Cleared (quietly, by a device that can save) only when this load read the stage file AND the job
+   * data was made after the removal (meta.updated_utc > the entry's at), so a cached older jobs.json never undoes a
+   * "Completed"; the worst case of a wrong clear is the job asking again. Once per job per session. */
+  var staleCleared = {};
+  function clearStaleRemoved(since) {
+    if (!HAS_STAGES || !dataLoaded || updFailed || !writable() || !stagesFresh(since)) return;
+    var made = lastMeta && typeof lastMeta.updated_utc === 'string' ? Date.parse(lastMeta.updated_utc) : NaN;
+    if (!isFinite(made)) return;
+    ALL.forEach(function (x) {
+      var jn = x.jobNumber, e = STAGEMAP[jn];
+      if (x.closed || staleCleared[jn] || !e || e.removed !== true) return;
+      var at = Date.parse(e.at); if (!isFinite(at) || at >= made) return;
+      staleCleared[jn] = 1;
+      var p; try { p = store.set(jn, { removed: null }, { label: x.street || x.title || '' }); } catch (err) { p = Promise.reject(err); }
+      Promise.resolve(p).then(null, function () { staleCleared[jn] = 0; });
+    });
+  }
   $('rf').addEventListener('click', reloadData);
 
   /* ---------------- generic actions ---------------- */
@@ -1172,28 +1449,42 @@
     }, function () { toast('Couldn’t get your location', null, { error: true }); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
   }
 
-  /* ---------------- published routes ---------------- */
-  function renderRoutes(r) {
-    var el = $('rlist'); el.textContent = '';
-    if (!Array.isArray(r) || !r.length) { el.className = 'muted'; el.textContent = 'No routes published yet.'; return; }
-    el.className = '';
+  /* ---------------- R-3 Settings -> Routes -> "Old route maps (N)" (r3-plan F) ----------------
+   * routes/index.json (publish_routes.py) = the route maps published before R-3. The Routes tab is gone; the list stays
+   * reachable here, read-only. A failed load keeps the last good list; an empty list hides the row. */
+  var OLDMAPS = [], omOpen = false;
+  function renderOldMaps(r) {
+    if (Array.isArray(r)) OLDMAPS = r.filter(function (x) { return x && typeof x.file === 'string' && x.file; });
+    var n = OLDMAPS.length;
+    $('omBox').hidden = !n; $('omN').textContent = n ? String(n) : '';
+    $('omTgl').setAttribute('aria-expanded', omOpen && n ? 'true' : 'false');
+    $('omPane').hidden = !(omOpen && n);
+    var list = $('omList'); list.textContent = '';
+    if (!omOpen || !n) return;
     var standalone = document.documentElement.classList.contains('is-standalone');
-    r.forEach(function (x) {
-      if (!x || !x.file) return;
-      var a = h('a', { class: 'card', href: BASE + 'routes/' + encodeURIComponent(x.file) }, [h('b', { text: x.title || x.file }), h('div', { class: 'd', text: x.date || '' })]);
+    OLDMAPS.forEach(function (x) {
+      var a = h('a', { class: 'om-row', href: BASE + 'routes/' + encodeURIComponent(x.file) }, [
+        h('span', { class: 'om-tx' }, [h('span', { class: 't', text: String(x.title || x.file) }), h('span', { class: 's', text: String(x.date || '') })]),
+        svgIcon(['M9 6l6 6-6 6'])]);
       if (standalone) { a.target = '_blank'; a.rel = 'noopener'; }   // Home Screen app: open in a viewer with a Done button
-      el.appendChild(a);
+      list.appendChild(a);
     });
   }
+  $('omTgl').addEventListener('click', function () { omOpen = !omOpen; renderOldMaps(); });
 
-  /* ================= R-2 route editor (builder B): the ONE route editor in the Plan view, drawn on the single map =================
+  /* ================= R-2 route editor (builder B): the ONE route editor in the Route view, drawn on the single map =================
    * r2-plan sec. 4; APP_MASTER sec. 11 R-2 (Riley: "all jobs in the respective stage by default but I should be able to
    * deselect individual jobs ... or add custom stops ... drag the stops around like in apple maps ... a button for reoptimize").
-   * Used by the one-click route (Route button, route menu, group-header Route) AND manual planning (Plan tab, "Add to route").
-   *   ED.start   fixed first stop: the shop "S" (an old saved route that started elsewhere keeps that start, numbered 1)
+   * Used by the one-click route (Route button, route menu, group-header Route) AND manual planning (Route tab, "Add to route").
+   * R-3 (r3-plan B): the Plan view is the Route view; the start is ED.mode:
+   *   "shop"  the shop "S" (default; every one-click route); "stop": the shop switch is off, the FIRST INCLUDED stop is the
+   *           fixed start (#1; Re-optimize keeps it first; drag another stop to the top to change it); "gps": "Me", this
+   *           device's position (navigator.geolocation), not a stop. Job stops are numbered #1..n in every mode.
+   *   ED.shop the shop point (the start in "shop" mode; always the end when Return to shop is on) · ED.me the GPS point
    *   ED.stops   ordered stops {_id, name, lat, lon, jobNumber?, match?, shop?, oot?, skip?}. Included = no skip, in array
    *              order (numbered, routed); skipped ones are listed grey under "Skipped" and never routed.
-   *   ED.rt      Return to shop · ED.title caption · ED.unmapped jobs listed under "Not mapped, not included".
+   *   ED.rt      Return to shop (always the shop, whatever the start) · ED.title caption · ED.unmapped jobs listed under
+   *              "Not mapped, not included" · ED.routeId / ED.owner the synced saved route this is (Save updates it).
    *   ED.dirty   the user changed something since the route was built / loaded / saved -> replacing it asks first (+ Undo).
    * Every change goes through edChanged(): live recompute of numbers, legs, totals, map line + pins and Google Maps parts.
    * Manual order is kept until Re-optimize. An added stop goes to its cheapest spot; the other stops keep their order.
@@ -1206,7 +1497,10 @@
   var edList = $('edList'), edUid = 0, openActs = null, partsOpen = false, optBusy = false, edParts = [];
   var routeLines = [], routeMarkers = {};
   function sid(s) { s._id = ++edUid; return s; }
-  function blankEditor(rt) { return { start: sid(Object.assign({}, SHOP)), stops: [], rt: !!rt, title: '', unmapped: [], dirty: false }; }
+  function shopPt() { return sid(Object.assign({}, SHOP)); }
+  function blankEditor(rt) {
+    return { mode: 'shop', shop: shopPt(), me: null, stops: [], rt: !!rt, title: '', unmapped: [], dirty: false, keys: null, routeId: null, owner: '' };
+  }
   var ED = blankEditor(false);
   function jobStop(x) {
     var s = { name: x.street || x.title || ('#' + x.jobNumber), lat: x.lat, lon: x.lon, jobNumber: x.jobNumber };
@@ -1215,15 +1509,33 @@
   }
   function included() { return ED.stops.filter(function (s) { return !s.skip; }); }
   function skippedStops() { return ED.stops.filter(function (s) { return !!s.skip; }); }
-  function routeSeq() { return [ED.start].concat(included()); }
-  function isEmptyEditor() { return !ED.stops.length && !!ED.start.shop && !ED.unmapped.length; }
+  /* R-3 (r3-plan B): the path a route drives = [start] + included stops + [the shop, when Return to shop is on]. The start is
+   * the shop (mode "shop"), "Me" (mode "gps" once located) or nothing (mode "stop", or "gps" not located yet: the first
+   * included stop is the start). Labels: "S" for the shop, "Me" for the GPS start, "1".."n" for the included stops in
+   * every mode (Rule 6: a route that starts at a site numbers that site 1). off = legs index of the leg INTO stop i is
+   * i + off. Pure (tests/ui_route.test.js). */
+  function routePath(mode, shop, me, inc, rt) {
+    var o = mode === 'shop' ? shop : mode === 'gps' && me ? me : null;
+    var seq = (o ? [o] : []).concat(inc), end = rt && inc.length ? shop : null;
+    var path = end ? seq.concat([end]) : seq;
+    var labels = path.map(function (p, i) {
+      if (i === 0 && o) return o.me ? 'Me' : 'S';
+      if (end && i === path.length - 1) return 'S';
+      return String(i + (o ? 0 : 1));
+    });
+    return { origin: o, seq: seq, end: end, path: path, labels: labels, off: o ? 0 : -1 };
+  }
+  function model() { return routePath(ED.mode, ED.shop, ED.me, included(), ED.rt); }
+  function origin() { return model().origin; }
+  function routeSeq() { return model().seq; }
+  function isEmptyEditor() { return !ED.stops.length && ED.mode === 'shop' && !ED.unmapped.length; }
   function stopById(id) { id = +id; for (var i = 0; i < ED.stops.length; i++) if (ED.stops[i]._id === id) return ED.stops[i]; return null; }
-  function lblFn() { var shop = !!ED.start.shop; return function (i) { return shop ? (i === 0 ? 'S' : String(i)) : String(i + 1); }; }
   function fmtMin(m) { return m < 10 ? m.toFixed(1) : String(Math.round(m)); }
   function legText(l) { return '+~' + fmtMin(l.min) + ' min · ~' + l.km.toFixed(1) + ' km' + (l.rural ? ' · rural' : ''); }
   function copyEd(e) {
-    function c(s) { return Object.assign({}, s); }
-    return { start: c(e.start), stops: e.stops.map(c), rt: e.rt, title: e.title, unmapped: e.unmapped.slice(), dirty: e.dirty, keys: e.keys || null };
+    function c(s) { return s ? Object.assign({}, s) : null; }
+    return { mode: e.mode, shop: c(e.shop), me: c(e.me), stops: e.stops.map(c), rt: e.rt, title: e.title, unmapped: e.unmapped.slice(),
+      dirty: e.dirty, keys: e.keys || null, routeId: e.routeId || null, owner: e.owner || '' };
   }
   function restore(s) { ED = copyEd(s); openActs = null; edChanged({ fit: true, clean: true }); }
   function replaceSnapshot() { return ED.dirty && !isEmptyEditor() ? copyEd(ED) : null; }   // work worth an Undo
@@ -1238,6 +1550,7 @@
   function stopJob(s) { return s && s.jobNumber != null ? byNum[s.jobNumber] || null : null; }
   function stopName(s) {
     var x = stopJob(s), n = String(s.name || ''), p = x && x.permit ? ' · ' + x.permit : '';
+    if (x && x.renamed) return jobName(x);                    // R-3: a job renamed in the app shows its new name
     if (p && n.length > p.length && n.slice(-p.length) === p) n = n.slice(0, -p.length);   // R-1 names carried the permit
     return n || (x ? x.street || x.title || '' : '') || (s.shop ? 'Shop' : 'Stop');
   }
@@ -1253,24 +1566,57 @@
     return s.oot ? 'Out of town' : '';
   }
 
+  /* R-3: a job renamed or given a new pin (here or on another device) updates its stop in the open route at once:
+   * the stop's point follows the job, then numbers, legs, line and Google Maps links are recomputed (not "dirty"). */
+  function followJobInRoute(x) {
+    var hit = false;
+    ED.stops.forEach(function (s) {
+      if (s.jobNumber == null || String(s.jobNumber) !== String(x.jobNumber)) return;
+      hit = true;
+      if (mappedJob(x)) { s.lat = x.lat; s.lon = x.lon; }
+    });
+    if (hit) drawRoute(renderEditor(), false);
+  }
+
   /* ---- render (list + header + footer); the map follows in drawRoute ---- */
   function edRowPin(label, cls) { return h('span', { class: 'rpin' + (cls || ''), 'aria-hidden': 'true', text: label }); }
-  function fixedRow(kind, label, sub) {                       // the start row (kind 'start')
-    var s = ED.start, name = stopName(s);
-    var r = h('div', { class: 'ed-row is-fixed', role: 'listitem', tabindex: '0', 'data-fixed': kind },
-      [edRowPin(label, s.shop ? ' is-shop' : ''), h('div', { class: 'ed-tx ed-tx--wide' }, [h('div', { class: 't', text: name }), h('div', { class: 's', text: sub })])]);
-    r.setAttribute('aria-label', 'Start ' + label + ': ' + name + (sub ? ', ' + sub : ''));
+  var ICON_LOC = ['M20.5 3.5 3.5 10.6l7.2 2.1 2.1 7.2z'];     // the "My location" arrow (same glyph as the map control)
+  var ME_PIN = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 3.5 10.6l7.2 2.1 2.1 7.2z"/></svg>';   // constant markup
+  function mePin(off) { return h('span', { class: 'rpin is-me' + (off ? ' is-skip' : ''), 'aria-hidden': 'true' }, [svgIcon(ICON_LOC)]); }
+  function clock(ms) { var d = new Date(ms); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  /* R-3 (r3-plan B) start row: [pin] [name / what the start is] [switch "Start at the shop"] [location arrow].
+   * Switch off = the first included stop is the start (#1). The arrow = "Start from my location" ("Me"); again = update it;
+   * while it looks, the arrow is a spinner (tap again to cancel). A location error stays in the row, in full. */
+  function startRow(inc) {
+    var m = ED.mode, on = m === 'shop', gps = m === 'gps', me = gps ? ED.me : null;
+    var name = gps ? 'My location' : on ? stopName(ED.shop) : 'Start at the shop';
+    var err = !locBusy && locErr;
+    var sub = locBusy ? 'Finding your location…' : err ? locErr
+      : me ? 'Start' + (me.acc ? ' · ±' + me.acc + ' m' : '') + (me.at ? ' · ' + clock(me.at) : '')
+      : gps ? 'Not located yet · tap the arrow'
+      : on ? 'Start · switch off to start at a site'
+      : inc.length ? 'Off · stop 1 is the start' : 'Off · the first stop is the start';
+    var sw = h('input', { type: 'checkbox', class: 'switch switch--sm', role: 'switch', 'aria-label': 'Start at the shop' });
+    sw.checked = on;
+    var locLbl = locBusy ? 'Stop finding my location' : me ? 'Update my location' : 'Start from my location';
+    var loc = h('button', { type: 'button', class: 'ed-loc' + (locBusy ? ' is-busy' : '') + (gps ? ' is-on' : ''), 'aria-label': locLbl, title: locLbl,
+      'aria-busy': locBusy ? 'true' : null }, [locBusy ? h('span', { class: 'spinner', 'aria-hidden': 'true' }) : svgIcon(ICON_LOC)]);
+    var pin = gps ? mePin(!me) : edRowPin(on ? 'S' : '', on ? ' is-shop' : ' is-skip');
+    var r = h('div', { class: 'ed-row is-fixed is-start' + (on || me ? '' : ' is-skip'), role: 'listitem', tabindex: '0', 'data-fixed': 'start' }, [
+      pin, h('div', { class: 'ed-tx', title: name + (sub ? '\n' + sub : '') }, [h('div', { class: 't', text: name }), h('div', { class: 's' + (err ? ' is-err' : ''), text: sub })]),
+      h('label', { class: 'ed-sw', title: on ? 'Start at the first stop instead' : 'Start at the shop' }, [sw]), loc]);
+    r.setAttribute('aria-label', 'Start: ' + (gps ? 'my location' : on ? name : 'the first stop') + (sub ? ', ' + sub : ''));
     return r;
   }
   /* Last row of the route: "Return to shop" with the same include switch as a stop (a labelled control, never an icon).
-   * On: numbered like the start, with the last leg. Off: grey, "Open end". */
+   * On: "S" with the last leg (R-3: always the shop, whatever the start). Off: grey, "Open end". */
   function returnRow(leg, n) {
-    var s = ED.start, on = !!ED.rt, name = 'Return to ' + (s.shop ? 'shop' : stopName(s));
+    var on = !!ED.rt, name = 'Return to shop';
     var sub = on ? (leg ? legText(leg) : '') : 'Off · the route ends at stop ' + n;
     var sw = h('input', { type: 'checkbox', class: 'switch switch--sm', role: 'switch', 'aria-label': name + ' at the end' });
     sw.checked = on;
     var r = h('div', { class: 'ed-row is-fixed is-return' + (on ? '' : ' is-skip'), role: 'listitem', tabindex: '0', 'data-fixed': 'return' }, [
-      edRowPin(on ? lblFn()(0) : '', on ? (s.shop ? ' is-shop' : '') : ' is-skip'),
+      edRowPin(on ? 'S' : '', on ? ' is-shop' : ' is-skip'),
       h('div', { class: 'ed-tx', title: name + (sub ? '\n' + sub : '') }, [h('div', { class: 't', text: name }), h('div', { class: 's', text: sub })]),
       h('label', { class: 'ed-sw', title: on ? 'End at the last stop instead' : 'Come back at the end' }, [sw]),
       h('span', { class: 'ed-grip is-off', 'aria-hidden': 'true' })]);
@@ -1290,9 +1636,9 @@
     for (var i = 0; i < ks.length; i++) if (matchesKey(x, ks[i])) return isListKey(ks[i]) ? (REASON[ks[i]] || LIST[ks[i]].label) : STAGES[stageIndex(ks[i])].short;
     return '';
   }
-  function stopRow(s, label, leg, idx, n, last) {
+  function stopRow(s, label, leg, idx, n, last, isStart) {    // isStart (R-3): the first stop IS the start (no shop / Me)
     var skip = !!s.skip, name = stopName(s), oot = ootCaption(s), why = stopReason(s);
-    var sub = (skip ? [why, oot, stopIdent(s)] : [why, leg ? legText(leg) : '', oot, stopIdent(s)]).filter(Boolean).join(' · ');
+    var sub = (skip ? [why, oot, stopIdent(s)] : [why, isStart ? 'Start' : leg ? legText(leg) : '', oot, stopIdent(s)]).filter(Boolean).join(' · ');
     var sw = h('input', { type: 'checkbox', class: 'switch switch--sm', role: 'switch', 'aria-label': 'Include ' + name + ' in the route' });
     sw.checked = !skip;
     var r = h('div', { class: 'ed-row' + (skip ? ' is-skip' : '') + (openActs === s._id ? ' is-open' : ''), role: 'listitem', tabindex: '0',
@@ -1311,16 +1657,18 @@
     edList.textContent = '';
     edList.appendChild(h('div', { class: 'spinner-line' }, [h('span', { class: 'spinner', 'aria-hidden': 'true' }), msg]));
   }
-  function renderEditor() {
-    var inc = included(), seq = [ED.start].concat(inc), lbl = lblFn();
-    var legs = HAS_TSP && seq.length > 1 ? TSP.legs(seq, ED.rt) : [];
+  function renderEditor() {                                   // -> the route model (routePath) for drawRoute
+    var M = model(), inc = included();
+    var legs = HAS_TSP && M.path.length > 1 ? TSP.legs(M.path, false) : [];
     var tm = 0, tk = 0, rural = false;
     legs.forEach(function (l) { tm += l.min; tk += l.km; if (l.rural) rural = true; });
     var f = document.createDocumentFragment();
-    f.appendChild(fixedRow('start', lbl(0), ED.start.shop ? 'Start' : 'Start · ' + stopIdent(ED.start)));
-    inc.forEach(function (s, i) { f.appendChild(stopRow(s, lbl(i + 1), legs[i], i, inc.length, i === inc.length - 1 && !ED.rt)); });
+    f.appendChild(startRow(inc));
+    inc.forEach(function (s, i) {
+      f.appendChild(stopRow(s, String(i + 1), legs[i + M.off] || null, i, inc.length, i === inc.length - 1 && !ED.rt, !M.origin && i === 0));
+    });
     if (!inc.length) f.appendChild(h('div', { class: 'ed-empty', text: ED.stops.length ? 'Every stop is skipped. Switch one on to route it.' : 'No stops yet. Add one below, or tap Route on a stage in Jobs.' }));
-    if (inc.length) f.appendChild(returnRow(ED.rt && legs.length ? legs[legs.length - 1] : null, inc.length));
+    if (inc.length) f.appendChild(returnRow(M.end && legs.length ? legs[legs.length - 1] : null, inc.length));
     var sk = skippedStops();
     if (sk.length) {
       f.appendChild(h('div', { class: 'group-title ed-grp', role: 'presentation', text: 'Skipped (' + sk.length + ')' }));
@@ -1337,32 +1685,37 @@
       });
     }
     edList.textContent = ''; edList.appendChild(f);
-    paintHead(inc, tm, tk, rural); paintFoot(seq);
-    return seq;
+    paintHead(inc, tm, tk, rural); paintFoot(M);
+    return M;
   }
+  function freeStops(inc) { return inc.length - (origin() ? 0 : 1); }   // stops Re-optimize may move (the start stays first)
   function paintHead(inc, tm, tk, rural) {
     $('edHead').hidden = isEmptyEditor();
     var tot = $('edTotal');
     tot.textContent = inc.length ? '~' + Math.round(tm) + ' min · ~' + tk.toFixed(1) + ' km' : 'No stops included';
     tot.title = 'Estimate: straight-line ×1.39 at 40 km/h' + (rural ? ' (70 km/h rural legs)' : '') + ' · no live traffic';
     paintEdCap(inc);
-    var o = $('edOpt'); o.disabled = optBusy || inc.length < 2; o.textContent = optBusy ? 'Optimizing…' : 'Re-optimize';
+    var o = $('edOpt'); o.disabled = optBusy || freeStops(inc) < 2; o.textContent = optBusy ? 'Optimizing…' : 'Re-optimize';
+    o.title = 'Find the shortest order for the included stops (' + (ED.mode === 'shop' ? 'the shop' : origin() ? 'your location' : 'stop 1') + ' stays first)';
   }
-  function edValue(inc) {                                     // R-2 prices: Jobber total of the routed job stops (start included)
+  function edValue(inc) {                                     // R-2 prices: Jobber total of the routed job stops
     var jobs = [];
-    [ED.start].concat(inc).forEach(function (s) { var x = stopJob(s); if (x && jobs.indexOf(x) < 0) jobs.push(x); });
+    inc.forEach(function (s) { var x = stopJob(s); if (x && jobs.indexOf(x) < 0) jobs.push(x); });
     return sumPrices(jobs);
   }
-  function paintEdCap(inc) {                                  // caption: N stops · $value · round trip · title · no live traffic
+  function startWord(mode) { return mode === 'gps' ? 'from my location' : mode === 'stop' ? 'from a site' : ''; }
+  function rtWord(mode) { return mode === 'shop' ? 'round trip' : 'ends at the shop'; }
+  function edTitle() { return ED.mode === 'shop' ? ED.title : String(ED.title || '').replace(/ from shop$/, ''); }   // one-click titles say "from shop"
+  function paintEdCap(inc) {                                  // caption: N stops · $value · start · return · title · no live traffic
     var cap = $('edCap'), sv = edValue(inc);                  // count (and value) lead, so a phone never ellipsizes them away
-    cap.textContent = [plural(inc.length, 'stop'), sv.n ? fmtPS(sv.v) : '', ED.rt ? 'round trip' : '', ED.title, 'no live traffic']
+    cap.textContent = [plural(inc.length, 'stop'), sv.n ? fmtPS(sv.v) : '', startWord(ED.mode), ED.rt ? rtWord(ED.mode) : '', edTitle(), 'no live traffic']
       .filter(Boolean).join(' · ');
     cap.title = cap.textContent + (sv.n ? '\nJobber total of the ' + plural(sv.n, 'priced stop') + ': ' + fmtP(sv.v) : '');
   }
-  function paintFoot(seq) {
-    var n = seq.length - 1, maps = $('edMaps');
-    edParts = HAS_TSP && n >= 1 ? TSP.gmapsParts(seq, ED.rt) : [];
-    maps.hidden = !edParts.length; $('edSave').hidden = !n; $('edClear').hidden = isEmptyEditor();
+  function paintFoot(M) {                                     // Google Maps parts start at the chosen start (R-3)
+    var maps = $('edMaps');
+    edParts = HAS_TSP && M.path.length > 1 ? TSP.gmapsParts(M.path, false) : [];
+    maps.hidden = !edParts.length; $('edSave').hidden = !included().length; $('edClear').hidden = isEmptyEditor();
     if (edParts.length === 1) {
       maps.href = edParts[0]; maps.target = '_blank'; maps.removeAttribute('role'); maps.removeAttribute('aria-expanded');
       maps.textContent = 'Google Maps'; maps.title = 'Open the route in Google Maps';
@@ -1378,8 +1731,8 @@
     if (multi) $('edMaps').setAttribute('aria-expanded', partsOpen ? 'true' : 'false');
     box.textContent = ''; box.hidden = !(partsOpen && multi);
     if (box.hidden) return;
-    var seq = routeSeq(), lbl = lblFn(), total = seq.length + (ED.rt && seq.length > 1 ? 1 : 0);
-    function at(p) { return p >= seq.length ? lbl(0) : lbl(p); }
+    var M = model(), total = M.path.length;
+    function at(p) { return M.labels[Math.min(p, total - 1)]; }
     edParts.forEach(function (u, i) {
       var a = 9 * i, b = Math.min(a + 9, total - 1);
       box.appendChild(h('a', { class: 'btn btn--sm btn--tinted pressable', href: u, target: '_blank', rel: 'noopener',
@@ -1393,20 +1746,20 @@
     drawRoute(renderEditor(), !!opts.fit);
   }
 
-  /* ---- map: line + numbered .rpin markers in routeLayer (job pins hidden while the Plan view shows a route) ---- */
+  /* ---- map: line + numbered .rpin markers in routeLayer (job pins hidden while the Route view shows a route) ---- */
   function styleRouteLines() {
     if (!routeLines.length) return;
     routeLines[0].setStyle({ color: cssVar('--route-casing', '#fff') });
     routeLines[1].setStyle({ color: cssVar('--route', '#0088ff') });
   }
-  function drawRoute(seq, fit) {
+  function drawRoute(M, fit) {                                // M = routePath model (renderEditor's return value)
     if (!HAS_MAP) return;
     routeLayer.clearLayers(); routeLines = []; routeMarkers = {};
-    var sk = skippedStops();
-    if (seq.length < 2 && !sk.length) { if (window.onViewChange) window.onViewChange(UI.currentView()); return; }
-    var lbl = lblFn(), pts = seq.map(function (s) { return [s.lat, s.lon]; });
-    if (seq.length > 1) {
-      var line = pts.slice(); if (ED.rt) line.push(pts[0]);
+    var sk = skippedStops(), path = M.path;
+    if (!(path.length > 1 || (path.length && !M.origin)) && !sk.length) { if (window.onViewChange) window.onViewChange(UI.currentView()); return; }
+    var pts = path.map(function (s) { return [s.lat, s.lon]; });
+    if (path.length > 1) {
+      var line = pts.slice();
       routeLines = [
         L.polyline(line, { color: cssVar('--route-casing', '#fff'), weight: 8, opacity: 1, interactive: false, lineJoin: 'round' }),
         L.polyline(line, { color: cssVar('--route', '#0088ff'), weight: 5, opacity: 1, interactive: false, lineJoin: 'round' })];
@@ -1418,19 +1771,23 @@
       m.on('click', function () { revealRow(s._id); });
       routeMarkers[s._id] = m; routeLayer.addLayer(m);
     });
-    seq.forEach(function (s, i) {
-      var last = i === seq.length - 1 && !ED.rt && i > 0, id = i === 0 ? 'start' : s._id;
+    path.forEach(function (s, i) {
+      var isO = i === 0 && !!M.origin, isEnd = !!M.end && i === path.length - 1 && i > 0;
+      if (isEnd && M.origin === M.end) return;                // a round trip from the shop: one "S" marker
+      var id = isO ? 'start' : isEnd ? 'return' : s._id, me = isO && !!s.me;
+      var last = !M.end && i === path.length - 1 && !isO;
+      var cls = 'rpin' + (me ? ' is-me' : isO || isEnd ? ' is-shop' : '') + (last ? ' is-end' : '') + (id === openActs ? ' is-selected' : '');
       var m = L.marker([s.lat, s.lon], {
-        icon: L.divIcon({ html: '<div class="rpin' + (i === 0 && s.shop ? ' is-shop' : '') + (last ? ' is-end' : '') + (id === openActs ? ' is-selected' : '') + '">' + esc(lbl(i)) + '</div>', className: '', iconSize: [26, 26], iconAnchor: [13, 13] }),
-        title: lbl(i) + ' · ' + stopName(s), zIndexOffset: i === 0 ? 500 : 0
+        icon: L.divIcon({ html: '<div class="' + cls + '">' + (me ? ME_PIN : esc(M.labels[i])) + '</div>', className: '', iconSize: [26, 26], iconAnchor: [13, 13] }),
+        title: me ? 'Me · my location' : M.labels[i] + ' · ' + (isEnd ? 'Return to shop' : stopName(s)), zIndexOffset: isO ? 500 : isEnd ? 400 : 0
       });
       m.on('click', function () { revealRow(id); });
       routeMarkers[id] = m; routeLayer.addLayer(m);
     });
     if (window.onViewChange) window.onViewChange(UI.currentView());
     if (fit) {
-      var fp = seq.length > 1 ? pts : pts.concat(sk.map(function (s) { return [s.lat, s.lon]; }));
-      var pad = UI.mapPadding(); pad.maxZoom = 15; map.fitBounds(fp, pad);
+      var fp = path.length > 1 ? pts : pts.concat(sk.map(function (s) { return [s.lat, s.lon]; }));
+      if (fp.length) { var pad = UI.mapPadding(); pad.maxZoom = 15; map.fitBounds(fp, pad); }
     }
   }
   function markRoutePin(id) {                                 // the stop whose actions are open is scaled up on the map
@@ -1442,7 +1799,7 @@
   window.onViewChange = function (v) {                        // show the route instead of job pins while the editor has one
     closeRouteMenu();
     if (!HAS_MAP) return;
-    var route = v === 'plan' && routeLayer.getLayers().length > 0;
+    var route = v === 'route' && routeLayer.getLayers().length > 0;
     if (route) { closeCard(true); if (map.hasLayer(jobLayer)) map.removeLayer(jobLayer); if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); }
     else { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); if (!map.hasLayer(jobLayer)) jobLayer.addTo(map); }
   };
@@ -1451,7 +1808,7 @@
     closeCard(true); closeRouteMenu();
     if (dataLoaded) renderChips();                            // chips row: accessory (iPhone) vs panel layout
   };
-  function sheetBody() { return $('v-plan').closest('.sheet-body'); }
+  function sheetBody() { return $('v-route').closest('.sheet-body'); }
   function scrollIntoBody(el) {                               // scroll the sheet body only (never the page: iOS would pan)
     var body = sheetBody(); if (!body || !el) return;
     var bb = body.getBoundingClientRect(), rb = el.getBoundingClientRect();
@@ -1459,10 +1816,10 @@
     if (rb.top < top) body.scrollTop -= top - rb.top;
     else if (rb.bottom > bottom) body.scrollTop += Math.min(rb.bottom - bottom, rb.top - top);
   }
-  function rowEl(id) { return id === 'start' ? edList.querySelector('[data-fixed="start"]') : edList.querySelector('.ed-row[data-id="' + id + '"]'); }
+  function rowEl(id) { return id === 'start' || id === 'return' ? edList.querySelector('[data-fixed="' + id + '"]') : edList.querySelector('.ed-row[data-id="' + id + '"]'); }
   function revealRow(id) {                                    // a route pin was tapped: bring its row into view and flash it
-    var ready = UI.currentView() === 'plan' && UI.listSheetOpen() && !UI.isDetailOpen();
-    if (!ready) UI.openList('plan', 'medium');
+    var ready = UI.currentView() === 'route' && UI.listSheetOpen() && !UI.isDetailOpen();
+    if (!ready) UI.openList('route', 'medium');
     setTimeout(function () {
       var r = rowEl(id); if (!r) return;
       scrollIntoBody(r);
@@ -1490,12 +1847,13 @@
     return true;
   }
   function insertStop(s) {                                    // cheapest insertion; returns its stop number
-    var inc = included(), seq = [ED.start].concat(inc), best = inc.length, bestD = Infinity;
-    if (HAS_TSP) {
-      for (var i = 0; i <= inc.length; i++) {
-        var a = seq[i], b = i < inc.length ? seq[i + 1] : (ED.rt ? ED.start : null);
+    // R-3: after any point of the path but never before the start (with no shop / Me start, stop 1 stays the start)
+    var M = model(), inc = included(), seq = M.seq, lead = M.origin ? 0 : 1, best = inc.length, bestD = Infinity;
+    if (HAS_TSP && seq.length) {
+      for (var i = 0; i < seq.length; i++) {
+        var a = seq[i], b = i + 1 < seq.length ? seq[i + 1] : (ED.rt ? ED.shop : null);
         var d = TSP.hav(a, s) + (b ? TSP.hav(s, b) - TSP.hav(a, b) : 0);
-        if (d < bestD - 1e-9) { bestD = d; best = i; }
+        if (d < bestD - 1e-9) { bestD = d; best = i + lead; }   // before included stop #best (0-based)
       }
     }
     var at = best < inc.length ? ED.stops.indexOf(inc[best]) : (inc.length ? ED.stops.indexOf(inc[inc.length - 1]) + 1 : 0);
@@ -1520,7 +1878,6 @@
     var ex = ED.stops.filter(function (s) { return s.jobNumber != null && String(s.jobNumber) === String(x.jobNumber); })[0];
     if (ex && !ex.skip) return nm + ' is already stop ' + (included().indexOf(ex) + 1);
     if (ex) return 'Included ' + nm + ' as stop ' + includeStop(ex);
-    if (ED.start.jobNumber != null && String(ED.start.jobNumber) === String(x.jobNumber)) return nm + ' is the start of this route';
     return 'Added ' + nm + ' as stop ' + insertStop(jobStop(x));
   }
   function rowAction(s, a, btn) {
@@ -1547,15 +1904,25 @@
     markRoutePin(openActs);
   }
   function tapRow(row, s) {
-    var p = row.getAttribute('data-fixed') ? ED.start : s;
+    var fx = row.getAttribute('data-fixed'), p = fx === 'start' ? origin() || included()[0] : fx === 'return' ? ED.shop : s;
     if (p && typeof p.lat === 'number') focusPoint(p.lat, p.lon, true);
     if (s) toggleActs(row, s);
   }
   edList.addEventListener('change', function (e) {
     var sw = e.target.closest && e.target.closest('.switch'); if (!sw) return;
+    if (sw.closest('[data-fixed="start"]')) {                 // R-3 "Start at the shop" switch: off = stop 1 is the start
+      ED.mode = sw.checked ? 'shop' : 'stop'; locErr = ''; cancelGps(); openActs = null;
+      edChanged({ fit: true });
+      var first = included()[0];
+      announce(sw.checked ? 'Starts at the shop' : first ? 'Starts at stop 1, ' + stopName(first) : 'The first stop is the start');
+      if (freeStops(included()) >= 2) toast(sw.checked ? 'Starts at the shop' : 'Starts at stop 1 · drag another stop up to change it',   // the order was made for the old start
+        function () { $('edOpt').click(); }, { action: 'Re-optimize' });
+      var ss = edList.querySelector('[data-fixed="start"] .switch'); if (ss) try { ss.focus({ preventScroll: true }); } catch (err) {}
+      return;
+    }
     if (sw.closest('[data-fixed="return"]')) {                // "Return to shop" row
       ED.rt = sw.checked; edChanged();
-      announce(ED.rt ? 'Returns to the start at the end' : 'Open end');
+      announce(ED.rt ? 'Returns to the shop at the end' : 'Open end');
       var rs = edList.querySelector('[data-fixed="return"] .switch'); if (rs) try { rs.focus({ preventScroll: true }); } catch (err) {}
       return;
     }
@@ -1571,6 +1938,7 @@
     }
   });
   edList.addEventListener('click', function (e) {
+    if (e.target.closest('.ed-loc')) { startFromGps(); return; }   // R-3 "Start from my location" (again: update / cancel)
     if (e.target.closest('.ed-sw, .ed-grip')) return;         // the switch has its change event; the handle drags
     var row = e.target.closest('.ed-row'); if (!row || row.classList.contains('is-unmapped')) return;
     var s = stopById(row.getAttribute('data-id')), a = e.target.closest('[data-a]');
@@ -1610,7 +1978,7 @@
     drag = { row: row, grip: g, rows: rows, from: from, to: from, body: body, pid: e.pointerId, lastY: e.clientY, raf: 0,
       tops: rows.map(function (r) { return r.getBoundingClientRect().top - bt + st; }),
       hs: rows.map(function (r) { return r.getBoundingClientRect().height; }),
-      pins: rows.map(function (r) { return r.querySelector('.rpin'); }), lbl: lblFn() };
+      pins: rows.map(function (r) { return r.querySelector('.rpin'); }) };
     drag.y0 = e.clientY - bt + st;
     try { g.setPointerCapture(e.pointerId); } catch (err) {}
     edList.classList.add('is-sorting'); row.classList.add('is-lifted');
@@ -1637,9 +2005,9 @@
       if (f < to && j > f && j <= to) { shift = -d.hs[f]; k = j - 1; }
       else if (to < f && j >= to && j < f) { shift = d.hs[f]; k = j + 1; }
       d.rows[j].style.translate = shift ? '0 ' + shift + 'px' : '';
-      if (d.pins[j]) d.pins[j].textContent = d.lbl(k + 1);
+      if (d.pins[j]) d.pins[j].textContent = String(k + 1);   // included stops are #1..n in every start mode
     }
-    if (d.pins[f]) d.pins[f].textContent = d.lbl(to + 1);
+    if (d.pins[f]) d.pins[f].textContent = String(to + 1);
   }
   function autoScroll() {                                     // near the top/bottom of the visible list: scroll it
     var d = drag; if (!d) return;
@@ -1670,18 +2038,36 @@
   }
 
   /* ---- header + footer controls ---- */
+  /* Re-optimize (R-3): the start stays first (the shop, "Me", or stop 1 when the shop switch is off); with Return to shop
+   * on, the shop is the fixed end. -> the included stops in the new order (the same objects). */
+  function optimizeStops(inc) {
+    var M = model(), o = M.origin, end = ED.rt ? ED.shop : null;
+    if (ED.mode === 'shop') return TSP.optimize([o].concat(inc), true, false, ED.rt).slice(1);   // R-2 behaviour, unchanged
+    var out = TSP.optimize((o ? [o] : []).concat(inc).concat(end ? [end] : []), true, !!end, false);
+    if (o) out = out.slice(1);
+    if (end) out = out.slice(0, -1);
+    return out;
+  }
+  function reorderFromStart() {                               // the included stops re-optimized from the current start -> changed?
+    var inc = included(); if (!HAS_TSP || freeStops(inc) < 2) return false;
+    var seq = null; try { seq = optimizeStops(inc); } catch (e) { seq = null; }
+    if (!seq || seq.length !== inc.length || !seq.every(function (s) { return inc.indexOf(s) >= 0; })) return false;
+    if (seq.every(function (s, i) { return s === inc[i]; })) return false;
+    ED.stops = seq.concat(skippedStops()); optGen++;
+    return true;
+  }
   $('edOpt').addEventListener('click', function () {
-    var inc = included(); if (inc.length < 2 || optBusy) return;
+    var inc = included(); if (freeStops(inc) < 2 || optBusy) return;
     if (!HAS_TSP) { toast('Route optimizer failed to load — reload the app', null, { error: true }); return; }
-    var before = copyEd(ED), mins = function () { var t = 0; TSP.legs(routeSeq(), ED.rt).forEach(function (l) { t += l.min; }); return t; }, m0 = mins();
+    var before = copyEd(ED), mins = function () { var t = 0, p = model().path; if (p.length > 1) TSP.legs(p, false).forEach(function (l) { t += l.min; }); return t; }, m0 = mins();
     optBusy = true; paintHead(inc, 0, 0, false); $('edTotal').textContent = 'Optimizing ' + plural(inc.length, 'stop') + '…';
     setTimeout(function () {                                  // let "Optimizing…" paint first (~0.1 s for 60 stops)
       var seq = null;
-      try { seq = TSP.optimize([ED.start].concat(inc), true, false, ED.rt); } catch (e) { seq = null; }
+      try { seq = optimizeStops(inc); } catch (e) { seq = null; }
       optBusy = false;
-      if (!seq || seq.length !== inc.length + 1) { renderEditor(); toast('Couldn’t optimize this route', null, { error: true }); return; }
-      var same = seq.every(function (s, i) { return i === 0 || s === inc[i - 1]; });
-      ED.stops = seq.slice(1).concat(skippedStops()); openActs = null; optGen++;   // skipped stops lose their places
+      if (!seq || seq.length !== inc.length || !seq.every(function (s) { return inc.indexOf(s) >= 0; })) { renderEditor(); toast('Couldn’t optimize this route', null, { error: true }); return; }
+      var same = seq.every(function (s, i) { return s === inc[i]; });
+      ED.stops = seq.concat(skippedStops()); openActs = null; optGen++;   // skipped stops lose their places
       edChanged({ fit: true, clean: same && !before.dirty });
       var saved = m0 - mins();
       if (same) toast('Already the shortest order found');
@@ -1697,9 +2083,53 @@
   $('edClear').addEventListener('click', function () {
     if (isEmptyEditor()) return;
     var before = copyEd(ED); ED = blankEditor(ED.rt); openActs = null; partsOpen = false; closeAddBox();
-    edChanged({ clean: true });
+    cancelGps(); locErr = '';
+    edChanged({ clean: true }); renderSaved();
     toast('Route cleared', function () { restore(before); });
   });
+
+  /* ---- R-3 (r3-plan B) "Start from my location": one GPS fix (high accuracy, 10 s timeout) becomes the start "Me" ----
+   * Never a stop, never saved with its coordinates (a saved "from my location" route asks for the position again when it
+   * is opened). Errors stay in the start row in full (permission, no fix, timeout, outside Manitoba). */
+  var locBusy = false, locErr = '', locGen = 0;
+  var GPS_ERR = {
+    1: 'Location is blocked for this app. iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using the App. PC: allow location for this site (the icon in the address bar).',
+    2: 'Couldn’t find your position. Check that Location Services is on, then try again.',
+    3: 'Finding your location took longer than 10 seconds. Try again (it’s quicker outdoors).'
+  };
+  function gpsError(code) { return GPS_ERR[code] || 'Couldn’t get your location. Try again.'; }
+  function cancelGps() { if (locBusy) { locGen++; locBusy = false; } }
+  /* opts.undo / opts.msg (opening a saved "from my location" route): the toast's Undo goes back to the route that was
+   * open before, not only to the start before the fix. */
+  function startFromGps(opts) {
+    opts = opts || {};
+    if (locBusy) { cancelGps(); renderEditor(); announce('Stopped finding your location'); return; }   // tap again = cancel
+    var geo = null; try { geo = navigator.geolocation; } catch (e) { geo = null; }
+    if (!geo || typeof geo.getCurrentPosition !== 'function') {
+      locErr = 'Location isn’t available in this browser.'; renderEditor(); toast('Location isn’t available here', null, { error: true }); return;
+    }
+    var my = ++locGen; locBusy = true; locErr = ''; renderEditor(); announce('Finding your location');
+    function mine() { if (my !== locGen) return false; locBusy = false; return true; }
+    function fail(msg) { locErr = msg; renderEditor(); toast('Couldn’t get your location', null, { error: true }); announce(msg); }
+    try {
+      geo.getCurrentPosition(function (p) {
+        if (!mine()) return;
+        var c = (p && p.coords) || {}, lat = Number(c.latitude), lon = Number(c.longitude), acc = Number(c.accuracy);
+        if (!inMB(lat, lon)) { fail('You’re outside Manitoba, so the route can’t start from here.'); return; }
+        var before = copyEd(ED);
+        ED.me = sid({ name: 'My location', lat: +lat.toFixed(6), lon: +lon.toFixed(6), me: true, acc: isFinite(acc) && acc > 0 ? Math.round(acc) : null, at: Date.now() });
+        ED.mode = 'gps'; openActs = null;
+        // A tap on "Start from my location": the stops were ordered from the old start, so order them from here (Undo
+        // brings back both). A saved route opened "from my location" keeps its saved order.
+        var reord = !has(opts, 'undo') && reorderFromStart();
+        edChanged({ fit: UI.currentView() === 'route' });     // never move the map under another view (Jobs) when the fix lands late
+        if (has(opts, 'undo')) toast(opts.msg || 'Route starts at your location', opts.undo ? function () { restore(opts.undo); } : null);
+        else toast(reord ? 'Route starts at your location · re-optimized' : 'Route starts at your location', function () { restore(before); });
+        announce('The route starts at your location');
+      }, function (err) { if (mine()) fail(gpsError(err && err.code)); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 });
+    } catch (e) { if (mine()) fail(gpsError(0)); }
+  }
 
   /* ---- + Add stop: ONE field for an address / intersection (Esri geocoder) or a job (number, street, client…) ---- */
   var addBox = $('edAddBox'), addInp = $('addr'), suggBox = $('edSugg'), sugg = [], suggHi = 0, suggQ = '', sgT = 0;
@@ -1782,12 +2212,13 @@
   $('addAddr').addEventListener('click', function () { pickSugg(suggHi); });
   function geocode(text) {
     var u = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=CAN' +
-      '&searchExtent=-98.6,49.0,-95.8,50.7&outFields=Match_addr&singleLine=' + encodeURIComponent(text + (MB_RE.test(text) ? '' : ', Winnipeg, MB'));
+      '&searchExtent=-98.6,49.0,-95.8,50.7&outFields=Match_addr,Addr_type&singleLine=' + encodeURIComponent(text + (MB_RE.test(text) ? '' : ', Winnipeg, MB'));
     return fetch(u).then(function (r) { return r.json(); }).then(function (r) {
       var c = (r && r.candidates || [])[0];
       var lc = c && c.location;
       if (!lc || typeof lc.x !== 'number' || typeof lc.y !== 'number' || !isFinite(lc.x) || !isFinite(lc.y)) throw new Error('not found');
-      return { name: text, lat: c.location.y, lon: c.location.x, match: (c.attributes && c.attributes.Match_addr) || c.address || '' };
+      return { name: text, lat: c.location.y, lon: c.location.x, match: (c.attributes && c.attributes.Match_addr) || c.address || '',
+        type: String(c.attributes && c.attributes.Addr_type || ''), score: typeof c.score === 'number' ? c.score : 0 };
     });
   }
 
@@ -1803,85 +2234,285 @@
     if (!confirmReplace(title)) return;
     if (use.length > ROUTE_CONFIRM_ABOVE &&
         !confirm('Build a route with ' + plural(use.length, 'job') + ' from the shop? It will need ' + Math.ceil((use.length + (rt ? 1 : 0)) / 9) + ' Google Maps links.')) return;
-    UI.openList('plan', 'medium');
-    closeAddBox(); openActs = null; partsOpen = false;
+    UI.openList('route', 'medium');
+    closeAddBox(); openActs = null; partsOpen = false; cancelGps(); locErr = '';
     edBusy('Optimizing ' + plural(use.length, 'job') + ' from the shop…');
     setTimeout(function () {                                  // let the spinner paint first
-      var start = sid(Object.assign({}, SHOP)), seq = [start];
+      var start = shopPt(), seq = [start];
       if (use.length) { try { seq = TSP.optimize([start].concat(use.map(jobStop)), true, false, rt); } catch (e) { seq = null; } }
       if (!seq) { renderEditor(); toast('Couldn’t optimize this route', null, { error: true }); return; }
       var skipped = use === inTown ? out.map(function (x) { var s = jobStop(x); s.skip = true; return s; }) : [];
-      ED = { start: seq[0], stops: seq.slice(1).concat(skipped), rt: rt, title: title, unmapped: unmapped, dirty: false,
-        keys: keys && keys.length > 1 ? keys.slice() : null };   // a combined route (Setup + Cuts & cleanup): rows say why
-      edChanged({ fit: true, clean: true });
+      ED = { mode: 'shop', shop: seq[0], me: null, stops: seq.slice(1).concat(skipped), rt: rt, title: title, unmapped: unmapped, dirty: false,
+        keys: keys && keys.length > 1 ? keys.slice() : null, routeId: null, owner: '' };   // keys: a combined route (Setup + Cuts & cleanup): rows say why
+      edChanged({ fit: true, clean: true }); renderSaved();
       var body = sheetBody(); if (body) body.scrollTop = 0;
       if (prev) toast('Route replaced', function () { restore(prev); });
     }, 30);
   }
 
-  /* ---- saved routes (NS + 'routes', "ej_routes"): {name, when, seq:[start + included, in order], rt, skipped?:[{…, skip:true}]} ----
-   * seq keeps the R-1 shape, so R-1 and pre-R-1 entries load unchanged (their first stop is the start). */
-  function cleanStop(s) {
-    var o = { name: String(s.name || ''), lat: +s.lat, lon: +s.lon };
-    if (s.shop) o.shop = true; if (s.jobNumber != null) o.jobNumber = s.jobNumber; if (s.match) o.match = String(s.match);
-    if (s.oot) o.oot = true; if (s.skip) o.skip = true;
+  /* ================= R-3 saved routes (r3-plan F): shared through js/routes.js =================
+   * SavedRoutes keeps routes.json in eckstein-jobs-state with the SAME edit key as stages (local preview: localStorage).
+   * The list: "Mine" (owner = Settings -> Routes -> Your name), then "Team" (owner shown), then "On this device".
+   * Open = load into the editor (it remembers the route id: Save then updates that route, keeping its owner); the trash
+   * button deletes (asks first; for everyone). A device that cannot write (no key / key rejected) sees the shared list
+   * read-only and saves on the device in NS + 'routes' (the R-2 shape {name, when, seq, rt, skipped?}; R-3 adds
+   * start {mode} for a route that does not start at the shop, whose seq then has no shop). Those, and routes saved before
+   * R-3, get a one-time "Sync my N saved routes" once the device can write (then they leave the device list).
+   * A "from my location" route is saved as start {mode: "gps"} WITHOUT coordinates (the public state repo never gets a
+   * device's position; opening it looks up the position again). Stops are sanitized again by js/routes.js. */
+  var SR = window.SavedRoutes || null, rstore = null;
+  try { if (SR && typeof SR.createStore === 'function') rstore = SR.createStore(); } catch (e) { rstore = null; }
+  var SR_MAX = (SR && SR.LIMITS && SR.LIMITS.stops) || 100;
+  function rWritable() { try { return !!(rstore && rstore.writable); } catch (e) { return false; } }
+  function rList() { try { return (rstore && rstore.peek()) || []; } catch (e) { return []; } }
+  function oneLine(v, max) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max); }
+  function userName() { return oneLine(lsGet('user_name', ''), 40); }
+  function isMine(r, me) {                                    // no owner (name skipped): the routes this device saved
+    var o = oneLine(r && r.owner, 40);
+    if (o) return !!me && o.toLowerCase() === me.toLowerCase();
+    var dev = ''; try { dev = rstore && rstore.deviceLabel ? rstore.deviceLabel() : ''; } catch (e) { dev = ''; }
+    return !!r && !!dev && r.by === dev;
+  }
+  function splitSaved(list, me) {                             // -> {mine, team}, each newest first (the store's order)
+    var o = { mine: [], team: [] };
+    (list || []).forEach(function (r) { (isMine(r, me) ? o.mine : o.team).push(r); });
     return o;
   }
+  /* Asked once, on the first shared save (Settings -> Routes changes it). -> the name, '' (skipped), null (cancelled). */
+  function ensureUserName() {
+    var nm = userName(); if (nm || lsGet('user_name_asked', '')) return nm;
+    var v = prompt('Your first name, shown on the routes you save. Saved routes are public, so a first name or initials is enough (Settings → Routes changes it):', '');
+    lsSet('user_name_asked', '1');                            // asked once; Cancel = skip (saved without a name)
+    if (v == null) return '';
+    nm = oneLine(v, 40);
+    if (nm) { lsSet('user_name', nm); $('rtName').value = nm; }
+    return nm;
+  }
   function validStop(s) { return !!s && typeof s.lat === 'number' && typeof s.lon === 'number' && isFinite(s.lat) && isFinite(s.lon); }
-  function fromSaved(s, skip) { var o = cleanStop(s); delete o.skip; if (skip) o.skip = true; return sid(o); }
-  function saveRoute() {
-    var inc = included(); if (!inc.length) return;
-    var nm = prompt('Name this route:', ED.title || new Date().toLocaleDateString()); if (nm == null) return;
-    nm = String(nm).trim(); if (!nm) return;
+  function toSavedStop(s) {                                   // editor stop -> saved stop {name, lat, lon, jobNumber?, match?, shop?, oot?}
+    var o = { name: stopName(s), lat: s.lat, lon: s.lon };
+    if (s.jobNumber != null) o.jobNumber = s.jobNumber;
+    if (s.match) o.match = String(s.match);
+    if (s.shop) o.shop = true;
+    if (s.oot) o.oot = true;
+    return o;
+  }
+  function fromSaved(s, skip) {                               // saved stop -> editor stop (a job follows its current pin)
+    var o = { name: String(s.name || ''), lat: +s.lat, lon: +s.lon };
+    if (s.shop) o.shop = true; if (s.jobNumber != null) o.jobNumber = s.jobNumber; if (s.match) o.match = String(s.match);
+    if (s.oot) o.oot = true;
+    var x = stopJob(o); if (x && mappedJob(x)) { o.lat = x.lat; o.lon = x.lon; }
+    if (skip) o.skip = true;
+    return sid(o);
+  }
+  function startForSave(mode) { return { mode: mode === 'gps' || mode === 'stop' ? mode : 'shop' }; }
+  function localMode(r) {                                     // a device route's start: R-3 start.mode, else seq[0] (R-1/R-2)
+    var m = r.start && r.start.mode;
+    if (m === 'gps' || m === 'stop') return m;
+    var first = (r.seq || []).filter(validStop)[0];
+    return first && first.shop ? 'shop' : 'stop';
+  }
+  function edFrom(mode, stops, skipped, r, extra) {
+    var ed = blankEditor(r.rt === true);
+    ed.mode = mode;
+    ed.stops = stops.map(function (s) { return fromSaved(s); }).concat(skipped.map(function (s) { return fromSaved(s, true); }));
+    ed.title = oneLine(r.name, 120) || 'Route';
+    return Object.assign(ed, extra || {});
+  }
+  function edFromSynced(r) {
+    var seq = (r.seq || []).filter(validStop); if (!seq.length) return null;
+    var m = r.start && r.start.mode;
+    return edFrom(m === 'gps' || m === 'stop' ? m : 'shop', seq, (r.skipped || []).filter(validStop), r, { routeId: r.id, owner: oneLine(r.owner, 40) });
+  }
+  function edFromLocal(r) {
+    var seq = (Array.isArray(r.seq) ? r.seq : []).filter(validStop), m = localMode(r);
+    if (m === 'shop') seq = seq.slice(1);                     // seq[0] was the shop
+    if (!seq.length) return null;
+    return edFrom(m, seq, (Array.isArray(r.skipped) ? r.skipped : []).filter(validStop), r);
+  }
+  /* A device route -> a SavedRoutes route (owner given), or null. SavedRoutes.fromLegacy reads seq[0] as the start; an R-3
+   * device route that starts at a site or at "Me" says so in start.mode (its seq has no shop). */
+  function localToSynced(r, owner) {
+    if (!SR || typeof SR.fromLegacy !== 'function' || !r || !Array.isArray(r.seq)) return null;
+    var out = null; try { out = SR.fromLegacy(r, owner); } catch (e) { out = null; }
+    if (!out) return null;
+    var m = r.start && r.start.mode;
+    if (m === 'gps' || m === 'stop') out.start = { mode: m };
+    return out;
+  }
+  function localRoutes() { var a = lsJSON('routes', []); return Array.isArray(a) ? a.filter(function (r) { return r && Array.isArray(r.seq) && r.seq.some(validStop); }) : []; }
+  function writeLocal(list) {
+    try { if (list.length) localStorage.setItem(NS + 'routes', JSON.stringify(list.slice(0, 50))); else localStorage.removeItem(NS + 'routes'); return true; }
+    catch (e) { return false; }
+  }
+  function sameLocal(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function saveLocal(nm) {                                    // no edit key: this device only (R-2 shape + start)
     var all = lsJSON('routes', []); if (!Array.isArray(all)) all = [];
-    var entry = { name: nm.slice(0, 120), when: new Date().toISOString(), seq: [ED.start].concat(inc).map(cleanStop), rt: !!ED.rt };
-    var sk = skippedStops(); if (sk.length) entry.skipped = sk.map(cleanStop);
+    var seq = ED.mode === 'shop' ? [ED.shop].concat(included()) : included();
+    var entry = { name: nm, when: new Date().toISOString(), seq: seq.map(toSavedStop), rt: !!ED.rt };
+    if (ED.mode !== 'shop') entry.start = startForSave(ED.mode);
+    var sk = skippedStops(); if (sk.length) entry.skipped = sk.map(toSavedStop);
     all.unshift(entry);
-    try { localStorage.setItem(NS + 'routes', JSON.stringify(all.slice(0, 50))); }
-    catch (e) { toast('Couldn’t save (storage full or blocked)', null, { error: true }); return; }
-    ED.title = entry.name; ED.dirty = false; renderEditor();
-    toast('Route saved'); renderSaved();
+    return writeLocal(all);
   }
-  function loadSaved(r) {
-    var seq = (Array.isArray(r.seq) ? r.seq : []).filter(validStop); if (!seq.length) return;
-    var name = String(r.name || 'Route').slice(0, 120), prev = replaceSnapshot();
-    if (!confirmReplace('“' + name + '”')) return;
-    var sk = (Array.isArray(r.skipped) ? r.skipped : []).filter(validStop);
-    ED = { start: fromSaved(seq[0]), stops: seq.slice(1).map(function (s) { return fromSaved(s); }).concat(sk.map(function (s) { return fromSaved(s, true); })),
-      rt: !!r.rt, title: name, unmapped: [], dirty: false };
-    openActs = null; partsOpen = false; closeAddBox();
-    edChanged({ fit: true, clean: true });
+  function routeErr(err) {
+    var c = err && err.code;
+    return c === 'readonly' ? 'Saved routes are read-only on this device'
+      : c === 'auth' ? 'Edit key rejected — Settings → Stages'
+      : c === 'invalid' ? 'This route has no stops to save'
+      : c === 'storage' ? 'Couldn’t save on this device (storage full or blocked)'
+      : (err && err.message) || 'Couldn’t save the route';
+  }
+  var saving = false;
+  function saveRoute() {
+    var inc = included(); if (!inc.length || saving) return;
+    var sk = skippedStops(), shared = rWritable();
+    if (inc.length > SR_MAX || sk.length > SR_MAX) { toast('A saved route holds up to ' + SR_MAX + ' stops (and ' + SR_MAX + ' skipped)', null, { error: true }); return; }
+    var cur = null;
+    if (shared && ED.routeId) { try { cur = rstore.get(ED.routeId); } catch (e) { cur = null; } }
+    var owner = cur ? cur.owner : '';
+    if (shared && !cur) { owner = ensureUserName(); if (owner == null) return; }
+    var nm = prompt(cur ? 'Save the changes to this route. Name:' : 'Name this route:', edTitle() || new Date().toLocaleDateString());
+    if (nm == null) return;
+    nm = oneLine(nm, shared ? 80 : 120); if (!nm) return;
+    if (!shared) {
+      if (!saveLocal(nm)) { toast('Couldn’t save (storage full or blocked)', null, { error: true }); return; }
+      ED.title = nm; ED.dirty = false; renderEditor(); renderSaved();
+      toast(rstore ? 'Saved on this device — shared routes need the edit key' : 'Route saved');
+      return;
+    }
+    var route = { name: nm, owner: owner, rt: !!ED.rt, start: startForSave(ED.mode), seq: inc.map(toSavedStop), skipped: sk.map(toSavedStop) };
+    if (cur) route.id = cur.id;
+    saving = true;
+    Promise.resolve().then(function () { return rstore.save(route); }).then(function (res) {
+      ED.routeId = res.id; ED.owner = owner; ED.title = nm; ED.dirty = false;
+      renderEditor(); renderSaved();
+      toast(res.status === 'queued' ? 'Saved on this device — it syncs when it can' : cur ? 'Route updated' : 'Route saved for the team');
+    }, function (err) {
+      var c = err && err.code;
+      toast(routeErr(err), c === 'auth' || c === 'readonly' ? openStageSettings : null, { error: true, action: 'Settings' });
+    }).then(function () { saving = false; });
+  }
+  function openRoute(r, local) {
+    var ed = local ? edFromLocal(r) : edFromSynced(r); if (!ed) return;
+    var prev = replaceSnapshot();
+    if (!confirmReplace('“' + ed.title + '”')) return;
+    cancelGps(); locErr = '';
+    ED = ed; openActs = null; partsOpen = false; closeAddBox();
+    edChanged({ fit: true, clean: true }); renderSaved();
     var body = sheetBody(); if (body) body.scrollTop = 0;
-    toast('Loaded “' + name + '”', prev ? function () { restore(prev); } : null);
+    toast('Opened “' + ed.title + '”', prev ? function () { restore(prev); } : null);
+    if (ED.mode === 'gps') startFromGps({ undo: prev, msg: 'Opened “' + ed.title + '” from your location' });   // where you are now; Undo = the route before
   }
-  function renderSaved() {
-    var all = lsJSON('routes', []), el = $('savedlist');
-    if (!Array.isArray(all)) all = [];
-    all = all.filter(function (r) { return r && Array.isArray(r.seq) && r.seq.some(validStop); });
-    el.textContent = '';
-    if (!all.length) { el.className = 'muted'; el.textContent = 'None yet.'; return; }
-    el.className = '';
-    all.forEach(function (r) {
-      var ok = r.seq.filter(validStop), when = new Date(r.when), n = Math.max(0, ok.length - (ok[0] && ok[0].shop ? 1 : 0));
-      var sk = Array.isArray(r.skipped) ? r.skipped.filter(validStop).length : 0;
-      var c = h('div', { class: 'card is-link', role: 'button', tabindex: '0' }, [
-        h('b', { text: r.name || 'Route' }),
-        h('div', { class: 'd', text: plural(n, 'stop') + (sk ? ' · ' + sk + ' skipped' : '') + (r.rt ? ' · round trip' : '') + (isNaN(when) ? '' : ' · ' + when.toLocaleString()) })
-      ]);
-      var del = h('button', { type: 'button', class: 'btn btn--sm btn--danger pressable', style: 'margin-top:6px', text: 'Delete' });
-      del.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (!confirm('Delete saved route “' + (r.name || 'Route') + '”?')) return;
-        var cur = lsJSON('routes', []); if (!Array.isArray(cur)) cur = [];
-        var idx = -1; cur.forEach(function (x, j) { if (idx < 0 && x && x.when === r.when && x.name === r.name) idx = j; });
-        if (idx >= 0) cur.splice(idx, 1);
-        lsSet('routes', JSON.stringify(cur)); renderSaved();
-      });
-      c.addEventListener('click', function () { loadSaved(r); });
-      c.addEventListener('keydown', function (e) { if (e.target === c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); loadSaved(r); } });
-      c.appendChild(del); el.appendChild(c);
+  function deleteRoute(r) {
+    var who = r.owner && !isMine(r, userName()) ? ' (' + r.owner + '’s route)' : '';
+    if (!confirm('Delete “' + r.name + '”' + who + ' for everyone? This can’t be undone.')) return;
+    Promise.resolve().then(function () { return rstore.remove(r.id); }).then(function (res) {
+      if (ED.routeId === r.id) ED.routeId = null;
+      renderSaved();
+      toast(res && res.status === 'queued' ? 'Deleted on this device — it syncs when it can' : 'Deleted “' + r.name + '”');
+    }, function (err) { toast(routeErr(err), null, { error: true }); });
+  }
+  function deleteLocal(r) {
+    if (!confirm('Delete “' + (r.name || 'Route') + '” from this device?')) return;
+    var all = lsJSON('routes', []); if (!Array.isArray(all)) all = [];
+    var i = -1; all.forEach(function (x, j) { if (i < 0 && sameLocal(x, r)) i = j; });
+    if (i >= 0) all.splice(i, 1);
+    writeLocal(all); renderSaved();
+  }
+  var syncing = false;
+  function syncLocal() {                                      // the one-time "Sync my N saved routes"
+    if (syncing || !rWritable()) return;
+    var owner = ensureUserName(); if (owner == null) return;
+    var jobs = [];
+    localRoutes().forEach(function (r) { var c = localToSynced(r, owner); if (c) jobs.push({ src: r, route: c }); });
+    if (!jobs.length) return;
+    syncing = true; renderSaved();
+    // All saves are queued before the store's first write runs, so they go up as ONE commit ("routes: save …; save …").
+    Promise.all(jobs.map(function (j) {
+      return Promise.resolve().then(function () { return rstore.save(j.route, { keepAt: true }); }).then(function () { return j.src; }, function () { return null; });
+    })).then(function (done) {
+      done = done.filter(Boolean);
+      writeLocal(localRoutes().filter(function (r) { return !done.some(function (d) { return sameLocal(d, r); }); }));
+      syncing = false; renderSaved();
+      if (done.length === jobs.length) toast('Synced ' + plural(done.length, 'route'));
+      else toast('Synced ' + done.length + ' of ' + plural(jobs.length, 'route') + ' — try again', null, { error: true });
     });
   }
+  function fmtWhen(iso) { var d = new Date(iso); return isNaN(d) ? '' : fmtTime(d); }
+  function savedRow(r, local, canDel, me) {
+    var mode = local ? localMode(r) : (r.start && r.start.mode) || 'shop';
+    var n = local ? r.seq.filter(validStop).length - (mode === 'shop' ? 1 : 0) : r.seq.length;
+    var skN = Array.isArray(r.skipped) ? r.skipped.filter(validStop).length : 0;
+    var name = oneLine(r.name, 120) || 'Route';
+    var sub = [plural(Math.max(0, n), 'stop'), skN ? skN + ' skipped' : '', startWord(mode), r.rt ? rtWord(mode) : '',
+      !local && r.owner && !isMine(r, me) ? oneLine(r.owner, 40) : '', fmtWhen(local ? r.when : r.at), r.pending ? 'waiting to sync' : ''].filter(Boolean).join(' · ');
+    var cur = !local && !!r.id && r.id === ED.routeId;
+    var open = h('button', { type: 'button', class: 'sr-open', 'aria-label': 'Open ' + name + ', ' + sub + (cur ? ', open now' : '') },
+      [h('span', { class: 't', text: name }), h('span', { class: 's', text: sub })]);
+    open.addEventListener('click', function () { openRoute(r, local); });
+    var del = null;
+    if (canDel) {
+      del = h('button', { type: 'button', class: 'sr-del pressable', 'aria-label': 'Delete ' + name, title: local ? 'Delete from this device' : 'Delete for everyone' }, [svgIcon(ICON_TRASH)]);
+      del.addEventListener('click', function () { if (local) deleteLocal(r); else deleteRoute(r); });
+    }
+    return h('div', { class: 'sr-row' + (cur ? ' is-current' : '') + (r.pending ? ' is-pending' : ''), role: 'listitem' }, [open, del]);
+  }
+  function paintSrStatus() {
+    var el = $('srStatus'), st = null, t = '';
+    try { st = rstore ? rstore.status() : null; } catch (e) { st = null; }
+    if (!rstore) t = 'Shared routes didn’t load — reload the app. Saves stay on this device.';
+    else if (st && st.mode === 'readonly') t = localRoutes().length ? 'Saved on this device only (the edit key shares routes, Settings → Stages).' : '';
+    else if (st && st.mode === 'invalid') t = 'Edit key rejected: saves stay on this device (Settings → Stages).';
+    else if (st && st.mode === 'local') t = 'Local preview: saved routes stay on this device.';
+    else if (st && st.lastError) t = String(st.lastError);
+    else if (st && st.pending) t = plural(st.pending, 'change') + ' waiting to sync';
+    el.textContent = t;
+  }
+  function renderSaved() {
+    var el = $('savedlist'), me = userName(), w = rWritable(), locals = localRoutes(), n = 0;
+    el.textContent = '';
+    $('rtNameBox').hidden = !w;                               // the name only labels shared saves: none without the edit key
+    var syncable = w ? locals.filter(function (r) { return !!localToSynced(r, ''); }) : [];
+    if (syncable.length) {
+      var b = h('button', { type: 'button', class: 'btn btn--sm btn--tinted pressable', disabled: syncing, text: syncing ? 'Syncing…' : 'Sync my ' + plural(syncable.length, 'saved route') });
+      b.addEventListener('click', syncLocal);
+      el.appendChild(h('div', { class: 'sr-banner' }, [h('p', { text: plural(syncable.length, 'route is', 'routes are') + ' saved only on this device. Sync to share ' + (syncable.length === 1 ? 'it' : 'them') + ' with the team (saved routes are public).' }), b]));
+    }
+    function section(title, items, local, canDel) {
+      if (!items.length) return;
+      el.appendChild(h('div', { class: 'sr-h', text: title }));
+      var box = h('div', { class: 'sr-box', role: 'list', 'aria-label': title });
+      items.forEach(function (r) { box.appendChild(savedRow(r, local, canDel, me)); n++; });
+      el.appendChild(box);
+    }
+    var sp = splitSaved(rList(), me);
+    section('Mine', sp.mine, false, w);
+    section('Team', sp.team, false, w);
+    section('On this device', locals, true, true);
+    if (!n) el.appendChild(h('div', { class: 'muted sr-empty', text: 'None yet. Build a route, then Save.' }));
+    paintSrStatus();
+  }
+  function loadSavedRoutes() {
+    if (!rstore) { renderSaved(); return Promise.resolve(); }
+    return Promise.resolve().then(function () { return rstore.load(); }).then(function () { renderSaved(); }, function () { renderSaved(); });
+  }
+  if (rstore) {
+    try { rstore.onChange(function () { renderSaved(); }); rstore.onStatus(function () { renderSaved(); }); } catch (e) { /* ignore */ }
+  }
+  /* Settings -> Routes -> Your name (NS + 'user_name', this device only): the owner of the routes this device saves. */
+  var nameInp = $('rtName');
+  nameInp.value = userName();
+  function saveUserName() {                                   // -> true when it changed
+    var v = oneLine(nameInp.value, 40); nameInp.value = v;
+    if (v === userName()) return false;
+    if (v) lsSet('user_name', v); else { try { localStorage.removeItem(NS + 'user_name'); } catch (e) {} }
+    lsSet('user_name_asked', '1');
+    renderSaved();
+    return true;
+  }
+  nameInp.addEventListener('change', function () { if (saveUserName()) toast(nameInp.value ? 'Name saved' : 'Name cleared'); });
+  nameInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (saveUserName()) toast(nameInp.value ? 'Name saved' : 'Name cleared'); nameInp.blur(); } });
 
   /* ================= One-click route of the selected jobs from the shop ================= */
   // R-2: startShopRoute (the route editor above) builds the route; these are the ways to start one.
@@ -1973,6 +2604,224 @@
     startShopRoute(JOBS.filter(function (x) { return groupOf(x) === k && (!q || hay(x).indexOf(q) >= 0); }), g.label + queryTitle() + ' from shop');
   }
 
+  /* ================= R-3 "Closed in Jobber — confirm they're done" (r3-plan A) =================
+   * Once per app open (cold start or reload), on a device that can save stages, when at least one job is awaitingOk
+   * (closed in Jobber, not removed, nothing outstanding): a glass dialog lists them. Completed = removed: true (Undo
+   * toast; the job leaves every device and goes to Recently removed). Still needs work = open the job at its items so
+   * pavers / asphalt / cleanup can be set (that keeps it). Later = closed until the next app open. Like an iOS alert, a
+   * tap outside does nothing. */
+  var pop = $('closedPop'), popScrim = $('popScrim'), popList = $('popList'), popBack = null;
+  /* When it asks: the check is armed by every data load (app open, Reload, and a return after POP_RESUME_MS in the
+   * background, which reloads). It needs jobs AND a stage read that succeeded in that same pass (never the offline cache
+   * or the empty defaults: a job with pavers still required would look finished and "Completed" would drop it), and it
+   * gives up POP_WINDOW_MS after both are in, so it never pops up in the middle of other work. While a text field has
+   * focus or a sheet is being dragged it waits. Jobs put off with Later / Still needs work are not asked again in this
+   * session; a job that becomes awaiting later (Reload, resume) is. */
+  var REDUCE_MOTION = (function () { try { return matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { return { matches: false }; } })();
+  var POP_WINDOW_MS = 30000, POP_RESUME_MS = 6 * 3600 * 1000;
+  var popArm = null;          // {since: ms the load started, loaded: its data is in, readyAt: ms jobs + stages were ready}
+  var popSeen = {};           // job number -> 1: put off in this session
+  var popOrder = [];          // job numbers of the open dialog, in order (an Undo puts a row back where it was)
+  var popResume = false, popWait = null, popCloseT = null;
+  function popSub(x) { var p = priceOf(x); return [clientLabel(x), '#' + x.jobNumber, stageOf(x).label, p ? fmtPS(p.t) : ''].filter(Boolean).join(' · '); }
+  function popRow(x) {
+    var nm = jobName(x);
+    return h('div', { class: 'pop-row', role: 'listitem', 'data-jn': String(x.jobNumber) }, [
+      h('div', { class: 'pop-tx' }, [h('div', { class: 't', text: nm }), h('div', { class: 's', text: popSub(x) })]),
+      h('div', { class: 'pop-acts' }, [
+        h('button', { type: 'button', class: 'btn btn--sm pressable', 'data-a': 'work', 'aria-label': 'Still needs work: ' + nm, text: 'Still needs work' }),
+        h('button', { type: 'button', class: 'btn btn--sm btn--ok pressable', 'data-a': 'done', 'aria-label': 'Completed: ' + nm, text: 'Completed' })])]);
+  }
+  function popIsOpen() { return !pop.hidden && !pop.classList.contains('is-closing'); }
+  /** The stage file was read (or saved) successfully at or after `since` (local mode: always). */
+  function stagesFresh(since) {
+    if (store.mode === 'local') return true;
+    var st = null; try { st = store.status(); } catch (e) { st = null; }
+    return !!st && typeof st.lastSync === 'number' && st.lastSync >= since;
+  }
+  function popBusy() {                                        // typing (search, rename) or dragging a sheet: wait
+    var a = document.activeElement;
+    if (a && !pop.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return true;
+    return !!document.querySelector('.sheet.is-dragging');
+  }
+  function popCandidates() { return JOBS.filter(function (x) { return awaitingOk(x) && !popSeen[x.jobNumber]; }); }
+  function armPop() { popArm = { since: Date.now(), loaded: false, readyAt: 0 }; }
+  function maybeShowClosedPop() {
+    var a = popArm;
+    if (!a || !a.loaded || !HAS_STAGES || !dataLoaded || updFailed || !stagesLoaded || popIsOpen()) return;
+    var now = Date.now();
+    if (!a.readyAt) a.readyAt = now;
+    if (now - a.readyAt > POP_WINDOW_MS) { popArm = null; return; }
+    if (!writable() || !stagesFresh(a.since)) return;         // read-only (a key may still arrive) / no fresh stage read yet: a later status event retries
+    if (popBusy()) { clearTimeout(popWait); popWait = setTimeout(maybeShowClosedPop, 1500); return; }
+    popArm = null;
+    var list = popCandidates(); if (list.length) openPop(list);
+  }
+  function openPop(list) {
+    clearTimeout(popCloseT); pop.classList.remove('is-closing');
+    popList.textContent = ''; popOrder = list.map(function (x) { return String(x.jobNumber); });
+    list.forEach(function (x) { popList.appendChild(popRow(x)); });
+    closeCard(true); closeRouteMenu();
+    popBack = document.activeElement;
+    popScrim.hidden = false; pop.hidden = false;
+    void pop.offsetWidth;                                     // commit the closed state so the open springs
+    pop.classList.add('is-open'); popScrim.classList.add('is-on');
+    try { pop.focus({ preventScroll: true }); } catch (e) {}   // the dialog itself: Enter / Space never removes a job
+  }
+  function closePop() {
+    if (!popIsOpen()) return;
+    pop.classList.remove('is-open'); pop.classList.add('is-closing'); popScrim.classList.remove('is-on');
+    popOrder = [];
+    var back = popBack; popBack = null;
+    if (back && back.focus && document.contains(back) && back !== document.body) try { back.focus({ preventScroll: true }); } catch (e) {}
+    clearTimeout(popCloseT);
+    popCloseT = setTimeout(function () {                      // after the scale-out and the scrim fade
+      pop.classList.remove('is-closing'); pop.hidden = true; popScrim.hidden = true; popList.textContent = '';   // no price text left in a closed dialog
+    }, REDUCE_MOTION.matches ? 0 : 200);
+  }
+  function putOff() {                                         // Later / Esc: not asked again in this session
+    popList.querySelectorAll('.pop-row').forEach(function (r) { popSeen[r.getAttribute('data-jn')] = 1; });
+    closePop();
+  }
+  /** A row leaves smoothly: it fades and its height closes, so the dialog shrinks instead of jumping. */
+  function collapseRow(row, done) {
+    var next = row.previousElementSibling ? null : row.nextElementSibling;   // the new first row loses its gap in step
+    var hadFocus = row.contains(document.activeElement);
+    row.style.height = row.offsetHeight + 'px';
+    void row.offsetHeight;
+    row.classList.add('is-gone'); row.style.height = '0px';
+    if (next) next.style.marginTop = '0px';
+    if (hadFocus) try { pop.focus({ preventScroll: true }); } catch (e) {}
+    setTimeout(function () {
+      if (row.parentNode) row.parentNode.removeChild(row);
+      if (next) next.style.marginTop = '';
+      if (done) done();
+    }, REDUCE_MOTION.matches ? 0 : 280);
+  }
+  /** The open dialog follows the jobs: an Undo of "Completed" (or a restore elsewhere) puts the row back in its place;
+   *  a job that stops waiting (removed or given work on another device) leaves. */
+  function syncPopRows() {
+    if (!popIsOpen()) return;
+    popOrder.forEach(function (jn, i) {
+      var x = byNum[jn], row = popList.querySelector('.pop-row[data-jn="' + jn + '"]'), want = !!x && awaitingOk(x);
+      if (want && (!row || row.classList.contains('is-gone'))) {
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+        var nr = popRow(x), after = null;
+        for (var k = i + 1; k < popOrder.length && !after; k++) after = popList.querySelector('.pop-row[data-jn="' + popOrder[k] + '"]:not(.is-gone)');
+        popList.insertBefore(nr, after);
+      } else if (!want && row && !row.classList.contains('is-gone')) {
+        collapseRow(row, function () { if (!popList.querySelector('.pop-row')) closePop(); });
+      }
+    });
+  }
+  function flagItems() {                                      // "Still needs work": the job's items, scrolled into view and flashed
+    var el = $('dItems'); if (!el || el.hidden) return;
+    var body = $('detail').querySelector('.sheet-body');
+    var rb = el.getBoundingClientRect(), bb = body.getBoundingClientRect(), bottom = Math.min(bb.bottom, innerHeight);   // iPhone medium detent: below the screen
+    if (rb.bottom > bottom - 12 || rb.top < bb.top) body.scrollTop = Math.max(0, body.scrollTop + rb.top - bb.top - 12);
+    ['asphalt', 'pavers', 'cleanup'].forEach(function (k) { var r = itemRows[k]; if (r && !r.row.hidden) flagEl(r.row); });
+  }
+  function resumePop() {                                      // the "Still needs work" job was closed: ask about the rest
+    if (popIsOpen() || UI.isDetailOpen() || !writable()) return;
+    var list = popCandidates(); if (list.length) openPop(list);
+  }
+  popList.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-a]'), row = b && b.closest('.pop-row'); if (!row || row.classList.contains('is-gone')) return;
+    var x = byNum[row.getAttribute('data-jn')]; if (!x) { row.parentNode.removeChild(row); return; }
+    if (b.getAttribute('data-a') === 'work') {
+      popSeen[x.jobNumber] = 1;
+      closePop(); openJob(x, false);
+      setTimeout(function () { flagItems(); popResume = true; }, DESK.matches ? 80 : 560);   // after the iPhone sheet has sprung open
+      return;
+    }
+    if (!writable()) { readOnlyToast(); return; }
+    collapseRow(row, function () { if (!popList.querySelector('.pop-row')) closePop(); });
+    changeJob(x, { removed: true }, { msg: 'Completed — removed from app' });
+  });
+  $('popLater').addEventListener('click', putOff);
+  addEventListener('keydown', function (e) {                  // capture: Esc = Later; Tab stays inside the dialog
+    if (!popIsOpen()) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); putOff(); return; }
+    if (e.key !== 'Tab') return;
+    var f = [].slice.call(pop.querySelectorAll('.pop-row:not(.is-gone) button:not([disabled]), .pop-foot button:not([disabled])')); if (!f.length) return;
+    var i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (i < 0 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+  }, true);
+  function repaintPop() {                                     // prices arrived / toggled while the dialog is open
+    if (!popIsOpen()) return;
+    popList.querySelectorAll('.pop-row').forEach(function (r) { var x = byNum[r.getAttribute('data-jn')]; if (x) r.querySelector('.s').textContent = popSub(x); });
+  }
+  var hiddenAt = 0;                                           // a Home Screen app resumed after hours: fresh data (and the check)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > POP_RESUME_MS && dataLoaded) { hiddenAt = 0; reloadData(); }
+  });
+
+  /* ================= R-3 Settings -> Data -> "Recently removed (60 days)" (r3-plan A) =================
+   * data/closed_archive.json (the sync's 60-day archive: {version, days, jobs: [record + droppedAt, droppedWhy]}) plus jobs
+   * removed here that are still in data/closed_jobs.json (until the next sync). Restore = patch {removed: null}: a job
+   * still in closed_jobs.json is back at once; an archived one "Comes back at the next sync". */
+  var ARCHIVE = [], rrOpen = false;
+  function loadArchive() {
+    return getJSON(BASE + 'data/closed_archive.json' + bust()).then(function (a) {
+      ARCHIVE = a && Array.isArray(a.jobs) ? a.jobs.filter(function (r) { return r && typeof r === 'object' && r.jobNumber != null; }) : [];
+    }, function (e) { if (/^HTTP 404$/.test(e && e.message)) ARCHIVE = []; })   // other failures keep the last good list
+      .then(renderRemoved);
+  }
+  function localDay(iso) { var d = new Date(iso); return isNaN(d) ? '' : isoDay(d); }
+  function removedItems() {
+    var out = [], seen = {};
+    ALL.forEach(function (x) {
+      if (!x._hidden) return;
+      var e = STAGEMAP[x.jobNumber]; seen[x.jobNumber] = 1;
+      out.push({ jn: x.jobNumber, name: jobName(x), day: e && e.at ? localDay(e.at) : '', live: true });
+    });
+    ARCHIVE.forEach(function (r) {
+      var jn = r.jobNumber, cur = byNum[jn];
+      if (seen[jn] || (cur && !cur._hidden)) return;          // listed already, or back in the app
+      seen[jn] = 1;
+      var e = STAGEMAP[jn], nm = effName(e) || String(r.street || r.title || '#' + jn).slice(0, 80);
+      out.push({ jn: jn, name: nm, day: /^\d{4}-\d{2}-\d{2}$/.test(String(r.droppedAt || '')) ? r.droppedAt : '', removed: !!(e && e.removed === true) });
+    });
+    return out.sort(function (a, b) { return a.day < b.day ? 1 : a.day > b.day ? -1 : 0; }).slice(0, 100);
+  }
+  function renderRemoved() {
+    var items = dataLoaded ? removedItems() : [];
+    $('rrBox').hidden = !items.length;
+    $('rrN').textContent = items.length ? String(items.length) : '';
+    $('rrTgl').setAttribute('aria-expanded', rrOpen && items.length ? 'true' : 'false');
+    $('rrPane').hidden = !(rrOpen && items.length);
+    var list = $('rrList'); list.textContent = '';
+    if (!rrOpen || !items.length) return;
+    var ro = !writable();
+    items.forEach(function (it) {
+      var act = it.live || it.removed
+        ? h('button', { type: 'button', class: 'btn btn--sm btn--tinted pressable', 'data-jn': String(it.jn), 'aria-label': 'Restore ' + it.name, text: 'Restore', disabled: ro })
+        : h('span', { class: 'rr-state', text: 'Comes back at the next sync' });
+      list.appendChild(h('div', { class: 'rr-row' }, [
+        h('div', { class: 'rr-tx' }, [h('div', { class: 't', text: it.name }), h('div', { class: 's', text: '#' + it.jn + (it.day ? ' · removed ' + fmtDay(it.day) : '') })]), act]));
+    });
+    $('rrNote').textContent = ro ? 'Restoring needs the edit key (Settings → Stages).' : 'Completed jobs stay here for 60 days. Restore puts a job back in the app on every device.';
+  }
+  $('rrTgl').addEventListener('click', function () { rrOpen = !rrOpen; renderRemoved(); });
+  $('rrList').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-jn]'); if (!b || b.disabled) return;
+    if (!writable()) { readOnlyToast(); return; }
+    var jn = b.getAttribute('data-jn'), x = byNum[jn];
+    if (x && x._hidden) { changeJob(x, { removed: null }, { msg: 'Back in the app' }); return; }   // still in closed_jobs.json: back now
+    var before = STAGEMAP[jn] || null, it = removedItems().filter(function (r) { return String(r.jn) === String(jn); })[0];
+    var next = entryWith(before, 'removed', undefined);       // optimistic: the row says "Comes back at the next sync"
+    if (next) { next.at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'); next.by = store.deviceLabel ? store.deviceLabel() : ''; STAGEMAP[jn] = next; }
+    else delete STAGEMAP[jn];
+    renderRemoved();
+    var p; try { p = store.set(isFinite(+jn) ? +jn : jn, { removed: null }, { label: it ? it.name : '' }); } catch (err) { p = Promise.reject(err); }
+    Promise.resolve(p).then(function () { toast('Restored — comes back at the next sync'); }, function () {
+      if (before) STAGEMAP[jn] = before; else delete STAGEMAP[jn];
+      renderRemoved(); toast('Couldn’t restore — try again', null, { error: true });
+    });
+  });
+
   /* ================= Settings ================= */
   function segBind(el, get, set) {
     function paint() {
@@ -2024,13 +2873,13 @@
       if (r && r.ok) { inp.value = ''; stMsg('Key saved — GitHub accepted it. Stage edits are on and sync across devices; your first move confirms write access.', 'ok'); toast('Edit key saved'); }
       else stMsg('Not saved: ' + ((r && r.reason) || 'the key could not be checked.'), 'err');
     }, function () { stMsg('Not saved: the key could not be checked. Try again.', 'err'); })
-      .then(function () { b.disabled = false; renderStageStatus(); lockSliders(); });
+      .then(function () { b.disabled = false; renderStageStatus(); lockSliders(); loadSavedRoutes(); });   // R-3: routes use the same key
   });
   $('stKey').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('stSave').click(); } });
   $('stRemove').addEventListener('click', function () {
     if (!confirm('Remove the edit key from this device? Stages become read-only here.')) return;
     try { store.removeKey(); } catch (e) {}
-    stMsg('Key removed from this device.'); renderStageStatus(); lockSliders();
+    stMsg('Key removed from this device.'); renderStageStatus(); lockSliders(); loadSavedRoutes();
   });
   $('stShare').addEventListener('click', function () {
     var key = null; try { key = store.getKeyForShare(); } catch (e) {}
@@ -2077,7 +2926,8 @@
         var x = byNum[jn], r = rows[jn]; if (!x || !r) return;
         r.replaceChild(rowTrail(x), r.lastChild); r.setAttribute('aria-label', rowAria(x));
       });
-      updateGroupCounts(); updateChipCounts();
+      updateGroupCounts(); updateChipCounts(); updateCount();   // R-3: "N jobs · $total"
+      repaintPop();
     }
     if (detailJn != null && byNum[detailJn]) paintDetailPrice(byNum[detailJn]); else paintDetailPrice(null);
     if (cardJob) { paintCardPrice(cardJob); cardH = card.offsetHeight || cardH; } else paintCardPrice(null);
@@ -2173,7 +3023,7 @@
   }
   syncModeSeg(); renderEditor(); renderSaved(); renderStageStatus(); lockSliders(); paintPrices();
   if (!HAS_MAP) { setUpd('map library failed to load — check the connection and reload'); }
-  loadData().then(function () { try { store.start(); } catch (e) {} });
+  loadData().then(function () { try { store.start(); } catch (e) {} try { if (rstore) rstore.start(); } catch (e) {} });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 
   window.EJ = {                                               // debugging / verification hooks (no secrets)
@@ -2187,6 +3037,11 @@
     },
     /* R-2 verification: after editing jobs' hints / closed in the console, recompute and redraw everything */
     refreshAll: function () { ALL.forEach(refreshEff); rebuildVisible(); renderAll(); refreshOpenJob(); },
-    reload: reloadData, esc: esc, get stops() { return ED.stops; }, get editor() { return ED; }, get routeSeq() { return routeSeq(); }
+    reload: reloadData, esc: esc, get stops() { return ED.stops; }, get editor() { return ED; }, get routeSeq() { return routeSeq(); },
+    get routePath() { return model().path; },
+    savedRoutes: {                                            // R-3 (js/routes.js): read-only view for verification (no key access)
+      get mode() { return rstore ? rstore.mode : null; }, peek: function () { return rList(); },
+      status: function () { return rstore ? rstore.status() : null; }, load: loadSavedRoutes
+    }
   };
 })();

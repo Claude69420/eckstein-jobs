@@ -12,12 +12,7 @@
  *   "invalid"  the key was rejected (401/403): behaves read-only until a new key is saved.
  *
  * Stored entry (only non-default fields; asphalt/pavers whenever someone set them, including "na"):
- *   {stage?, assess?, lane?:{s, from?, to?}, cut?, asphalt?, pavers?, cleanup?, removed?, name?, loc?:{lat, lon}, sat?,
- *    at, by}
- * R-3 (docs/r3-plan.md E): name = the job's display name / street set in the app (one line, <= 80 chars, cleaned like
- * labels); loc = its map position {lat, lon} (finite, inside the Manitoba box MB_BOX). set(jn, {name: "..." | null,
- * loc: {lat, lon} | null}); null clears (back to Jobber's). effective() gives name / loc (null by default). Commit
- * parts: 'name -> "..."' / 'name -> cleared', 'loc -> moved' / 'loc -> cleared'. The Python sync ignores both.
+ *   {stage?, assess?, lane?:{s, from?, to?}, cut?, asphalt?, pavers?, cleanup?, removed?, sat?, at, by}
  * load() / peek() / onChange() hand out these STORED entries (beta: MERGED with the overlay, see below); the UI
  * applies Stages.effective(entry, job.hints, job.jobNumber).
  *
@@ -72,8 +67,6 @@ var Stages = (function () {
   function normalize(key) { return KEYS[stageIndex(key)]; }
 
   /* ---------- small helpers ---------- */
-  /** Manitoba box (R-3): job positions (loc) and saved-route stops must fall inside it (js/routes.js uses the same). */
-  var MB_BOX = { latMin: 48.9, latMax: 50.9, lonMin: -99.8, lonMax: -95.3 };
   function has(o, k) { return !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k); }
   function isPlainObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function str(v) { return typeof v === 'string' ? v : ''; }
@@ -122,12 +115,9 @@ var Stages = (function () {
   function inValues(key, v) { return typeof v === 'string' && ITEM[key].values.indexOf(v) >= 0; }
 
   /** Every field a patch may carry, in file order (sat, at, by follow). */
-  var FIELDS = ['stage', 'assess', 'lane', 'cut', 'asphalt', 'pavers', 'cleanup', 'removed', 'name', 'loc'];
+  var FIELDS = ['stage', 'assess', 'lane', 'cut', 'asphalt', 'pavers', 'cleanup', 'removed'];
   /** Stored/queued fields: FIELDS + "sat" (stage-set time; set by the store itself, never by a patch). */
   var QFIELDS = FIELDS.concat(['sat']);
-  /** R-3 per-job overrides, stored in the file's top-level OVR_KEY object (serializeDoc). */
-  var OFIELDS = ['name', 'loc'];
-  var OVR_KEY = 'overrides';
   /** ISO 8601 date-time with "Z" or a +-HH:MM offset ("2026-09-26T15:00:00Z", "...T10:00:00.5-05:00",
    *  "...T15:00Z") -> itself, or null. Compared as instants (tests/fixtures/overlay_vectors.json "times";
    *  sync_jobs.py parse_time matches). This app writes only toISOString's form without milliseconds.
@@ -387,23 +377,6 @@ var Stages = (function () {
     if (has(l, 'to')) o.to = l.to;
     return o;
   }
-  /* R-3 (docs/r3-plan.md E): a job's display name and map position, set in the app (shared with everyone).
-   * name: one line, <= 80 chars, cleaned like labels (nothing left = no name). loc: {lat, lon}, finite numbers inside
-   * the Manitoba box. Both are content (an entry may hold only them); the sync ignores both. */
-  function inManitoba(lat, lon) {
-    return typeof lat === 'number' && typeof lon === 'number' && isFinite(lat) && isFinite(lon) &&
-      lat >= MB_BOX.latMin && lat <= MB_BOX.latMax && lon >= MB_BOX.lonMin && lon <= MB_BOX.lonMax;
-  }
-  /** Any value -> a cleaned name, or null (not a string, or nothing left after cleaning). */
-  function cleanName(v) { if (typeof v !== 'string') return null; var n = cleanLabel(v); return n || null; }
-  /** Any value -> {lat, lon} (a new object), or null. */
-  function cleanLoc(v) { return isPlainObj(v) && inManitoba(v.lat, v.lon) ? { lat: v.lat, lon: v.lon } : null; }
-  /** Copy of one stored field value (objects are copied; everything else is a primitive). */
-  function copyVal(f, v) {
-    if (f === 'lane') return copyLane(v);
-    if (f === 'loc') return v ? { lat: v.lat, lon: v.lon } : v;
-    return v;
-  }
   /** Content fields of a public-file entry (unknown values dropped, defaults dropped). Never null. */
   function cleanContent(v) {
     var o = {}, k;
@@ -421,8 +394,6 @@ var Stages = (function () {
     if (has(v, 'pavers') && inValues('pavers', v.pavers)) o.pavers = v.pavers;
     if (has(v, 'cleanup') && v.cleanup === 'done') o.cleanup = 'done';
     if (has(v, 'removed') && v.removed === true) o.removed = true;
-    if (has(v, 'name')) { var nm = cleanName(v.name); if (nm) o.name = nm; }
-    if (has(v, 'loc')) { var lc = cleanLoc(v.loc); if (lc) o.loc = lc; }
     return o;
   }
   /** Holds anything but at/by? (A beta entry holding only "sat" means "the beta set Ready at sat".) */
@@ -435,7 +406,7 @@ var Stages = (function () {
   function copyEntry(e) {
     if (!e) return null;
     var o = {};
-    QFIELDS.forEach(function (f) { if (has(e, f)) o[f] = copyVal(f, e[f]); });
+    QFIELDS.forEach(function (f) { if (has(e, f)) o[f] = f === 'lane' ? copyLane(e.lane) : e[f]; });
     if (has(e, 'at')) o.at = e.at;
     if (has(e, 'by')) o.by = e.by;
     return o;
@@ -478,12 +449,6 @@ var Stages = (function () {
       case 'sat': // internal (the store sets it, cleanPatch never accepts it); null drops it
         if (v === null) return null;
         return cleanIso(v) || INVALID;
-      case 'name': // null, or a name that cleans to nothing = back to the Jobber name
-        if (v === null) return null;
-        return typeof v === 'string' ? cleanName(v) : INVALID;
-      case 'loc': // null = back to the Jobber position
-        if (v === null) return null;
-        return cleanLoc(v) || INVALID;
       case 'lane': {
         if (v === null) return { s: 'na' };
         if (typeof v === 'string') return inValues('lane', v) ? { s: v } : INVALID;
@@ -505,7 +470,7 @@ var Stages = (function () {
     switch (f) {
       case 'stage': return v === 'ready';
       case 'lane': return !v || v.s === 'na';
-      case 'asphalt': case 'pavers': case 'sat': case 'name': case 'loc': return v === null;
+      case 'asphalt': case 'pavers': case 'sat': return v === null;
       case 'removed': return v !== true;
       default: return v === ITEM[f].def;
     }
@@ -527,7 +492,7 @@ var Stages = (function () {
   }
   function copyFields(fields) {
     var o = {};
-    QFIELDS.forEach(function (f) { if (has(fields, f)) o[f] = copyVal(f, fields[f]); });
+    QFIELDS.forEach(function (f) { if (has(fields, f)) o[f] = f === 'lane' ? copyLane(fields.lane) : fields[f]; });
     return o;
   }
   /** Stored entry (or null) + fields -> new entry object (defaults dropped; at/by carried over unchanged). */
@@ -537,7 +502,7 @@ var Stages = (function () {
       if (!has(fields, f)) return;
       var v = fields[f];
       if (isDefaultValue(f, v)) delete o[f];
-      else o[f] = copyVal(f, v);
+      else o[f] = f === 'lane' ? copyLane(v) : v;
     });
     return o;
   }
@@ -562,9 +527,7 @@ var Stages = (function () {
       asphalt: has(e, 'asphalt') ? e.asphalt : (h.asphalt === true ? 'req' : 'na'),
       pavers: has(e, 'pavers') ? e.pavers : (h.pavers === true ? 'req' : 'na'),
       cleanup: has(e, 'cleanup') ? e.cleanup : 'todo',
-      removed: has(e, 'removed') && e.removed === true,
-      name: has(e, 'name') ? e.name : null,             // R-3: display name set in the app (null = the Jobber name)
-      loc: has(e, 'loc') ? copyVal('loc', e.loc) : null // R-3: map position set in the app (null = the Jobber pin)
+      removed: has(e, 'removed') && e.removed === true
     };
   }
   function ok() { return { ok: true }; }
@@ -585,7 +548,7 @@ var Stages = (function () {
       if (value !== null && !knownKey(value)) return blocked('invalid', MSG.invalid);
       return canMove(entry, value === null ? 'ready' : value, hints);
     }
-    if (item !== 'removed' && item !== 'name' && item !== 'loc' && !itemDef(item)) return blocked('invalid', MSG.invalid);
+    if (item !== 'removed' && !itemDef(item)) return blocked('invalid', MSG.invalid);
     if (item === 'lane' && isPlainObj(value) && value.s === 'booked' && cleanDate(value.from) && cleanDate(value.to) &&
         value.from > value.to) return blocked('dates', MSG.dates);
     if (cleanFieldValue(item, value) === INVALID) return blocked('invalid', MSG.invalid);
@@ -605,11 +568,6 @@ var Stages = (function () {
     var ls = eff.lane && eff.lane.s;
     return stageIndex(eff.stage) > 0 || eff.asphalt === 'req' || eff.pavers === 'req' || eff.cut === 'req' ||
       ls === 'req' || ls === 'booked';
-  }
-  /** R-3 (docs/r3-plan.md A): closed in Jobber, not removed, nothing outstanding -> the app asks "confirm they're done".
-   *  Takes effective() and the job (jobs.json / closed_jobs.json row: job.closed === true when it left Jobber). */
-  function awaitingOk(eff, job) {
-    return !!eff && !!job && !!job.closed && !eff.removed && !keepWhenClosed(eff);
   }
   /** Is the item's switch shown for this job? (Its stages, plus later stages while still Required.) */
   function itemShown(eff, item) {
@@ -635,46 +593,24 @@ var Stages = (function () {
   /** Any parsed JSON -> {map, extras, version}; malformed/missing -> empty map. Unknown top-level fields are kept.
    *  Keys that differ only by whitespace (" 684" and "684", hand edits): the exact key always wins, otherwise the
    *  last one in the file (independent of Object.keys order, which lists integer-like keys first). */
-  /** {key: value} with whitespace-variant job keys resolved (exact key wins, else the last in file order). */
-  function jobKeyed(st) {
-    var raw = {}, exact = {};
-    Object.keys(st).forEach(function (k) {
-      var jn = cleanJobKey(k);
-      if (!jn || (jn !== k && has(exact, jn))) return;
-      raw[jn] = st[k];
-      if (jn === k) exact[jn] = true;
-    });
-    return raw;
-  }
   function sanitizeDoc(obj) {
     var map = {}, extras = {};
     if (isPlainObj(obj)) {
       Object.keys(obj).forEach(function (k) {
-        if (k !== 'version' && k !== 'stages' && k !== OVR_KEY && k !== '__proto__') extras[k] = obj[k];
+        if (k !== 'version' && k !== 'stages' && k !== '__proto__') extras[k] = obj[k];
       });
       var st = obj.stages;
       if (isPlainObj(st)) {
-        var raw = jobKeyed(st);
+        var raw = {}, exact = {};
+        Object.keys(st).forEach(function (k) {
+          var jn = cleanJobKey(k);
+          if (!jn || (jn !== k && has(exact, jn))) return;
+          raw[jn] = st[k];
+          if (jn === k) exact[jn] = true;
+        });
         Object.keys(raw).forEach(function (jn) {
           var e = cleanEntry(raw[jn]);
           if (e) map[jn] = e;
-        });
-      }
-      // R-3 name / loc live in the top-level "overrides" object (see serializeDoc); they win over inline ones.
-      if (isPlainObj(obj[OVR_KEY])) {
-        var ovr = jobKeyed(obj[OVR_KEY]);
-        Object.keys(ovr).forEach(function (jn) {
-          var v = ovr[jn];
-          if (!isPlainObj(v)) return;
-          var oc = cleanEntry({ name: v.name, loc: v.loc, at: v.at, by: v.by });
-          if (!oc) return;
-          var cur = has(map, jn) ? map[jn] : null;
-          if (!cur) { map[jn] = oc; return; }
-          var e = copyEntry(cur);
-          OFIELDS.forEach(function (f) { if (has(oc, f)) e[f] = copyVal(f, oc[f]); });
-          var to = isoMs(oc.at), tc = isoMs(cur.at);
-          if (isFinite(to) && !(tc >= to)) { e.at = oc.at; e.by = oc.by; }
-          map[jn] = copyEntry(e);
         });
       }
     }
@@ -750,24 +686,10 @@ var Stages = (function () {
   }
 
   /** File text (v2): 2-space JSON + trailing newline; numeric job keys come out in ascending order. */
-  // R-3: name / loc are written to a top-level "overrides" object {jn: {name?, loc?, at, by}}, never inside the
-  // stage entries. An R-2 page still open after the update passes unknown top-level fields through untouched, but
-  // its cleanEntry would strip unknown entry fields (and drop an entry holding only name / loc) on its next save.
-  // The sync reads only "stages"; promote_stages.py keeps top-level fields too.
   function serializeDoc(map, extras) {
-    var stages = {}, ovr = {}, nOvr = 0;
-    Object.keys(map).forEach(function (jn) {
-      var e = copyEntry(map[jn]), o = {};
-      OFIELDS.forEach(function (f) { if (has(e, f)) { o[f] = e[f]; delete e[f]; } });
-      if (hasContent(e)) stages[jn] = e;
-      if (hasContent(o)) {
-        if (has(e, 'at')) o.at = e.at;
-        if (has(e, 'by')) o.by = e.by;
-        ovr[jn] = o; nOvr++;
-      }
-    });
+    var stages = {};
+    Object.keys(map).forEach(function (jn) { stages[jn] = copyEntry(map[jn]); });
     var doc = { version: FILE_VERSION, stages: stages };
-    if (nOvr) doc[OVR_KEY] = ovr;
     if (extras) Object.keys(extras).forEach(function (k) { if (!has(doc, k)) doc[k] = extras[k]; });
     return JSON.stringify(doc, null, 2) + '\n';
   }
@@ -811,8 +733,6 @@ var Stages = (function () {
         return v.s + (v.from || v.to ? ' ' + (v.from || '') + '..' + (v.to || '') : '');
       case 'asphalt': case 'pavers': return v || 'auto';
       case 'removed': return v === true ? 'true' : 'false';
-      case 'name': return v ? '"' + v + '"' : 'cleared';
-      case 'loc': return v ? 'moved' : 'cleared';
       default: return v || ITEM[f].def;
     }
   }
@@ -820,13 +740,12 @@ var Stages = (function () {
    *  set that only renews "sat" (beta: the same stage as the file, over a v1 move) still reads "stage -> X". */
   function describeChange(before, after, fields) {
     var parts = [];
-    function locKey(e) { return has(e, 'loc') ? JSON.stringify(copyVal('loc', e.loc)) : ''; }
     FIELDS.forEach(function (f) {
       if (!has(fields, f)) return;
       var a = fieldText(f, before), b = fieldText(f, after);
-      var changed = f === 'loc' ? locKey(before) !== locKey(after) // "moved" -> "moved" is still a move
-        : a !== b || (f === 'stage' && has(fields, 'sat') && str(before && before.sat) !== str(after && after.sat));
-      if (changed) parts.push(f + ' -> ' + b);
+      if (a !== b || (f === 'stage' && has(fields, 'sat') && str(before && before.sat) !== str(after && after.sat))) {
+        parts.push(f + ' -> ' + b);
+      }
     });
     return parts;
   }
@@ -1488,7 +1407,7 @@ var Stages = (function () {
           var e = has(queue, jn) ? queue[jn] : { fields: {}, fb: {}, label: '' };
           QFIELDS.forEach(function (f) {
             if (!has(fields, f)) return;
-            e.fields[f] = copyVal(f, fields[f]);
+            e.fields[f] = f === 'lane' ? copyLane(fields.lane) : fields[f];
             e.fb[f] = openBatch.id;
           });
           e.at = at; e.by = by; e.label = label || e.label;
@@ -1616,9 +1535,6 @@ var Stages = (function () {
     canSetItem: canSetItem,
     fieldWorkDone: fieldWorkDone,
     keepWhenClosed: keepWhenClosed,
-    awaitingOk: awaitingOk,
-    MB_BOX: MB_BOX,
-    inManitoba: inManitoba,
     itemShown: itemShown,
     createStore: createStore,
     resolveConfig: resolveConfig,
@@ -1635,8 +1551,7 @@ var Stages = (function () {
       serializeDoc: serializeDoc, commitMessage: commitMessage, cleanJobKey: cleanJobKey,
       cleanEntry: cleanEntry, cleanPatch: cleanPatch, cleanDate: cleanDate, applyFields: applyFields,
       describeChange: describeChange, parseOverlayText: parseOverlayText, mergeOverlay: mergeOverlay,
-      overlayWins: overlayWins, isoMs: isoMs, cleanLabel: cleanLabel, cleanName: cleanName, cleanLoc: cleanLoc,
-      cleanIso: cleanIso
+      overlayWins: overlayWins, isoMs: isoMs
     }
   };
 })();

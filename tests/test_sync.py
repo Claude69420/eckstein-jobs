@@ -5,7 +5,7 @@
 Fixtures live in tests/fixtures/ (made-up jobs, streets and amounts). The AES key used here is a public
 TEST ONLY key (bytes 0..31); it is not the real PRICE_KEY.
 """
-import base64, contextlib, http.client, io, json, os, shutil, sys, tempfile, unittest, urllib.error
+import base64, contextlib, http.client, io, json, os, shutil, sys, tempfile, unittest, urllib.error, urllib.parse
 from datetime import date
 from pathlib import Path
 from unittest import mock
@@ -28,9 +28,13 @@ def fixture(name):
 # from the beta file, sat dropped), plus #156 with a stage this sync does not understand (a newer app).
 # Dual-file mode (the beta trial, r2-plan §9; S.BETA_STATE_FILE = "stages-beta.json"): v1's stages.json (stage/at/by
 # only, as R-1 writes it) and the beta's stages-beta.json (items + sat).
-# Every one of these gives the same decisions as the combined sync_stages.json:
-# kept 150 (v1 base is newer than the beta sat), 151 (asphalt hint), 155 (beta prep + asphalt, beta sat newer),
-# 156 (v1 stage not understood); dropped 152 (field work done), 153 (removed in the beta), 154 (no work).
+# Every one of these gives the same decisions as the combined sync_stages.json.
+# R-3 keep rule (docs/r3-plan.md A): a closed job is kept until its entry has removed: true. Kept 150 (v1 base is newer
+# than the beta sat), 151 (asphalt hint), 155 (beta prep + asphalt, beta sat newer), 156 (v1 stage not understood),
+# 152 (field work done: waiting for "Completed" in the app), 154 (no work: waiting too); dropped only 153 (removed).
+# (Under R-2's rule 152 and 154 were dropped too.)
+KEPT = [150, 151, 152, 154, 155, 156]
+ALL_CLOSED = [150, 151, 152, 153, 154, 155, 156]
 PROMOTED_TEXT = (FIX / "sync_stages_promoted.json").read_text(encoding="utf-8")
 V1_TEXT = (FIX / "sync_stages_v1.json").read_text(encoding="utf-8")
 BETA_TEXT = (FIX / "sync_stages_beta.json").read_text(encoding="utf-8")
@@ -230,10 +234,12 @@ class CarryForward(unittest.TestCase):
 
     def test_rules(self):
         kept, dropped = S.carry_forward(self.prev, {201, 9001}, {9001}, self.entries)
-        self.assertEqual(sorted(r["jobNumber"] for r in kept), [150, 151, 155, 156])
-        self.assertEqual(sorted(jn for jn, _ in dropped), [152, 153, 154])
-        why = dict(dropped)
-        self.assertIn("removed", why[153]); self.assertIn("field work done", why[152])
+        self.assertEqual(sorted(r["jobNumber"] for r in kept), KEPT)
+        self.assertEqual(dropped, [(153, "removed in app")])
+        why = {r["jobNumber"]: r["_why"] for r in kept}
+        self.assertEqual(why[152], "waiting for Completed in the app (field work done)")
+        self.assertEqual(why[154], "waiting for Completed in the app (nothing outstanding)")
+        self.assertEqual(why[150], "work started, field work not done")
         for r in kept:
             self.assertIs(r["closed"], True)
             self.assertIn("hints", r); self.assertIn("id", r)
@@ -246,11 +252,11 @@ class CarryForward(unittest.TestCase):
 
     def test_read_failure_keeps_every_candidate(self):
         kept, dropped = S.carry_forward(self.prev, {201, 9001}, {9001}, None)
-        self.assertEqual(sorted(r["jobNumber"] for r in kept), [150, 151, 152, 153, 154, 155, 156])
+        self.assertEqual(sorted(r["jobNumber"] for r in kept), ALL_CLOSED)
         self.assertEqual(dropped, [])
 
     def test_active_again_is_not_closed(self):
-        kept, _ = S.carry_forward(self.prev, {150, 151, 155, 156, 201}, set(), self.entries)
+        kept, _ = S.carry_forward(self.prev, set(KEPT) | {201}, set(), self.entries)
         self.assertEqual(kept, [])
 
     def test_does_not_mutate_previous_records(self):
@@ -365,7 +371,7 @@ class EndToEnd(SyncTestCase):
         self.assertEqual(rc, 0)
         # jobs.json keeps the R-1 membership (active + pending); closed jobs are only in closed_jobs.json
         self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001])
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 155, 156])
+        self.assertEqual(sorted(self.closed_out()), KEPT)
         jobs = self.all_out()
         # active records: id + hints, no prices, no line-item text
         self.assertEqual(jobs[201]["id"], "TEST-ID-201")
@@ -384,7 +390,7 @@ class EndToEnd(SyncTestCase):
         # pending
         self.assertTrue(jobs[9001]["pending"]); self.assertNotIn("closed", jobs[9001])
         # closed jobs
-        for jn in (150, 151, 155, 156): self.assertIs(jobs[jn]["closed"], True)
+        for jn in KEPT: self.assertIs(jobs[jn]["closed"], True)
         self.assertEqual(jobs[150]["status"], "requires_invoicing")           # refreshed
         self.assertEqual(jobs[155]["status"], "requires_invoicing")           # refresh failed -> previous kept
         self.assertEqual(jobs[156]["status"], "action_required")              # not found -> previous kept
@@ -396,7 +402,7 @@ class EndToEnd(SyncTestCase):
             self.assertEqual(order, sorted(order, reverse=True))
         meta = self.meta()
         self.assertEqual((meta["total"], meta["mapped"], meta["closed"], meta["stages_read"], meta["stages_beta_read"]),
-                         (4, 4, 4, "ok", "not read (single-file mode)"))
+                         (4, 4, 6, "ok", "not read (single-file mode)"))
         self.assertEqual(meta["stage_entries"], {"stages.json": 6})
         self.assertEqual([u.split("?")[0] for u in self.fetched], [S.STAGES_RAW_URL], "only stages.json is read")
         self.assertEqual(sorted(meta["by_client"].values()), [1, 1, 2])   # jobs.json only (Crown x2, Harris, Other)
@@ -433,7 +439,7 @@ class EndToEnd(SyncTestCase):
         self.run_main(self.default_jobber(), stages)          # previous files are now the first run's output
         second = self.all_out()
         self.assertEqual(sorted(first), sorted(second))
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 155, 156])
+        self.assertEqual(sorted(self.closed_out()), KEPT)
 
     def test_price_key_missing_leaves_existing_file_alone(self):
         (self.out / S.PRICES_NAME).write_text("OLD-FILE", encoding="utf-8")
@@ -479,7 +485,7 @@ class EndToEnd(SyncTestCase):
         fake = self.refusing_jobber("uninvoicedTotal")
         self.assertEqual(self.run_main(fake, STAGES_TEXT), 0)
         jobs = self.all_out()
-        self.assertEqual(sorted(jobs), [150, 151, 155, 156, 201, 202, 203, 9001])
+        self.assertEqual(sorted(jobs), [150, 151, 152, 154, 155, 156, 201, 202, 203, 9001])
         self.assertEqual(jobs[202]["hints"], {"asphalt": False, "pavers": True}, "line items still used")
         self.assertIn("::warning::jobber: job list query refused", self.log)
         self.assertIn("prices: skipped (Jobber did not return complete totals", self.log)
@@ -560,7 +566,7 @@ class EndToEnd(SyncTestCase):
         self.assertLessEqual(len(refreshes), 3)
         self.assertIn("refresh failed (JobberError; previous values kept)", self.log)   # the budget ran out mid-retry
         self.assertIn("refresh budget used up; previous values kept", self.log)
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 155, 156], "closed jobs still kept (previous values)")
+        self.assertEqual(sorted(self.closed_out()), KEPT, "closed jobs still kept (previous values)")
         self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001])
 
     def test_gql_deadline_bounds_throttle_waits(self):
@@ -588,7 +594,7 @@ class EndToEnd(SyncTestCase):
         shutil.move(str(self.out / S.CACHE_NAME), str(self.inp / S.CACHE_NAME))
         inp_before = {p.name: p.read_bytes() for p in self.inp.iterdir()}
         self.run_main(self.default_jobber(), STAGES_TEXT)
-        self.assertEqual(sorted(self.all_out()), [150, 151, 155, 156, 201, 202, 203, 9001])
+        self.assertEqual(sorted(self.all_out()), [150, 151, 152, 154, 155, 156, 201, 202, 203, 9001])
         self.assertEqual({p.name: p.read_bytes() for p in self.inp.iterdir()}, inp_before, "--data is read-only")
         self.assertTrue(all(self.jobs_out()[jn]["ok"] for jn in (201, 202, 203)), "cache read from --data")
 
@@ -598,6 +604,14 @@ class EndToEnd(SyncTestCase):
 def stages_without(*job_numbers):
     doc = json.loads(STAGES_TEXT)
     for jn in job_numbers: doc["stages"].pop(str(jn), None)
+    return json.dumps(doc)
+
+def stages_with(**entries):
+    """STAGES_TEXT with entries replaced (keys are "_<jobNumber>"; None removes the entry)."""
+    doc = json.loads(STAGES_TEXT)
+    for k, v in entries.items():
+        if v is None: doc["stages"].pop(k.lstrip("_"), None)
+        else: doc["stages"][k.lstrip("_")] = v
     return json.dumps(doc)
 
 
@@ -616,26 +630,32 @@ class ReviewFixesUnit(unittest.TestCase):
                     "2026-10-6", "20261006", "2026-W40-1", "２０２６-10-06", 20261006, None):
             with self.subTest(bad=bad): self.assertIsNone(S.clean_date(bad))
 
-    def test_unknown_values_keep_only_when_they_could_change_the_decision(self):
+    def test_r3_only_removed_drops_and_unknown_values_never_do(self):
+        """R-3 keep rule: every closed job stays until removed: true; a value this sync does not understand can never
+        drop a job (an unknown `removed` value reads as not removed). The reason names what is outstanding."""
+        W = S.AWAITING_WHY
         cases = [
-            ({"stage": "poured", "cleanup": "done", "cut": "maybe"}, False),     # field work done either way
-            ({"stage": "poured", "cleanup": "done", "assess": "phone"}, False),
-            ({"stage": "poured", "cleanup": "done", "lane": {"s": "later"}}, False),
-            ({"stage": "poured", "cleanup": "done", "asphalt": "partial"}, True),  # might still be required
-            ({"stage": "poured", "cleanup": "done", "pavers": "partial"}, True),
-            ({"assess": "phone"}, False),                                        # no work either way
-            ({"cleanup": "later"}, False),
-            ({"removed": "yes"}, False),
-            ({"cut": "scheduled"}, True),                                        # might be work in progress
-            ({"lane": {"s": "pending"}}, True),
-            ({"stage": "setup2"}, True),                                         # a newer app's stage
-            ("setup2", True),
-            (5, True), ([1], True),                                              # whole entry not understood
-            ({"stage": "base", "removed": True, "cut": "maybe"}, False),          # removed always wins
+            (None, True, f"{W} (nothing outstanding)"),                          # no entry at all
+            ({"stage": "poured", "cleanup": "done"}, True, f"{W} (field work done)"),
+            ({"stage": "poured", "cleanup": "done", "pavers": "req"}, True, "work started, field work not done"),
+            ({"stage": "base"}, True, "work started, field work not done"),
+            ({"stage": "poured", "cleanup": "done", "cut": "maybe"}, True, "stage entry not understood (kept to be safe)"),
+            ({"assess": "phone"}, True, "stage entry not understood (kept to be safe)"),
+            ({"removed": "yes"}, True, "stage entry not understood (kept to be safe)"),
+            ({"removed": False, "stage": "poured", "cleanup": "done"}, True, f"{W} (field work done)"),
+            ({"cut": "scheduled"}, True, None), ({"stage": "setup2"}, True, None), ("setup2", True, None),
+            (5, True, None), ([1], True, None),
+            ({"stage": "base", "removed": True, "cut": "maybe"}, False, "removed in app"),   # removed always wins
+            ({"removed": True}, False, "removed in app"),
+            ({"removed": True, "name": "Portage & Lipton", "loc": {"lat": 49.88, "lon": -97.28}}, False, "removed in app"),
+            ({"name": "Portage & Lipton", "loc": {"lat": 49.88, "lon": -97.28}}, True, f"{W} (nothing outstanding)"),
+            ({"stage": "base", "name": 5, "loc": "x"}, True, "work started, field work not done"),   # name/loc ignored
         ]
-        for entry, keep in cases:
+        for entry, keep, why in cases:
             with self.subTest(entry=entry):
-                self.assertEqual(S.keep_decision(entry, {})[0], keep)
+                got = S.keep_decision(entry, {})
+                self.assertEqual(got[0], keep)
+                if why is not None: self.assertEqual(got[1], why)
 
     def test_carried_records_are_normalized(self):
         prev = [{"jobNumber": "150", "hints": {"asphalt": 1}, "lat": float("nan"), "lon": -97.2, "ok": True,
@@ -702,17 +722,30 @@ class ReviewFixesEndToEnd(SyncTestCase):
     def archive(self):
         return json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))
 
-    def test_dropped_closed_job_comes_back_when_its_entry_is_restored(self):
+    def test_removed_closed_job_comes_back_when_restored_in_the_app(self):
+        """R-3: "Completed" (removed: true) archives the job with droppedWhy "removed in app"; Settings -> Recently
+        removed -> Restore (the patch {removed: null} deletes the field) brings it back at the next sync."""
         self.run_main(self.default_jobber(), STAGES_TEXT)
         self.assertIs(self.closed_out()[150]["closed"], True)
-        self.assertEqual(sorted(r["jobNumber"] for r in self.archive()["jobs"]), [152, 153, 154])
-        # run 2: #150's entry is gone (a slip back to Ready, or a stale/reset copy): dropped, warned, archived
+        self.assertEqual(sorted(r["jobNumber"] for r in self.archive()["jobs"]), [153])
+        # run 2: #150's entry slips back to Ready (entry gone): R-3 keeps it (only removed drops a job)
         self.run_main(self.default_jobber(), stages_without(150))
+        self.assertIn(150, self.closed_out())
+        self.assertIn("kept #150 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        # run 3: confirmed "Completed" in the app: dropped (logged, not silent), archived
+        self.run_main(self.default_jobber(), stages_with(_150={"stage": "base", "removed": True,
+                                                               "at": "2026-09-30T10:00:00Z", "by": "PC"}))
         self.assertNotIn(150, self.all_out())
-        self.assertIn("::warning::carry-forward: dropped #150, which was closed in Jobber", self.log)
+        self.assertIn("carry-forward: dropped #150, which was closed in Jobber (removed in app); its record stays in "
+                      "data/closed_archive.json", self.log)
+        self.assertNotIn("::warning::", self.log, "a confirmed removal is not a warning")
         arch = {r["jobNumber"]: r for r in self.archive()["jobs"]}
-        self.assertIn(150, arch); self.assertEqual(arch[150]["droppedWhy"], "no work in progress")
-        # run 3: the entry is back -> so is the job, with a fresh refresh; the archive forgets it
+        self.assertIn(150, arch); self.assertEqual(arch[150]["droppedWhy"], "removed in app")
+        self.assertEqual(arch[150]["street"], "150 Test Ave")
+        # run 4: still removed -> stays archived, not in the app
+        self.run_main(self.default_jobber(), stages_with(_150={"stage": "base", "removed": True}))
+        self.assertNotIn(150, self.all_out()); self.assertIn(150, {r["jobNumber"] for r in self.archive()["jobs"]})
+        # run 5: restored in the app (removed cleared) -> back, with a fresh refresh; the archive forgets it
         self.run_main(self.default_jobber(), STAGES_TEXT)
         jobs = self.closed_out()
         self.assertIs(jobs[150]["closed"], True)
@@ -886,8 +919,12 @@ class OverlayUnit(unittest.TestCase):
         overlay = {"1": {"stage": "base", "at": "2026-09-20T00:00:00Z"}, "2": {"stage": "base", "at": "2026-09-20T00:00:00Z"},
                    "3": {"stage": "excavation", "at": "2026-09-20T00:00:00Z"}}
         kept, dropped = S.carry_forward(prev, set(), set(), state, overlay=overlay)
-        self.assertEqual(sorted(r["jobNumber"] for r in kept), [2, 4])
-        self.assertEqual(dict(dropped), {1: "field work done", 3: "removed from app", 5: "no work in progress"})
+        self.assertEqual(sorted(r["jobNumber"] for r in kept), [1, 2, 4, 5], "R-3: only removed drops a job")
+        self.assertEqual(dropped, [(3, "removed in app")])
+        why = {r["jobNumber"]: r["_why"] for r in kept}
+        self.assertEqual((why[1], why[2], why[5]), ("waiting for Completed in the app (field work done)",
+                                                    "work started, field work not done",
+                                                    "waiting for Completed in the app (nothing outstanding)"))
 
     def test_fetch_stages_404(self):
         def raiser(code):
@@ -928,7 +965,7 @@ class ClosedJobsFiles(SyncTestCase):
         (self.out / S.CLOSED_NAME).write_text(json.dumps([rec]), encoding="utf-8")
         self.run_main(self.default_jobber(), self.STAGES)
         closed = self.closed_out()
-        self.assertEqual(sorted(closed), [150, 151, 156])     # 155 is in neither previous file any more
+        self.assertEqual(sorted(closed), [150, 151, 152, 154, 156])     # 155 is in neither previous file any more
         self.assertEqual(closed[150]["title"], "from closed_jobs.json")
         self.assertEqual(closed[150]["status"], "requires_invoicing", "still refreshed from Jobber")
 
@@ -986,9 +1023,10 @@ class SingleFileMode(SyncTestCase):
         self.assertEqual([u.split("?")[0] for u in self.fetched], [S.STAGES_RAW_URL])
         self.assertIn("kept #156 closed in Jobber (stage entry not understood (kept to be safe)", self.log)
         self.assertIn("kept #155 closed in Jobber (work started", self.log)
-        self.assertIn("dropped #152 (field work done)", self.log)
-        self.assertIn("dropped #153 (removed from app)", self.log)
-        self.assertIn("dropped #154 (no work in progress)", self.log)
+        self.assertIn("kept #152 closed in Jobber (waiting for Completed in the app (field work done)", self.log)
+        self.assertIn("kept #154 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        self.assertIn("dropped #153 (removed in app)", self.log)
+        self.assertEqual(self.log.count("dropped #"), 1)
         meta = self.meta()
         self.assertEqual((meta["stages_read"], meta["stages_beta_read"], meta["stage_entries"]),
                          ("ok", "not read (single-file mode)", {"stages.json": 6}))
@@ -1003,16 +1041,18 @@ class SingleFileMode(SyncTestCase):
             "155": {"stage": "poured", "cleanup": "done", "asphalt": "req"},                       # asphalt still required
             "156": {"lane": {"s": "booked", "from": "2026-10-06"}}})                               # lane booked
         self.run_main(self.default_jobber(), json.dumps(doc))
-        self.assertEqual(sorted(self.closed_out()), [152, 154, 155, 156])
-        self.assertIn("dropped #150 (removed from app)", self.log)
-        self.assertIn("dropped #151 (no work in progress)", self.log)
-        self.assertIn("dropped #153 (removed from app)", self.log)
+        self.assertEqual(sorted(self.closed_out()), [151, 152, 154, 155, 156])
+        self.assertIn("dropped #150 (removed in app)", self.log)
+        self.assertIn("kept #151 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        self.assertIn("dropped #153 (removed in app)", self.log)
 
     def test_v1_shaped_entries_are_read_as_they_are(self):
-        """A stage-only entry (the R-1 shape) is evaluated directly: no items means cleanup still to do."""
+        """A stage-only entry (the R-1 shape) is evaluated directly: no items means cleanup still to do; no removed
+        flag means every job is kept (R-3)."""
         self.run_main(self.default_jobber(), V1_TEXT)
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 155, 156])
-        self.assertIn("dropped #154 (no work in progress)", self.log)
+        self.assertEqual(sorted(self.closed_out()), ALL_CLOSED)
+        self.assertIn("kept #154 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        self.assertNotIn("dropped", self.log)
 
     def test_stages_json_404_keeps_everything(self):
         self.run_main(self.default_jobber(), stages_exc=urllib.error.HTTPError(S.STAGES_RAW_URL, 404, "Not Found", {}, None))
@@ -1035,14 +1075,15 @@ class SingleFileMode(SyncTestCase):
         self.assertEqual(self.meta()["stage_entries"], {"stages.json": 31}, "guard armed for the next run; beta count gone")
         self.run_main(self.default_jobber(), STAGES_TEXT)      # the file is back: normal decisions again
         self.assertNotIn("unreadable", self.log)
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 156])
+        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 154, 156])
+        self.assertIn("dropped #153, which was closed in Jobber (removed in app)", self.log)
         self.assertEqual(self.meta()["stage_entries"], {"stages.json": 6})
 
     def test_empty_stages_json_while_closed_jobs_were_kept_keeps_them(self):
         self.run_main(self.default_jobber(), STAGES_TEXT)
         (self.out / S.META_NAME).write_text("{}", encoding="utf-8")   # no count: the closed-jobs guard alone
         self.run_main(self.default_jobber(), '{"version":2,"stages":{}}')
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 155, 156])
+        self.assertEqual(sorted(self.closed_out()), KEPT)
         self.assertIn("::warning::carry-forward: stages.json unreadable (no entries at all, but closed jobs were kept",
                       self.log)
 
@@ -1055,13 +1096,13 @@ class SingleFileMode(SyncTestCase):
         trial = sorted(self.closed_out())
         self.run_main(self.default_jobber(), PROMOTED_TEXT)
         self.assertEqual(sorted(self.closed_out()), trial)
-        self.assertEqual(trial, [150, 151, 155, 156])
+        self.assertEqual(trial, KEPT)
         self.assertNotIn("::warning::carry-forward", self.log)
         self.assertNotIn("dropped", self.log)
         meta = self.meta()
         self.assertEqual((meta["stages_beta_read"], meta["stage_entries"]), ("not read (single-file mode)", {"stages.json": 6}))
         arch = json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]
-        self.assertEqual(sorted(r["jobNumber"] for r in arch), [152, 153, 154])
+        self.assertEqual(sorted(r["jobNumber"] for r in arch), [153])
 
     def test_read_stage_files_unit(self):
         with mock.patch.object(S, "_http_text", lambda url, timeout=20: STAGES_TEXT):
@@ -1099,20 +1140,21 @@ class BetaChannel(DualMode, SyncTestCase):
         self.assertEqual(sorted(jobs), [201, 202, 203, 9001])
         for r in jobs.values(): self.assertNotIn("closed", r)
         closed = self.closed_out()
-        self.assertEqual(sorted(closed), [150, 151, 155, 156])
+        self.assertEqual(sorted(closed), KEPT)
         for r in closed.values(): self.assertIs(r["closed"], True)
         self.assertIn("kept #150 closed in Jobber (work started", self.log)
         self.assertIn("kept #156 closed in Jobber (stages.json entry not understood", self.log)
-        self.assertIn("dropped #152 (field work done)", self.log)
-        self.assertIn("dropped #153 (removed from app)", self.log)
+        self.assertIn("kept #152 closed in Jobber (waiting for Completed in the app (field work done)", self.log)
+        self.assertIn("dropped #153 (removed in app)", self.log)
         arch = json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]
-        self.assertEqual(sorted(r["jobNumber"] for r in arch), [152, 153, 154])
+        self.assertEqual(sorted(r["jobNumber"] for r in arch), [153])
 
     def test_beta_file_404_is_empty_not_a_failure(self):
         self.run_main(self.default_jobber(), V1_TEXT, beta_exc=self.NOT_FOUND)
-        # v1 alone decides the stages; v1 carries no items, so 152 (poured, cleanup to do) and 153 stay
-        self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 155, 156])
-        self.assertIn("dropped #154 (no work in progress)", self.log)
+        # v1 alone decides the stages; v1 carries no items (no removed flag), so every job stays (R-3)
+        self.assertEqual(sorted(self.closed_out()), ALL_CLOSED)
+        self.assertIn("kept #154 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        self.assertNotIn("dropped", self.log)
         self.assertNotIn("stages-beta.json unreadable", self.log)
         meta = self.meta()
         self.assertEqual((meta["stages_read"], meta["stages_beta_read"]), ("ok", "not found (no entries yet)"))
@@ -1143,15 +1185,18 @@ class BetaChannel(DualMode, SyncTestCase):
     def test_sat_rule_end_to_end(self):
         v1 = v1_with(_150={"stage": "base", "at": "2026-09-20T10:00:00Z", "by": "PC"})
         done = {"stage": "poured", "cleanup": "done"}
+        # R-3: kept either way (nothing is removed); the merged stage decides the reason
         cases = [(dict(done, sat="2026-09-21T10:00:00Z"), False),   # beta set the stage after v1: field work done
                  (dict(done, sat="2026-09-19T10:00:00Z"), True),    # v1 moved it later: base, work in progress
                  (dict(done, sat="2026-09-20T10:00:00Z"), False),   # same instant: beta stage
                  (dict(done), True)]                                # no sat: v1 stage
-        for entry, kept in cases:
+        for entry, in_progress in cases:
             with self.subTest(entry=entry):
                 self.fresh_previous()
                 self.run_main(self.default_jobber(), v1, beta_text=beta_doc({"150": entry}))
-                self.assertEqual(150 in self.closed_out(), kept)
+                self.assertIn(150, self.closed_out())
+                why = "work started, field work not done" if in_progress else "waiting for Completed in the app (field work done)"
+                self.assertIn(f"kept #150 closed in Jobber ({why}", self.log)
 
     def test_items_come_only_from_the_beta_file(self):
         # v1 file carrying items (a hand edit): ignored; the beta's asphalt na beats #151's asphalt hint
@@ -1160,19 +1205,24 @@ class BetaChannel(DualMode, SyncTestCase):
                          "154": {"cut": "req", "sat": "2026-09-21T00:00:00Z"}})
         self.run_main(self.default_jobber(), v1, beta_text=beta)
         closed = self.closed_out()
-        self.assertIn(152, closed, "cleanup from v1's file is ignored: cleanup still to do")
-        self.assertNotIn(151, closed, "stored asphalt na beats the hint")
-        self.assertIn(154, closed, "street cut required in the beta")
+        self.assertIn(152, closed)
+        self.assertIn("kept #152 closed in Jobber (work started", self.log, "cleanup from v1's file is ignored")
+        self.assertIn(151, closed)
+        self.assertIn("kept #151 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log,
+                      "stored asphalt na beats the hint")
+        self.assertIn("kept #154 closed in Jobber (work started", self.log, "street cut required in the beta")
 
     def test_removed_in_beta_beats_a_newer_v1_stage(self):
         self.run_main(self.default_jobber(), v1_with(_153={"stage": "prep", "at": "2026-09-25T10:00:00Z"}))
         self.assertNotIn(153, self.closed_out())
-        self.assertIn("dropped #153 (removed from app)", self.log)
+        self.assertIn("dropped #153 (removed in app)", self.log)
 
-    def test_unclear_v1_stage_older_than_beta_sat_does_not_keep(self):
+    def test_unclear_v1_stage_older_than_beta_sat_is_not_named(self):
+        """R-3: kept either way; the odd v1 value would not have been used, so the reason is the beta's."""
         beta = json.loads(BETA_TEXT); beta["stages"]["156"] = {"assess": "virtual", "sat": "2026-09-21T00:00:00Z"}
         self.run_main(self.default_jobber(), V1_TEXT, beta_text=json.dumps(beta))
-        self.assertNotIn(156, self.closed_out())
+        self.assertIn(156, self.closed_out())
+        self.assertIn("kept #156 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
 
     def test_empty_beta_file_after_it_had_entries_keeps_everything(self):
         self.run_main(self.default_jobber(), V1_TEXT)
@@ -1181,7 +1231,7 @@ class BetaChannel(DualMode, SyncTestCase):
             with self.subTest(case=str(kw)):
                 shutil.copy(FIX / "sync_prev_jobs.json", self.out / S.JOBS_NAME)
                 self.run_main(self.default_jobber(), V1_TEXT, **kw)
-                # without the guard #154 would be dropped (and #153's "removed" forgotten)
+                # without the guard #153's "removed" would be forgotten (it would come back)
                 self.assertEqual(sorted(self.closed_out()), [150, 151, 152, 153, 154, 155, 156], "nothing dropped")
                 self.assertNotIn("dropped", self.log)
                 self.assertIn("::warning::carry-forward: stages-beta.json unreadable (no entries at all, but it had 5",
@@ -1197,8 +1247,244 @@ class BetaChannel(DualMode, SyncTestCase):
         (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
         self.run_main(self.default_jobber(), V1_TEXT, beta_exc=self.NOT_FOUND)
         self.assertEqual(sorted(self.jobs_out()), [201, 202, 203, 9001])
-        self.assertEqual(sorted(self.closed_out()), [150, 152, 153, 155, 156])
+        self.assertEqual(sorted(self.closed_out()), ALL_CLOSED)
         self.assertIsNone(self.closed_out()[150]["id"], "no id yet: not refreshed, previous values kept")
+
+
+# ----------------------------------------------------------------------------- R-3 (docs/r3-plan.md A, E)
+class R3KeepUntilRemoved(SyncTestCase):
+    """A: a job that left Jobber's active list stays until its stage entry has removed: true."""
+    def archive(self):
+        return {r["jobNumber"]: r for r in json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]}
+
+    def test_closed_job_with_nothing_outstanding_is_kept_not_dropped(self):
+        self.run_main(self.default_jobber(), stages_with(_152={"stage": "poured", "cleanup": "done"}, _154=None))
+        closed = self.closed_out()
+        for jn in (152, 154):
+            self.assertIn(jn, closed); self.assertIs(closed[jn]["closed"], True)
+        self.assertIn("kept #152 closed in Jobber (waiting for Completed in the app (field work done)", self.log)
+        self.assertIn("kept #154 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+        self.assertNotIn(152, self.archive()); self.assertNotIn(154, self.archive())
+        self.run_main(self.default_jobber(), stages_with(_152={"stage": "poured", "cleanup": "done"}, _154=None))
+        self.assertEqual(sorted(self.closed_out()), KEPT, "still there on the next run")
+
+    def test_removed_goes_to_the_archive(self):
+        self.run_main(self.default_jobber(), stages_with(_152={"stage": "poured", "cleanup": "done", "removed": True}))
+        self.assertNotIn(152, self.all_out())
+        arch = self.archive()
+        self.assertEqual(sorted(arch), [152, 153])
+        self.assertEqual((arch[152]["droppedWhy"], arch[153]["droppedWhy"]), ("removed in app", "removed in app"))
+        self.assertEqual(arch[152]["droppedAt"], S.datetime.now(S.timezone.utc).date().isoformat())
+        self.assertEqual(arch[152]["street"], "152 Test Ave")
+
+    def test_restore_after_removed_is_cleared(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertIn(153, self.archive()); self.assertNotIn(153, self.all_out())
+        self.run_main(self.default_jobber(), stages_with(_153={"stage": "excavation", "at": "2026-09-30T10:00:00Z"}))
+        self.assertIn(153, self.closed_out())
+        self.assertIs(self.closed_out()[153]["closed"], True)
+        self.assertNotIn("droppedWhy", self.closed_out()[153])
+        self.assertIn("kept #153 closed in Jobber (restored from closed_archive.json: work started", self.log)
+        self.assertNotIn(153, self.archive())
+
+    def test_job_archived_under_the_r2_rule_comes_back_at_the_first_r3_sync(self):
+        """closed_archive.json from an R-2 sync (droppedWhy "field work done"): not removed -> restored for the OK popup."""
+        rec = dict(next(r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] == 152),
+                   droppedAt=date.today().isoformat(), droppedWhy="field work done")
+        (self.out / S.JOBS_NAME).write_text(json.dumps([r for r in fixture("sync_prev_jobs.json") if r["jobNumber"] != 152]),
+                                            encoding="utf-8")
+        (self.out / S.ARCHIVE_NAME).write_text(json.dumps({"version": 1, "days": 60, "jobs": [rec]}), encoding="utf-8")
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertIn(152, self.closed_out())
+        self.assertNotIn("droppedAt", self.closed_out()[152])
+        self.assertIn("restored from closed_archive.json: waiting for Completed in the app (field work done)", self.log)
+
+    def test_pending_jobs_untouched(self):
+        """Pending manual (9000+) jobs are never carried forward or archived, even with removed: true."""
+        self.run_main(self.default_jobber(), stages_with(_9001={"removed": True}, _9002={"stage": "base"}))
+        self.assertIn(9001, self.jobs_out()); self.assertTrue(self.jobs_out()[9001]["pending"])
+        self.assertNotIn("closed", self.jobs_out()[9001])
+        self.assertNotIn(9001, self.closed_out())
+        self.assertNotIn(9002, self.all_out(), "a pending job that left pending_manual.json is not a closed job")
+        self.assertFalse({9001, 9002} & set(self.archive()))
+
+    def test_read_failure_and_reset_guards_still_keep_everything_and_restore_nothing(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertIn(153, self.archive())
+        for kw in ({"stages_exc": urllib.error.URLError("offline")}, {"stages_text": '{"version":2,"stages":{}}'},
+                   {"stages_text": "{oops"}, {"stages_text": '{"version":3,"stages":{}}'}):
+            with self.subTest(case=str(kw)):
+                self.run_main(self.default_jobber(), **kw)
+                self.assertEqual(sorted(self.closed_out()), KEPT, "nothing dropped")
+                self.assertNotIn(153, self.all_out(), "a removed job is not restored by an unreadable / reset store")
+                self.assertIn(153, self.archive())
+                self.assertNotIn("dropped", self.log)
+
+    def test_name_and_loc_in_entries_are_ignored(self):
+        doc = json.loads(stages_with(_150={"stage": "base", "name": "Portage & Lipton", "loc": {"lat": 49.88, "lon": -97.28}},
+                                     _154={"name": "x" * 500, "loc": "garbage"}))
+        self.run_main(self.default_jobber(), json.dumps(doc))
+        closed = self.closed_out()
+        self.assertEqual(sorted(closed), KEPT)
+        self.assertEqual((closed[150]["street"], closed[150]["lat"]), ("150 Test Ave", 49.8), "the sync never applies name/loc")
+        self.assertNotIn("name", closed[150]); self.assertNotIn("loc", closed[150])
+        self.assertIn("kept #154 closed in Jobber (waiting for Completed in the app (nothing outstanding)", self.log)
+
+
+class R3RangeStreetsUnit(unittest.TestCase):
+    def test_parse_range_street(self):
+        cases = {
+            "Portage Ave (Lipton St to Lenore St)": ("Portage Ave", "Lipton St", "Lenore St"),
+            "Colony St [Portage Av to Webb Pl]": ("Colony St", "Portage Av", "Webb Pl"),
+            "Main St [1st St NW to Railway St S]": ("Main St", "1st St NW", "Railway St S"),
+            "Pembina Hwy (Adamar Rd TO Plaza Dr)": ("Pembina Hwy", "Adamar Rd", "Plaza Dr"),
+            "  Princess St  (William Ave  to  Elgin Ave) ": ("Princess St", "William Ave", "Elgin Ave"),
+            "St Mary's Rd (Fermor Ave to St Anne&amp;s Rd)": ("St Mary's Rd", "Fermor Ave", "St Anne&s Rd"),
+            "Portage Ave (Lipton St to Lenore St) Rear Lane": ("Portage Ave", "Lipton St", "Lenore St"),
+            "2nd St (Toronto St to Ontario St)": ("2nd St", "Toronto St", "Ontario St"),
+        }
+        for raw, want in cases.items():
+            with self.subTest(raw=raw): self.assertEqual(S.parse_range_street(raw), want)
+        for raw in ("905 Portage Ave (Arlington St to Burnell St)", "12A Main St (A St to B St)",
+                    "10-12 Main St (A St to B St)", "1 St NW (A St to B St)",       # a house number: not a range street
+                    "Portage Ave (100 to 200)",                                      # house-number range
+                    "Watt St and Munroe Ave (505 Munroe Ave)", "Brandon Ave and Osborne St (back lane)",
+                    "Watt St and Munroe Ave (A St to B St)", "Watt St &amp; Munroe Ave (A St to B St)", "Portage Ave & Harris Blvd [A St to B St]",
+                    "15 Barnes St (Barnes Av & Cornerstone Ht)", "Portage Ave", "", None,
+                    "(Lipton St to Lenore St)", "Portage Ave ( to Lenore St)", "Portage Ave (Lipton St to )",
+                    "Portage Ave (Lipton St - Lenore St)", "Portage Ave (Lipton St to Lenore St]"):
+            with self.subTest(raw=raw): self.assertIsNone(S.parse_range_street(raw))
+
+    def test_distance_km(self):
+        self.assertAlmostEqual(S.distance_km([49.88, -97.20], [49.88, -97.20]), 0.0)
+        self.assertAlmostEqual(S.distance_km([49.88, -97.20], [49.89, -97.20]), 1.112, places=2)
+
+    def test_geocode_range_uses_the_cache_format(self):
+        k = lambda s: f"{s}, Winnipeg, MB, Canada"
+        cache = {k("Portage Ave & Lipton St"): [49.8810, -97.1880], k("Portage Ave & Lenore St"): [49.8816, -97.1840],
+                 k("Pembina Hwy & Adamar Rd"): [49.8000, -97.1500], k("Pembina Hwy & Plaza Dr"): [49.8400, -97.1500],
+                 k("Colony St & Webb Pl"): [49.8890, -97.1510]}
+        with contextlib.redirect_stdout(io.StringIO()):
+            c, how, calls = S.geocode_range(cache, "Portage Ave", "Lipton St", "Lenore St", "Winnipeg", None)
+            self.assertEqual((c, how, calls), ([49.8813, -97.186], "midpoint", 0))
+            c, how, _ = S.geocode_range(cache, "Pembina Hwy", "Adamar Rd", "Plaza Dr", "Winnipeg", None)   # 4.4 km apart
+            self.assertEqual((c, how), ([49.8000, -97.1500], "Pembina Hwy & Adamar Rd (Plaza Dr end too far)"))
+            c, how, _ = S.geocode_range(cache, "Colony St", "Portage Av", "Webb Pl", "Winnipeg", None)       # A not found
+            self.assertEqual((c, how), ([49.8890, -97.1510], "Colony St & Webb Pl (Portage Av end not found)"))
+            self.assertEqual(S.geocode_range(cache, "Nowhere St", "A St", "B St", "Winnipeg", None), (None, "not found", 0))
+
+
+class R3RangeStreetsEndToEnd(SyncTestCase):
+    """E: range streets through main() with a mocked TomTom geocoder (no network)."""
+    TOMTOM = {   # made-up coordinates inside the Manitoba box
+        "Portage Ave & Lipton St, Winnipeg, MB, Canada": (49.8810, -97.1880),
+        "Portage Ave & Lenore St, Winnipeg, MB, Canada": (49.8816, -97.1840),   # ~0.3 km: midpoint
+        "Colony St & Portage Av, Winnipeg, MB, Canada": (49.8880, -97.1515),
+        "Pembina Hwy & Adamar Rd, Winnipeg, MB, Canada": (49.8000, -97.1500),
+        "Pembina Hwy & Plaza Dr, Winnipeg, MB, Canada": (49.8400, -97.1500),    # ~4.4 km: too far apart
+        "905 Portage Ave, Winnipeg, MB, Canada": (49.8857, -97.1704),
+    }
+    TEST_ONLY_TOMTOM_KEY = "TEST-ONLY-TOMTOM-KEY"
+
+    def jobber_with(self, streets):
+        pages = fixture("sync_jobber_pages.json")["pages"]
+        base = pages[0]["data"]["jobs"]["nodes"][0]
+        for jn, street in streets.items():
+            n = json.loads(json.dumps(base))
+            n.update({"id": f"TEST-ID-{jn}", "jobNumber": jn, "title": f"Range test {jn}", "total": None,
+                      "uninvoicedTotal": None, "lineItems": {"nodes": [], "pageInfo": {"hasNextPage": False}}})
+            n["property"]["address"]["street1"] = street
+            pages[0]["data"]["jobs"]["nodes"].append(n)
+        jobber = FakeJobber(pages, refresh=self.default_jobber().refresh)
+        self.geocoded = []
+        def dispatch(url, data=None, headers=None, timeout=20):
+            if url.startswith("https://api.tomtom.com/"):
+                q = urllib.parse.unquote(url.split("/geocode/")[1].split(".json?")[0])
+                self.geocoded.append(q)
+                pos = self.TOMTOM.get(q)
+                return {"results": [{"position": {"lat": pos[0], "lon": pos[1]}}]} if pos else {"results": []}
+            return jobber(url, data, headers, timeout)
+        return dispatch
+
+    def run_ranges(self, streets, overrides=None):
+        os.environ["TOMTOM_KEY"] = self.TEST_ONLY_TOMTOM_KEY
+        if overrides is not None:
+            (self.inp / S.OVERRIDES_NAME).write_text(json.dumps(overrides), encoding="utf-8")
+        self.run_main(self.jobber_with(streets), STAGES_TEXT)
+        self.assertNotIn(self.TEST_ONLY_TOMTOM_KEY, self.log, "the TomTom key is never printed")
+        return self.jobs_out()
+
+    def test_portage_and_lipton_gets_a_midpoint_pin(self):
+        jobs = self.run_ranges({688: "Portage Ave (Lipton St to Lenore St)"})
+        r = jobs[688]
+        self.assertEqual((r["street"], r["range"], r["streetRaw"]),
+                         ("Portage Ave & Lipton St", "Lipton St to Lenore St", "Portage Ave (Lipton St to Lenore St)"))
+        self.assertEqual((r["lat"], r["lon"], r["ok"]), (49.8813, -97.186, True))
+        cache = json.loads((self.out / S.CACHE_NAME).read_text(encoding="utf-8"))
+        self.assertEqual(cache["Portage Ave & Lipton St, Winnipeg, MB, Canada"], [49.8810, -97.1880])
+        self.assertEqual(cache["Portage Ave & Lenore St, Winnipeg, MB, Canada"], [49.8816, -97.1840])
+        self.assertNotIn("Portage Ave, Winnipeg, MB, Canada", cache, "no generic street pin any more")
+        self.assertIn("range: #688 Portage Ave & Lipton St (Lipton St to Lenore St) -> pin midpoint", self.log)
+        self.assertEqual(self.meta()["geocode_api_calls"], 2)
+        for jn in (201, 202, 203, 9001): self.assertNotIn("range", jobs[jn], "only range jobs carry the key")
+        # second run: everything from the cache, same pin, no TomTom call
+        jobs = self.run_ranges({688: "Portage Ave (Lipton St to Lenore St)"})
+        self.assertEqual((jobs[688]["lat"], jobs[688]["lon"]), (49.8813, -97.186))
+        self.assertEqual(self.geocoded, []); self.assertEqual(self.meta()["geocode_api_calls"], 0)
+
+    def test_colony_street_falls_back_to_main_and_a(self):
+        jobs = self.run_ranges({690: "Colony St [Portage Av to Webb Pl]"})   # "Colony St & Webb Pl" not found
+        r = jobs[690]
+        self.assertEqual((r["street"], r["range"]), ("Colony St & Portage Av", "Portage Av to Webb Pl"))
+        self.assertEqual((r["lat"], r["lon"], r["ok"]), (49.8880, -97.1515, True))
+        self.assertEqual(sorted(self.geocoded), ["Colony St & Portage Av, Winnipeg, MB, Canada",
+                                                 "Colony St & Webb Pl, Winnipeg, MB, Canada"])
+        self.assertIn("range: #690 Colony St & Portage Av (Portage Av to Webb Pl) -> pin Colony St & Portage Av", self.log)
+
+    def test_far_apart_ends_fall_back_to_main_and_a(self):
+        jobs = self.run_ranges({698: "Pembina Hwy (Adamar Rd to Plaza Dr)"})
+        self.assertEqual((jobs[698]["street"], jobs[698]["lat"], jobs[698]["lon"]), ("Pembina Hwy & Adamar Rd", 49.8, -97.15))
+        self.assertIn("(Plaza Dr end too far)", self.log)
+
+    def test_neither_end_found_is_a_failed_job(self):
+        jobs = self.run_ranges({699: "Nowhere St (A St to B St)"})
+        r = jobs[699]
+        self.assertEqual((r["street"], r["range"], r["lat"], r["ok"]), ("Nowhere St & A St", "A St to B St", None, False))
+        self.assertIn("#699 Nowhere St & A St", self.meta()["failed"])
+
+    def test_neither_end_found_falls_back_to_the_street_pin(self):
+        self.TOMTOM = dict(self.TOMTOM, **{"Nowhere St, Winnipeg, MB, Canada": (49.9001, -97.1002)})
+        jobs = self.run_ranges({699: "Nowhere St (A St to B St)"})
+        r = jobs[699]
+        self.assertEqual((r["street"], r["range"], r["lat"], r["lon"], r["ok"]),
+                         ("Nowhere St & A St", "A St to B St", 49.9001, -97.1002, True))
+        self.assertEqual(self.geocoded[-1], "Nowhere St, Winnipeg, MB, Canada")
+        self.assertIn("-> pin Nowhere St (range ends not found, street pin)", self.log)
+        self.assertEqual(self.meta()["failed"], [])
+
+    def test_numbered_street_unchanged(self):
+        jobs = self.run_ranges({665: "905 Portage Ave (Arlington St to Burnell St)"})
+        r = jobs[665]
+        self.assertEqual((r["street"], r["lat"], r["lon"]), ("905 Portage Ave", 49.8857, -97.1704))
+        self.assertNotIn("range", r)
+        self.assertEqual(self.geocoded, ["905 Portage Ave, Winnipeg, MB, Canada"])
+
+    def test_street_override_still_wins(self):
+        self.TOMTOM = dict(self.TOMTOM, **{"Portage Ave & Harris Blvd, Winnipeg, MB, Canada": (49.8791, -97.2772)})
+        jobs = self.run_ranges({688: "Portage Ave (Lipton St to Lenore St)"}, overrides={"688": "Portage Ave & Harris Blvd"})
+        r = jobs[688]
+        self.assertEqual((r["street"], r["lat"], r["lon"]), ("Portage Ave & Harris Blvd", 49.8791, -97.2772))
+        self.assertNotIn("range", r)
+        self.assertEqual(self.geocoded, ["Portage Ave & Harris Blvd, Winnipeg, MB, Canada"])
+
+    def test_hints_permit_and_prices_unchanged(self):
+        os.environ["PRICE_KEY"] = TEST_ONLY_KEY_B64
+        jobs = self.run_ranges({688: "Portage Ave (Lipton St to Lenore St)"})
+        self.assertEqual(jobs[688]["permit"], "")
+        self.assertEqual(jobs[688]["hints"], {"asphalt": False, "pavers": False})
+        self.assertEqual(jobs[201]["hints"], {"asphalt": True, "pavers": False})
+        prices = S.decrypt_prices(json.loads((self.out / S.PRICES_NAME).read_text(encoding="utf-8")), TEST_ONLY_KEY)
+        self.assertEqual(sorted(prices), ["150", "201", "202"], "a job without totals has no price entry")
 
 
 class JsTrimParity(unittest.TestCase):
