@@ -78,12 +78,30 @@ R-3 (docs/r3-plan.md A, E):
     street_overrides.json still wins (no range then). Streets with a house number ("905 Portage Ave (Arlington St
     to Burnell St)") are cleaned as before.
 
+R-3.1 (docs/r3-plan.md G; residential jobs are stageless):
+  * Commercial clients come from data/commercial_clients.json (--data; hand-maintained, public, the ONE place to add
+    a client): {"version": 1, "clients": [{"key", "label", "short", "match": ["lowercase text", ...], "color"}]}.
+    A job is commercial when its Jobber client's companyName (or name), then its name, contains one of a client's
+    `match` strings as whole words (case-insensitive, any spacing; "Gary Harris Builders" is not "harris holdings");
+    clients are tried in file order and the first match wins. The record gets that client's `key` as clientKey.
+    No match = residential: clientKey "Residential" and "residential": true (commercial records carry no
+    residential key). A missing or invalid file (validated all-or-nothing) logs a ::warning:: and the built-in list
+    BUILTIN_COMMERCIAL_CLIENTS (identical to the file) is used. Active, pending, carried-forward closed and archived
+    records are all classified again on every run (the hard-coded R-1 CLIENT_KEYS map and clientKey "Other" are gone).
+  * Closed residential jobs: removed automatically. A residential job that left Jobber's active list goes to
+    closed_archive.json (droppedWhy "residential, closed in Jobber") unless its stage entry has `keep: true` (the
+    app's Settings -> Recently removed -> Restore of a residential job); with keep it waits for "Completed" like a
+    commercial job (removed: true still drops it, "removed in app"), and an archived residential job comes back at the
+    next sync once keep is set. A keep value this sync does not understand keeps the job; every read-failure / reset
+    guard above still applies (unreadable stage file: keep every candidate, archived jobs stay archived).
+
 CLI:  python sync_jobs.py [--out DIR] [--data DIR]
   --out   where jobs.json, closed_jobs.json, meta.json, geocode_cache.json, closed_archive.json and prices.json
           are written (default data/). The previous jobs.json / closed_jobs.json / geocode_cache.json /
           closed_archive.json / prices.json / meta.json are read from --out when present there, otherwise
           from --data (read-only).
-  --data  hand-maintained inputs street_overrides.json + pending_manual.json (default data/).
+  --data  hand-maintained inputs street_overrides.json, pending_manual.json and commercial_clients.json (default
+          data/).
 """
 from __future__ import annotations
 import argparse, base64, http.client, json, math, os, re, secrets, sys, time, urllib.error, urllib.parse, urllib.request
@@ -117,13 +135,26 @@ BETA_STATE_FILE: str | None = None
 # Manitoba sanity box: anything outside is a mis-snap (Alberta/Ontario/NB seen before).
 MB_BOX = (48.9, 50.9, -99.8, -95.3)  # lat_min, lat_max, lon_min, lon_max
 
-CLIENT_KEYS = {
-    "Crown Pipeline Ltd.": "Crown",
-    "Harris Holdings Ltd.": "Harris",
-    "ACV Sewer & Water": "ACV",
-    "MyTec Industry Ltd": "MyTec",
-    "No Limits Underground Ltd.": "NoLimits",
-}
+# ---- commercial clients (r3-plan G): data/commercial_clients.json is the ONE list; everyone else is residential.
+CLIENTS_NAME = "commercial_clients.json"
+RESIDENTIAL_KEY = "Residential"                 # clientKey of every job whose client is not on the list
+RESIDENTIAL_WHY = "residential, closed in Jobber"  # droppedWhy of a closed residential job without keep
+# Built-in fallback, used when the file is missing or invalid: identical to data/commercial_clients.json
+# (tests check that they stay the same).
+BUILTIN_COMMERCIAL_CLIENTS = [
+    {"key": "Crown", "label": "Crown Pipeline", "short": "Crown", "match": ["crown pipeline"], "color": "#2563eb"},
+    {"key": "Harris", "label": "Harris Holdings", "short": "Harris", "match": ["harris holdings"], "color": "#dc2626"},
+    {"key": "ACV", "label": "ACV Sewer & Water", "short": "ACV", "match": ["acv sewer"], "color": "#16a34a"},
+    {"key": "MyTec", "label": "MyTec", "short": "MyTec", "match": ["mytec"], "color": "#7c3aed"},
+    {"key": "NoLimits", "label": "No Limits Underground", "short": "No Limits", "match": ["no limits underground"],
+     "color": "#0d9488"},
+    {"key": "AECON", "label": "AECON", "short": "AECON", "match": ["aecon"], "color": "#db2777"},
+    {"key": "Tricore", "label": "Tricore", "short": "Tricore", "match": ["tricore"], "color": "#475569"},
+    {"key": "Swift", "label": "Swift Underground", "short": "Swift", "match": ["swift underground"], "color": "#a16207"},
+]
+CLIENT_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{0,31}")   # used with fullmatch
+COLOR_RE = re.compile(r"#[0-9A-Fa-f]{6}")                  # used with fullmatch
+RESERVED_CLIENT_KEYS = ("residential", "other", "allother")   # "AllOther" = the app's "All other" chip (js/app.js)
 
 # Jobber query cost: connection cost ~ first x child cost. 25 jobs x 50 line items stays far below the
 # 10,000-point bucket (the actual requested cost is logged per page); a page that could never fit is
@@ -401,6 +432,103 @@ def compute_hints(title: str | None, line_items: list | None = None) -> dict:
     text = "\n".join(parts).replace("&amp;", "&")
     return {"asphalt": bool(ASPHALT_RE.search(text)), "pavers": bool(PAVERS_RE.search(text))}
 
+# ----------------------------------------------------------------------------- commercial clients (r3-plan G)
+def norm_client_name(s) -> str:
+    """Lowercase, "&amp;" -> "&", every whitespace run (incl. no-break spaces) -> one space, trimmed."""
+    if not isinstance(s, str): return ""
+    return re.sub(r"\s+", " ", s.replace("&amp;", "&").lower()).strip()
+
+def validate_commercial_clients(doc) -> list[dict]:
+    """commercial_clients.json -> the client list ({key, label, short, match, color}; match strings normalized), or
+    ValueError naming the first problem. All or nothing: one bad client rejects the file (the built-in list is used)."""
+    if not isinstance(doc, dict): raise ValueError("not an object")
+    ver = doc.get("version")
+    if isinstance(ver, bool) or ver != 1: raise ValueError(f"version {ver!r} is not 1")
+    clients = doc.get("clients")
+    if not isinstance(clients, list) or not clients: raise ValueError("no clients list")
+    out, keys = [], set()
+    for i, c in enumerate(clients):
+        if not isinstance(c, dict): raise ValueError(f"client {i + 1} is not an object")
+        key = c.get("key")
+        if not isinstance(key, str) or not CLIENT_KEY_RE.fullmatch(key):
+            raise ValueError(f"client {i + 1}: bad key")
+        if key.lower() in RESERVED_CLIENT_KEYS or key.lower() in keys:
+            raise ValueError(f"client {i + 1}: key {key!r} is reserved or used twice")
+        keys.add(key.lower())
+        for f in ("label", "short"):
+            if not isinstance(c.get(f), str) or not c[f].strip(): raise ValueError(f"client {key}: no {f}")
+        match = c.get("match")
+        if not isinstance(match, list) or not match: raise ValueError(f"client {key}: no match list")
+        norm = [norm_client_name(m) for m in match]
+        if not all(isinstance(m, str) for m in match) or not all(norm):
+            raise ValueError(f"client {key}: empty or non-text match string")
+        if not isinstance(c.get("color"), str) or not COLOR_RE.fullmatch(c["color"]):
+            raise ValueError(f"client {key}: color is not #rrggbb")
+        out.append({"key": key, "label": c["label"].strip(), "short": c["short"].strip(), "match": norm,
+                    "color": c["color"]})
+    return out
+
+def load_commercial_clients(p: Path) -> tuple[list[dict], str | None]:
+    """(client list, None) from the file, or (the built-in list, problem) when it is missing or invalid."""
+    if not p.exists(): return builtin_clients(), f"{p.name} not found"
+    try:
+        return validate_commercial_clients(json.loads(p.read_text(encoding="utf-8-sig"))), None
+    except json.JSONDecodeError:
+        why = "not valid JSON"
+    except (RecursionError, OSError, UnicodeDecodeError) as e:
+        why = f"unreadable ({type(e).__name__})"
+    except ValueError as e:   # validate_commercial_clients names the problem
+        why = str(e)[:160]
+    return builtin_clients(), f"{p.name} invalid: {why}"
+
+_BUILTIN_CACHE: list = []
+
+def builtin_clients() -> list[dict]:
+    """BUILTIN_COMMERCIAL_CLIENTS in validated form (computed once)."""
+    if not _BUILTIN_CACHE:
+        _BUILTIN_CACHE.extend(validate_commercial_clients({"version": 1, "clients": BUILTIN_COMMERCIAL_CLIENTS}))
+    return _BUILTIN_CACHE
+
+def commercial_key(*names, clients: list | None = None) -> str | None:
+    """The commercial clientKey for a Jobber client, or None (= residential). Each name (companyName first, then
+    name) is checked in turn; for a name, the clients are tried in list order and the first whose match string is in
+    the name as whole words (case-insensitive, any spacing) wins. "Gary Harris Builders" is not "harris holdings"."""
+    clients = clients if clients is not None else builtin_clients()
+    for name in names:
+        n = norm_client_name(name)
+        if not n: continue
+        for c in clients:
+            for m in c["match"]:
+                if re.search(r"(?<!\w)" + re.escape(m) + r"(?!\w)", n): return c["key"]
+    return None
+
+def classify_record(rec: dict, clients: list | None, *names) -> dict:
+    """Sets rec["clientKey"] (+ "residential": true for a residential job; commercial records carry no residential
+    key). names default to rec["client"]. Returns rec."""
+    key = commercial_key(*(names or (rec.get("client"),)), clients=clients)
+    rec["clientKey"] = key or RESIDENTIAL_KEY
+    if key: rec.pop("residential", None)
+    else: rec["residential"] = True
+    return rec
+
+def stored_client_key(rec: dict, clients: list | None) -> str | None:
+    """The commercial key of a stored record (a carried or archived job): its clientKey when that is still a listed
+    commercial key and the record is not flagged residential (the sync matched it while the job was active, maybe on
+    Jobber's `name`, which records do not keep), else `client` matched again. Same rule as the app's classifyClient,
+    so a job never turns residential (and auto-archived) just because Jobber closed it."""
+    clients = clients if clients is not None else builtin_clients()
+    k = rec.get("clientKey")
+    if isinstance(k, str) and rec.get("residential") is not True and any(c["key"] == k for c in clients): return k
+    return commercial_key(rec.get("client") if isinstance(rec.get("client"), str) else "", clients=clients)
+
+def classify_stored(rec: dict, clients: list | None) -> dict:
+    """classify_record for a stored record (stored_client_key). Returns rec."""
+    key = stored_client_key(rec, clients)
+    rec["clientKey"] = key or RESIDENTIAL_KEY
+    if key: rec.pop("residential", None)
+    else: rec["residential"] = True
+    return rec
+
 # ----------------------------------------------------------------------------- stage contract (r2-plan §2a)
 # Python twin of js/stages.js; both are checked against tests/fixtures/contract_vectors.json.
 STAGE_KEYS = ["ready", "setup", "excavation", "base", "prep", "inspected", "poured"]
@@ -491,7 +619,7 @@ def unclear_fields(entry) -> set:
               "lane": lambda v: isinstance(v, dict) and _in(v.get("s"), LANE_VALUES),
               "cut": lambda v: _in(v, TRI_VALUES), "asphalt": lambda v: _in(v, TRI_VALUES),
               "pavers": lambda v: _in(v, TRI_VALUES), "cleanup": lambda v: _in(v, CLEANUP_VALUES),
-              "removed": lambda v: isinstance(v, bool)}
+              "removed": lambda v: isinstance(v, bool), "keep": lambda v: isinstance(v, bool)}
     return {k for k, ok in checks.items() if k in entry and entry[k] is not None and not ok(entry[k])}
 
 def entry_unclear(entry) -> bool:
@@ -627,6 +755,18 @@ def keep_decision(entry, hints) -> tuple[bool, str]:
     if entry_unclear(entry): return True, "stage entry not understood (kept to be safe)"
     return True, f"{AWAITING_WHY} ({'field work done' if field_work_done(eff) else 'nothing outstanding'})"
 
+def keep_flag(entry) -> bool | None:
+    """The R-3.1 `keep` field of a stage entry (r3-plan G; the app's Settings -> Recently removed -> Restore of a
+    residential job stores keep: true): True = keep this closed residential job until Completed; False = not set (no
+    entry, a v1 string entry, keep missing / null / false); None = a value this sync does not understand (the job is
+    then kept to be safe, like every other odd value: never dropped because of something unreadable)."""
+    if entry is None or isinstance(entry, str): return False
+    if not isinstance(entry, dict): return None
+    v = entry.get("keep")
+    if v is True: return True
+    if v is None or v is False: return False
+    return None
+
 def _job_number(v) -> int | None:
     if isinstance(v, bool): return None
     try: return int(v)
@@ -635,15 +775,17 @@ def _job_number(v) -> int | None:
 def _finite(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
-def _carried_record(r: dict, jn: int, hints: dict) -> dict:
+def _carried_record(r: dict, jn: int, hints: dict, clients: list | None = None) -> dict:
     """A previous (or archived) record as a closed job, with every field main() and the app rely on present
-    and well-typed (a hand-edited or older record must never crash the run half-way)."""
+    and well-typed (a hand-edited or older record must never crash the run half-way). clientKey / residential are
+    worked out again with the current commercial client list (classify_stored: a listed clientKey is kept)."""
     rec = dict(r)
     for k in ("_why", "droppedAt", "droppedWhy"): rec.pop(k, None)
     rec["jobNumber"] = jn
-    for k, default in (("client", "Unknown"), ("clientKey", "Other"), ("street", ""), ("city", "Winnipeg"),
+    for k, default in (("client", "Unknown"), ("clientKey", RESIDENTIAL_KEY), ("street", ""), ("city", "Winnipeg"),
                        ("title", ""), ("permit", ""), ("status", "")):
         if not isinstance(rec.get(k), str): rec[k] = default
+    classify_stored(rec, clients)
     if not isinstance(rec.get("streetRaw"), str): rec["streetRaw"] = rec["street"]
     rec["unscheduled"] = rec.get("unscheduled") is True
     rec["pending"] = False
@@ -666,7 +808,7 @@ def stage_decision(jk: str, hints: dict, stage_entries: dict, overlay: dict | No
 
 def carry_forward(prev_jobs: list, active_numbers: set, pending_numbers: set,
                   stage_entries: dict | None, archived: list | None = None,
-                  overlay: dict | None = None) -> tuple[list[dict], list[tuple[int, str]]]:
+                  overlay: dict | None = None, clients: list | None = None) -> tuple[list[dict], list[tuple[int, str]]]:
     """Previous records of jobs that left Jobber's active list and must stay (closed: true).
     prev_jobs = candidate records, freshest first (previous jobs.json, then previous closed_jobs.json).
     stage_entries = the state file's entries (stages.json v2 in single-file mode, the beta file in dual-file mode);
@@ -677,6 +819,10 @@ def carry_forward(prev_jobs: list, active_numbers: set, pending_numbers: set,
     archived = records from closed_archive.json (jobs dropped on an earlier run). One comes back as soon as
     its stage entry is no longer removed (Settings -> Recently removed -> Restore, a hand fix in the stage file, or
     a job an older sync dropped under the R-2 rule); while a stage file is unreadable they stay archived.
+    R-3.1 (r3-plan G): a residential candidate (stored_client_key: no listed clientKey and its `client` matches none
+    of `clients`, the commercial list; None = the built-in list) that is not removed is dropped too (RESIDENTIAL_WHY)
+    unless its stage entry has keep: true (keep_flag; then it waits for Completed like a commercial job). An archived residential job comes back once keep
+    is set. A keep value this sync does not understand keeps the job; an unreadable stage file keeps every candidate.
     Returns (kept records, [(jobNumber, reason) for jobs dropped this run from the previous records])."""
     kept, dropped, seen = [], [], set()
     cands = [(r, False) for r in prev_jobs or []] + [(r, True) for r in archived or []]
@@ -691,10 +837,15 @@ def carry_forward(prev_jobs: list, active_numbers: set, pending_numbers: set,
             keep, why = True, "stage file unreadable (kept to be safe)"
         else:
             keep, why = stage_decision(str(jn), hints, stage_entries, overlay)
+            if keep and stored_client_key(r, clients) is None:   # residential (r3-plan G)
+                flag = keep_flag(stage_entries.get(str(jn)))   # the state entry (items, keep) in either mode
+                if flag is False: keep, why = False, RESIDENTIAL_WHY
+                elif flag is None: why = "residential, keep value not understood (kept to be safe)"
+                else: why = f"residential, kept in the app: {why}"
         if not keep:
             if not from_archive: dropped.append((jn, why))
             continue
-        rec = _carried_record(r, jn, hints)
+        rec = _carried_record(r, jn, hints, clients)
         rec["_why"] = f"restored from {ARCHIVE_NAME}: {why}" if from_archive else why
         kept.append(rec)
     return kept, dropped
@@ -957,7 +1108,8 @@ def load_previous_jobs(p: Path) -> tuple[list | None, str | None]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Sync active Jobber jobs into jobs.json (see module docstring).")
     ap.add_argument("--out", default=str(DATA), help="output folder (default: repo data/)")
-    ap.add_argument("--data", default=str(DATA), help="folder with street_overrides.json + pending_manual.json (default: repo data/)")
+    ap.add_argument("--data", default=str(DATA), help="folder with street_overrides.json, pending_manual.json and "
+                                                      "commercial_clients.json (default: repo data/)")
     args = ap.parse_args(argv)
     out_dir, data_dir = Path(args.out), Path(args.data)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -989,6 +1141,12 @@ def main(argv: list[str] | None = None) -> int:
     cache = load_json(prev_path(CACHE_NAME), {})
     overrides = {int(k): v for k, v in load_json(data_dir / OVERRIDES_NAME, {}).items()}
     pending = load_json(data_dir / PENDING_NAME, [])
+    clients, clients_problem = load_commercial_clients(data_dir / CLIENTS_NAME)
+    if clients_problem:
+        print(f"::warning::clients: {clients_problem}; using the built-in commercial client list "
+              f"({len(clients)} clients)")
+    else:
+        print(f"clients: {len(clients)} commercial clients from {CLIENTS_NAME}; everyone else is residential")
     tkey = (os.environ.get("TOMTOM_KEY") or "").strip()
 
     jobs, totals, api_calls, li_truncated, li_missing = [], {}, 0, 0, 0
@@ -1011,13 +1169,14 @@ def main(argv: list[str] | None = None) -> int:
         li_conn = li_conn if isinstance(li_conn, dict) else {}
         line_items = li_conn.get("nodes") if isinstance(li_conn.get("nodes"), list) else []
         if (li_conn.get("pageInfo") or {}).get("hasNextPage"): li_truncated += 1
-        rec = {"jobNumber": jn, "id": j.get("id") or None, "client": client, "clientKey": CLIENT_KEYS.get(client, "Other"),
+        rec = {"jobNumber": jn, "id": j.get("id") or None, "client": client, "clientKey": RESIDENTIAL_KEY,
                "street": street, "streetRaw": street_raw, "city": city,
                "title": (j.get("title") or "").replace("&amp;", "&"),
                "permit": extract_permit(j.get("title") or ""),
                "status": j.get("jobStatus") or "", "unscheduled": (j.get("jobStatus") == "unscheduled"),
                "pending": False, "hints": compute_hints(j.get("title"), line_items),
                "lat": None, "lon": None, "ok": False}
+        classify_record(rec, clients, client, cl.get("name"))   # companyName (or name) first, then name
         if not li_ok:   # degraded: line items unavailable -> keep last run's hints (OR the title's)
             ph = prev_hints.get(jn) or {}
             rec["hints"] = {k: bool(rec["hints"][k] or ph.get(k) is True) for k in ("asphalt", "pavers")}
@@ -1042,11 +1201,12 @@ def main(argv: list[str] | None = None) -> int:
     for p in pending:  # manual, not-yet-in-Jobber jobs (survive rebuilds)
         c, _ = geocode(cache, p["street"], p.get("city", "Winnipeg"), tkey)
         pending_numbers.add(int(p["jobNumber"]))
-        jobs.append({"jobNumber": p["jobNumber"], "id": None, "client": p["client"], "clientKey": CLIENT_KEYS.get(p["client"], "Other"),
-                     "street": p["street"], "streetRaw": p["street"], "city": p.get("city", "Winnipeg"),
-                     "title": p.get("title", ""), "permit": "", "status": "pending", "unscheduled": False,
-                     "pending": True, "hints": compute_hints(p.get("title", "")),
-                     "lat": c[0] if c else None, "lon": c[1] if c else None, "ok": bool(c)})
+        jobs.append(classify_record(
+            {"jobNumber": p["jobNumber"], "id": None, "client": p["client"], "clientKey": RESIDENTIAL_KEY,
+             "street": p["street"], "streetRaw": p["street"], "city": p.get("city", "Winnipeg"),
+             "title": p.get("title", ""), "permit": "", "status": "pending", "unscheduled": False,
+             "pending": True, "hints": compute_hints(p.get("title", "")),
+             "lat": c[0] if c else None, "lon": c[1] if c else None, "ok": bool(c)}, clients))
 
     # ---- carry-forward: jobs that left Jobber's active list, kept until removed in the app (r3-plan A; r2-plan §9)
     # jobs.json keeps exactly the R-1 membership (active + pending); kept closed jobs go to closed_jobs.json.
@@ -1082,7 +1242,8 @@ def main(argv: list[str] | None = None) -> int:
                       "Jobber's active list")
         archived, archive_note = load_archive(prev_path(ARCHIVE_NAME))
         if archive_note: print(f"::warning::carry-forward: {archive_note}")
-        closed, dropped = carry_forward(cands, active_numbers, pending_numbers, state, archived, overlay=overlay)
+        closed, dropped = carry_forward(cands, active_numbers, pending_numbers, state, archived, overlay=overlay,
+                                        clients=clients)
         refresh_deadline = _monotonic() + REFRESH_BUDGET_S   # one budget for every refresh (see REFRESH_BUDGET_S)
         for rec in closed:
             why = rec.pop("_why")
@@ -1110,6 +1271,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"carry-forward: dropped #{jn}{closed_note} ({why}); its record stays in data/{ARCHIVE_NAME} for "
                   f"{ARCHIVE_DAYS} days and comes back on the next sync if it is restored in the app")
         archive = next_archive(archived, cands, dropped, closed, active_numbers, pending_numbers, now.date())
+        # archived records get the current classification too (Settings -> Recently removed shows them)
+        archive = [classify_stored(dict(r), clients) for r in archive]
         closed.sort(key=lambda r: -r["jobNumber"])
 
     # everything is computed before the first write, so a surprise can never leave a half-written set of files

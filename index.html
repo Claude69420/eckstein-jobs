@@ -49,9 +49,9 @@
 </script>
 <!-- ?v=: build id on every local css/js URL (bump it on each release). GitHub Pages sends max-age=600, so a new
      index.html must never pick up an HTTP-cached older app file; sw.js stores and matches them without the query. -->
-<link rel="stylesheet" href="css/tokens.css?v=r3.0">
-<link rel="stylesheet" href="css/glass.css?v=r3.0">
-<link rel="stylesheet" href="css/components.css?v=r3.0">
+<link rel="stylesheet" href="css/tokens.css?v=r3.1">
+<link rel="stylesheet" href="css/glass.css?v=r3.1">
+<link rel="stylesheet" href="css/components.css?v=r3.1">
 </head>
 <body>
 <div id="jmap" aria-label="Job map"></div>
@@ -298,7 +298,8 @@
         <button type="button" class="btn btn--prominent pressable" id="eSave">Save</button>
       </div>
     </section>
-    <div class="card">
+    <!-- R-3.1: hidden for a residential job (stageless: no slider, no job items) -->
+    <div class="card" id="dStageCard">
       <!-- R-2: ticks, labels and "of N" are generated from Stages.STAGES by UI.StageSlider (7 stops) -->
       <div class="stage" id="dStage" role="slider" tabindex="0" aria-label="Job stage" aria-valuemin="1" aria-valuenow="1" aria-valuetext="Ready to start">
         <div class="stage-now"><span class="dot">1</span><span class="name">Ready to start</span><small></small></div>
@@ -363,11 +364,11 @@
 <div class="toast glass glass--sm" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="btn pressable" hidden>Undo</button></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="js/tsp.js?v=r3.0"></script>
-<script src="js/stages.js?v=r3.0"></script>
-<script src="js/prices.js?v=r3.0"></script>
-<script src="js/routes.js?v=r3.0"></script>
-<script src="js/ui.js?v=r3.0"></script>
-<script src="js/app.js?v=r3.0"></script>
+<script src="js/tsp.js?v=r3.1"></script>
+<script src="js/stages.js?v=r3.1"></script>
+<script src="js/prices.js?v=r3.1"></script>
+<script src="js/routes.js?v=r3.1"></script>
+<script src="js/ui.js?v=r3.1"></script>
+<script src="js/app.js?v=r3.1"></script>
 </body>
 </html>

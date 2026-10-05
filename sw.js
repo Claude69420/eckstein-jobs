@@ -1,4 +1,4 @@
-// Eckstein Jobs service worker (cache "ej-v4", R-3; was "ej-v3" in R-2).
+// Eckstein Jobs service worker (cache "ej-v5", R-3.1 soft update 2026-10-04; "ej-v4" in R-3, "ej-v3" in R-2).
 // - Same-origin GET: network-first so twice-daily data and new deploys always show; offline falls back
 //   to the last good copy of that PATH (stored without the query string; matched with ignoreSearch,
 //   so the app's ?t= cache-busters never grow the cache). No slow-network timer (it could mix app versions).
@@ -9,14 +9,14 @@
 //   this cache. data/prices.json (R-2) is same-origin and ENCRYPTED: its last good copy is kept like any
 //   data file, so prices still decrypt offline; the pricing key itself never reaches this worker.
 // - Install precaches the app shell tolerantly (a missing file never fails install); activate deletes
-//   only OUR old caches (name starts with PREFIX and is not C: R-2's ej-v3, R-1's ej-v2 and older ej-v1 go) and then claims
+//   only OUR old caches (name starts with PREFIX and is not C: R-3's ej-v4, R-2's ej-v3, R-1's ej-v2 and older ej-v1 go) and then claims
 //   open pages. Never an "ejb-" cache: those belong to the retired beta at /beta/ (R-2 promoted 2026-09-26), whose
 //   retire worker (beta/sw.js) and notice page delete them and unregister the beta worker ("ejb-v1" does not start
 //   with "ej-"). This worker's scope (/eckstein-jobs/) also covers /beta/ once the beta worker is gone: harmless,
 //   the notice page is then just cached network-first like any page.
 'use strict';
 
-const C = 'ej-v4';
+const C = 'ej-v5';
 const PREFIX = 'ej-';
 
 const SHELL = [

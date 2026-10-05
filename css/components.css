@@ -460,7 +460,7 @@ a.card, .card.is-link{ cursor:pointer; }
     -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 8px), transparent);
             mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 8px), transparent); }
   .sheet .chips--stage.has-lists .chip-set--stages{ flex:none; width:calc(100% - 12px); }   /* the first list column peeks */
-  .sheet .chips--stage.has-lists .chip-div{ flex:none; width:.5px; height:auto; margin:6px 0; }
+  .sheet .chips--stage.has-lists .chip-div{ flex:none; align-self:stretch; width:.5px; height:auto; margin:6px 0; }
   .sheet .chips--stage.has-lists .chip-set--lists{ flex:none; display:grid; grid-auto-flow:column; grid-template-rows:repeat(2, 36px);
     gap:6px; margin:0; padding:0; overflow:visible; -webkit-mask-image:none; mask-image:none; }
 }
@@ -717,6 +717,15 @@ a.card, .card.is-link{ cursor:pointer; }
 .leaflet-marker-icon:focus-visible{ outline:none; }
 .leaflet-marker-icon:focus-visible .jpin, .leaflet-marker-icon:focus-visible .rpin{ outline:2px solid var(--accent); outline-offset:3px; }
 /* No L.popup / bindPopup / bindTooltip anywhere: Leaflet fades them with INLINE opacity, which CSS cannot override. */
+
+/* =====================================================================================================
+ * R-3.1 (docs/r3-plan.md G): residential jobs are stageless. Stage mode shows them amber with a small filled house
+ * (pins, list dots, the Residential chip and group header, the route menu). Content only: fills, no glass.
+ * ===================================================================================================== */
+.dot--res{ display:inline-grid; place-items:center; }
+.dot--res .ico{ width:64%; height:64%; }
+.jpin.is-res{ display:grid; place-items:center; }
+.jpin.is-res .ico{ width:13px; height:13px; }
 
 /* ---------- Desktop (>= 900px): left inset glass panel, map full-bleed behind ---------- */
 @media (min-width: 900px){

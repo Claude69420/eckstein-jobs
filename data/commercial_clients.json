@@ -1,0 +1,13 @@
+{
+ "version": 1,
+ "clients": [
+  {"key": "Crown", "label": "Crown Pipeline", "short": "Crown", "match": ["crown pipeline"], "color": "#2563eb"},
+  {"key": "Harris", "label": "Harris Holdings", "short": "Harris", "match": ["harris holdings"], "color": "#dc2626"},
+  {"key": "ACV", "label": "ACV Sewer & Water", "short": "ACV", "match": ["acv sewer"], "color": "#16a34a"},
+  {"key": "MyTec", "label": "MyTec", "short": "MyTec", "match": ["mytec"], "color": "#7c3aed"},
+  {"key": "NoLimits", "label": "No Limits Underground", "short": "No Limits", "match": ["no limits underground"], "color": "#0d9488"},
+  {"key": "AECON", "label": "AECON", "short": "AECON", "match": ["aecon"], "color": "#db2777"},
+  {"key": "Tricore", "label": "Tricore", "short": "Tricore", "match": ["tricore"], "color": "#475569"},
+  {"key": "Swift", "label": "Swift Underground", "short": "Swift", "match": ["swift underground"], "color": "#a16207"}
+ ]
+}

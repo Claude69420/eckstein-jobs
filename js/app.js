@@ -11,13 +11,27 @@
   'use strict';
 
   /* =====================================================================================================
-   * CONSTANTS — the ONE place for client keys, colours, labels and the shop (APP_MASTER Rule 12 / §7.8).
-   * A new client: add its key to CLIENT_KEYS and give it a COL colour, a LABEL and a SHORT name here (nowhere else).
+   * CONSTANTS — the ONE place in the app for clients and the shop (APP_MASTER Rule 12 / §7.8; R-3.1 docs/r3-plan.md G).
+   * Commercial clients come from data/commercial_clients.json (hand-maintained, public: THE place to add a client; the
+   * sync matches Jobber client names against the same file). BUILTIN_CLIENTS is the fallback when that file can't be
+   * read (the same 8; keep it in step). Every other client is Residential: stageless (no stage, no job items, never in
+   * a stage or list), amber. "All other" is the grey chip for the commercial clients past the first CHIP_MAX.
    * ===================================================================================================== */
-  var CLIENT_KEYS = ['Crown', 'Harris', 'ACV', 'MyTec', 'NoLimits', 'Other'];
-  var COL = { Crown: '#2563eb', Harris: '#dc2626', ACV: '#16a34a', MyTec: '#7c3aed', NoLimits: '#0d9488', Other: '#f59e0b' };
-  var LABEL = { Crown: 'Crown Pipeline', Harris: 'Harris Holdings', ACV: 'ACV Sewer & Water', MyTec: 'MyTec', NoLimits: 'No Limits Underground', Other: 'Other / Residential' };
-  var SHORT = { Crown: 'Crown', Harris: 'Harris', ACV: 'ACV', MyTec: 'MyTec', NoLimits: 'No Limits', Other: 'Other' };   // list-row badges
+  var BUILTIN_CLIENTS = [
+    { key: 'Crown', label: 'Crown Pipeline', short: 'Crown', match: ['crown pipeline'], color: '#2563eb' },
+    { key: 'Harris', label: 'Harris Holdings', short: 'Harris', match: ['harris holdings'], color: '#dc2626' },
+    { key: 'ACV', label: 'ACV Sewer & Water', short: 'ACV', match: ['acv sewer'], color: '#16a34a' },
+    { key: 'MyTec', label: 'MyTec', short: 'MyTec', match: ['mytec'], color: '#7c3aed' },
+    { key: 'NoLimits', label: 'No Limits Underground', short: 'No Limits', match: ['no limits underground'], color: '#0d9488' },
+    { key: 'AECON', label: 'AECON', short: 'AECON', match: ['aecon'], color: '#db2777' },
+    { key: 'Tricore', label: 'Tricore', short: 'Tricore', match: ['tricore'], color: '#475569' },
+    { key: 'Swift', label: 'Swift Underground', short: 'Swift', match: ['swift underground'], color: '#a16207' }];
+  var RES_KEY = 'Residential';                                // clientKey (Client mode chip) of every non-commercial job
+  var RES_STAGE = 'residential';                              // its Stage-mode chip key (sits with the stage keys)
+  var RES_COL = '#f59e0b', RES_INK = '#3d2600';               // residential amber; ink of the house glyph on it
+  var OTHER_KEY = 'AllOther', OTHER_COL = '#8e8e93';          // "All other" chip (neutral grey)
+  var CHIP_MAX = 8;   // Riley: "All commercial clients get their own chips unless there are 9 or more. In which case, the 8
+                      // with the most jobs get their own chips and the rest are lumped under all other"
   var SHOP = { name: 'Shop (1279 Loudoun Rd)', lat: 49.8401, lon: -97.2546, shop: true };
   var ROUTE_CONFIRM_ABOVE = 25;
   /* ===================================================================================================== */
@@ -88,8 +102,88 @@
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
   function mappedJob(x) { return !!(x && x.ok && typeof x.lat === 'number' && typeof x.lon === 'number' && isFinite(x.lat) && isFinite(x.lon)); }
   function isWpg(x) { return String(x.city || 'Winnipeg').trim().toLowerCase() === 'winnipeg'; }
-  function clientGroup(x) { return CLIENT_KEYS.indexOf(x.clientKey) >= 0 ? x.clientKey : 'Other'; }
-  function clientLabel(x) { return LABEL[clientGroup(x)] || x.client || 'Other'; }
+  /* ---------------- clients (R-3.1, docs/r3-plan.md G) ----------------
+   * CLIENTS = the commercial list (data/commercial_clients.json, else BUILTIN_CLIENTS); CLIENT[key] = {key, label, short,
+   * color} for those plus Residential and All other. A job's client key (x._ck, ckOf) is the sync's clientKey when it is a
+   * listed commercial key or "Residential" (residential: true); otherwise (a jobs.json from before R-3.1, clientKey
+   * "Other", or a key not on the list) the Jobber client name is matched here exactly like sync_jobs.py commercial_key:
+   * case-insensitive, any spacing, whole words, first client in list order wins; no match = Residential. */
+  var CLIENT_KEY_RE = /^[A-Za-z][A-Za-z0-9]{0,31}$/, COLOR_RE = /^#[0-9A-Fa-f]{6}$/, WORD = 'a-z0-9_\\u00c0-\\u024f';
+  var CLIENTS = [], CLIENT = {};
+  function normClientName(s) { return typeof s === 'string' ? s.replace(/&amp;/g, '&').toLowerCase().replace(/\s+/g, ' ').trim() : ''; }
+  function wordRe(m) { return new RegExp('(?:^|[^' + WORD + '])' + m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![' + WORD + '])'); }
+  /** {version: 1, clients: [...]} -> validated list, or null. All or nothing, like sync_jobs.py validate_commercial_clients
+   *  (one bad client = the whole file is ignored and the built-in / last good list stays). */
+  function validClients(doc) {
+    if (!doc || typeof doc !== 'object' || doc.version !== 1 || !Array.isArray(doc.clients) || !doc.clients.length) return null;
+    var out = [], seen = {};
+    for (var i = 0; i < doc.clients.length; i++) {
+      var c = doc.clients[i]; if (!c || typeof c !== 'object') return null;
+      var k = typeof c.key === 'string' ? c.key : '', lk = k.toLowerCase();
+      if (!CLIENT_KEY_RE.test(k) || lk === 'residential' || lk === 'other' || lk === OTHER_KEY.toLowerCase() || has(seen, lk)) return null;
+      seen[lk] = 1;
+      if (typeof c.label !== 'string' || !c.label.trim() || typeof c.short !== 'string' || !c.short.trim()) return null;
+      if (!Array.isArray(c.match) || !c.match.length) return null;
+      var m = c.match.map(normClientName);
+      if (!m.every(Boolean)) return null;
+      if (typeof c.color !== 'string' || !COLOR_RE.test(c.color)) return null;
+      out.push({ key: k, label: c.label.trim().slice(0, 40), short: c.short.trim().slice(0, 20), re: m.map(wordRe), color: c.color });
+    }
+    return out;
+  }
+  function setClients(list) {
+    CLIENTS = list; CLIENT = {};
+    list.forEach(function (c) { CLIENT[c.key] = c; });
+    CLIENT[RES_KEY] = { key: RES_KEY, label: 'Residential', short: 'Residential', color: RES_COL };
+    CLIENT[OTHER_KEY] = { key: OTHER_KEY, label: 'All other', short: 'All other', color: OTHER_COL };
+  }
+  setClients(validClients({ version: 1, clients: BUILTIN_CLIENTS }));
+  function matchClient(name) {                                // -> a commercial key or null
+    var n = normClientName(name); if (!n) return null;
+    for (var i = 0; i < CLIENTS.length; i++) for (var j = 0; j < CLIENTS[i].re.length; j++) if (CLIENTS[i].re[j].test(n)) return CLIENTS[i].key;
+    return null;
+  }
+  function classifyClient(x) {
+    if (x.residential === true || x.clientKey === RES_KEY) return RES_KEY;
+    if (typeof x.clientKey === 'string' && x.clientKey !== OTHER_KEY && has(CLIENT, x.clientKey)) return x.clientKey;
+    return matchClient(x.client) || RES_KEY;
+  }
+  function ckOf(x) { return x._ck || (x._ck = classifyClient(x)); }
+  function isRes(x) { return ckOf(x) === RES_KEY; }            // residential: stageless (r3-plan G)
+  /* Client-mode chips (Riley, D-R31-2): every commercial client with jobs gets a chip unless 9 or more have jobs: then
+   * the 8 with the most jobs do and the rest share "All other". Shown in list (file) order, so chips never reshuffle
+   * under the thumb when counts change. Recomputed when the shown set changes. */
+  var CHIPS = { own: [], set: {}, lumped: [] };
+  function clientChips(list) {
+    var n = {}, order = {};
+    CLIENTS.forEach(function (c, i) { order[c.key] = i; });
+    list.forEach(function (x) { var k = ckOf(x); if (k !== RES_KEY) n[k] = (n[k] || 0) + 1; });
+    var ks = CLIENTS.map(function (c) { return c.key; }).filter(function (k) { return n[k]; })
+      .sort(function (a, b) { return n[b] - n[a] || order[a] - order[b]; });
+    var own = ks.slice(0, CHIP_MAX), set = {};
+    own.forEach(function (k) { set[k] = true; });
+    return { own: own.sort(function (a, b) { return order[a] - order[b]; }), set: set, lumped: ks.slice(CHIP_MAX) };
+  }
+  function clientGroup(x) { var k = ckOf(x); return k === RES_KEY || CHIPS.set[k] ? k : OTHER_KEY; }
+  function clientLabel(x) { return (CLIENT[ckOf(x)] || CLIENT[RES_KEY]).label; }
+  function clientCol(k) { return (CLIENT[k] || CLIENT[OTHER_KEY]).color; }
+  var RES_VARS = '--c:' + RES_COL + ';--on-c:' + RES_INK;
+  var ICON_HOUSE = ['M12 3.9 3.3 11.2h2.6v8.4h4.5v-5.1h3.2v5.1h4.5v-8.4h2.6z'];   // filled house (residential, Stage mode)
+  var PIN_HOUSE = '<svg class="ico ico--fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.9 3.3 11.2h2.6v8.4h4.5v-5.1h3.2v5.1h4.5v-8.4h2.6z"/></svg>';   // constant markup
+  function resDot(cls) {
+    var s = svgIcon(ICON_HOUSE); s.setAttribute('class', 'ico ico--fill');
+    return h('span', { class: 'dot dot--res' + (cls || ''), style: RES_VARS, 'aria-hidden': 'true' }, [s]);
+  }
+  function stageText(x) { return isRes(x) ? 'Residential' : stageOf(x).label; }
+  /** The job's dot in the current mode: Stage mode = stage digit (residential: amber house); Client mode = its chip colour. */
+  function jobDot(x, cls) {
+    if (MODE === 'stage') {
+      if (isRes(x)) return resDot(cls);
+      var k = stageIndex(x.stage);
+      return h('span', { class: 'dot' + (cls || ''), style: stageVars(k), 'aria-hidden': 'true', text: String(k + 1) });
+    }
+    return h('span', { class: 'dot' + (cls || ''), style: '--c:' + clientCol(clientGroup(x)), 'aria-hidden': 'true' });
+  }
   function fmtTime(d) { return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
   /* ---------------- stages + job items (R-2: js/stages.js v2 API; r2-plan sec. 1, 2a) ----------------
@@ -144,23 +238,31 @@
   function canMoveX(x, key) { return HAS_STAGES ? SG.canMove(STAGEMAP[x.jobNumber] || null, key, x.hints) : { ok: true }; }
   function canSetX(x, item, v) { return HAS_STAGES ? SG.canSetItem(STAGEMAP[x.jobNumber] || null, item, v, x.hints) : { ok: true }; }
   function itemShownX(x, item) {                              // + a BOOKED lane stays visible (dates editable, red once late) until Poured
-    if (!HAS_STAGES) return false;
+    if (!HAS_STAGES || isRes(x)) return false;                // R-3.1: residential jobs have no job items
     var e = effOf(x);
     return SG.itemShown(e, item) || (item === 'lane' && !!e.lane && e.lane.s === 'booked' && e.stage !== 'poured') ||
       (!!x.closed && (item === 'asphalt' || item === 'pavers'));   // R-3: a closed job can always be marked "pavers / asphalt still to do"
   }
   /* R-3 (r3-plan A): closed in Jobber, not removed, nothing outstanding -> waits for someone to confirm it is done.
-   * Stages.awaitingOk is the shared contract; the same rule inline when an older js/stages.js is cached. */
+   * Stages.awaitingOk is the shared contract; the same rule inline when an older js/stages.js is cached.
+   * R-3.1 (r3-plan G): a residential job has no items; Jobber closing it removes it automatically (the sync) unless its
+   * entry says keep (restored in Settings -> Recently removed): then it waits for Completed like any closed job. */
   function awaitingOk(x) {
     if (!x || !x.closed || !HAS_STAGES) return false;
     var e = effOf(x);
+    if (isRes(x)) return e.keep === true && !e.removed;
     if (SG.awaitingOk) { try { return !!SG.awaitingOk(e, x); } catch (err) { return false; } }
     return !e.removed && !SG.keepWhenClosed(e);
   }
-  function fieldDone(x) { return HAS_STAGES && SG.fieldWorkDone(effOf(x)); }
+  function fieldDone(x) { return HAS_STAGES && !isRes(x) && SG.fieldWorkDone(effOf(x)); }
   function isHidden(x) { return !!x.closed && effOf(x).removed === true; }   // closed in Jobber AND removed: gone everywhere
-  function matchesKey(x, k) { return isListKey(k) ? LIST[k].predicate(effOf(x)) : effOf(x).stage === k; }
-  function keyLabel(k) { return isListKey(k) ? LIST[k].label : STAGES[stageIndex(k)].label; }
+  /* Stage-mode keys: a stage, a list, or RES_STAGE (R-3.1: residential jobs are in that one only, never in a stage / list). */
+  function matchesKey(x, k) {
+    if (k === RES_STAGE) return isRes(x);
+    if (isRes(x)) return false;
+    return isListKey(k) ? LIST[k].predicate(effOf(x)) : effOf(x).stage === k;
+  }
+  function keyLabel(k) { return k === RES_STAGE ? 'Residential' : isListKey(k) ? LIST[k].label : STAGES[stageIndex(k)].label; }
   function itemVal(e, key) { return key === 'lane' ? (e.lane && e.lane.s) : e[key]; }
   function isoDay(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function fmtDay(iso) { var p = String(iso || '').split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2]); return isNaN(d) ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }); }
@@ -216,7 +318,16 @@
   /* ---------------- state ---------------- */
   // ALL = every job in jobs.json; JOBS = the ones shown anywhere (not closed-in-Jobber + removed). byNum covers ALL.
   var ALL = [], JOBS = [], byNum = {}, dataLoaded = false, firstFit = false, stagesLoaded = false;
-  function rebuildVisible() { JOBS = ALL.filter(function (x) { x._hidden = isHidden(x); return !x._hidden; }); paintUpd(); renderRemoved(); }
+  function rebuildVisible() {
+    JOBS = ALL.filter(function (x) { x._hidden = isHidden(x); return !x._hidden; }); CHIPS = clientChips(JOBS);
+    // A selected client chip whose client is now lumped under "All other" becomes All other (no stray "0" chip)
+    if (CHIPS.lumped.some(function (k) { return SEL.client.indexOf(k) >= 0; })) {
+      SEL.client = SEL.client.map(function (k) { return CHIPS.lumped.indexOf(k) >= 0 ? OTHER_KEY : k; })
+        .filter(function (k, i, a) { return a.indexOf(k) === i; });
+      saveFilter();
+    }
+    paintUpd(); renderRemoved();
+  }
   var STAGEMAP = (function () {                               // cached last good stages: the first render is already right
     try { return (store.peek && store.peek()) || {}; } catch (e) { return {}; }
   })();
@@ -225,7 +336,16 @@
     var a = lsJSON(key, []); if (!Array.isArray(a)) a = [];
     return a.filter(function (k, i) { return allowed.indexOf(k) >= 0 && a.indexOf(k) === i; });
   }
-  var SEL = { client: loadSel('vis_client', CLIENT_KEYS), stage: loadSel('vis_stage', STAGE_KEYS.concat(LIST_KEYS)) };
+  /* Client chips (R-3.1: a stored "Other" from before is "Residential", migrated once). Key-shaped names not in the
+   * built-in list stay until data/commercial_clients.json has loaded (a client only that file names); loadData then
+   * drops unknown ones from the view (without saving, so a failed read never loses the selection). */
+  function loadClientSel() {
+    var a = lsJSON('vis_client', []), out = []; if (!Array.isArray(a)) a = [];
+    a.forEach(function (k) { if (k === 'Other') k = RES_KEY; if (typeof k === 'string' && CLIENT_KEY_RE.test(k) && out.indexOf(k) < 0) out.push(k); });
+    return out;
+  }
+  var SEL = { client: loadClientSel(), stage: loadSel('vis_stage', STAGE_KEYS.concat([RES_STAGE], LIST_KEYS)) };
+  (function () { var a = lsJSON('vis_client', []); if (Array.isArray(a) && a.indexOf('Other') >= 0) lsSet('vis_client', JSON.stringify(SEL.client)); })();   // "Other" migrated once
   function saveFilter() {
     lsSet('mode', MODE);
     lsSet('vis_client', JSON.stringify(SEL.client));
@@ -237,20 +357,23 @@
    * first selected LIST it is in (more specific), otherwise under its stage. */
   function groupOf(x) {
     if (MODE === 'client') return clientGroup(x);
+    if (isRes(x)) return RES_STAGE;
     var s = SEL.stage, e = effOf(x);
     for (var i = 0; i < LIST_KEYS.length; i++) if (s.indexOf(LIST_KEYS[i]) >= 0 && LIST[LIST_KEYS[i]].predicate(e)) return LIST_KEYS[i];
     return e.stage;
   }
   function inFilter(x) {
     var s = sel(); if (!s.length) return true;
-    if (MODE === 'client') return s.indexOf(clientGroup(x)) >= 0;
+    if (MODE === 'client') return s.indexOf(clientGroup(x)) >= 0 || s.indexOf(ckOf(x)) >= 0;
     return s.some(function (k) { return matchesKey(x, k); });
   }
   function hay(x) {                                           // reset by refreshEff (x._hay = null) on every stage/item change
     if (x._hay == null) {
-      var st = stageOf(x), e = effOf(x), bits = [x.street, x.permit, x.jobNumber, x.title, x.city, x.client, clientLabel(x), st.label, st.short];
+      var st = stageOf(x), e = effOf(x), res = isRes(x), bits = [x.street, x.permit, x.jobNumber, x.title, x.city, x.client, clientLabel(x)];
       if (x.renamed && x._j && x._j.street) bits.push(x._j.street);                        // R-3: the Jobber name still finds it
       if (typeof x.range === 'string') bits.push(x.range);                                   // R-3: "Lipton St to Lenore St" (range street)
+      if (res) { if (x.closed) bits.push('closed in jobber'); x._hay = bits.join(' ').toLowerCase(); return x._hay; }   // R-3.1: no stage, no items
+      bits.push(st.label, st.short);
       LISTS.forEach(function (l) { if (l.predicate(e)) bits.push(l.label); });              // "book lane", "street cuts", "asphalt"…
       ITEMS.forEach(function (it) { if (itemVal(e, it.key) === 'req') bits.push(it.label + ' required'); });
       if (e.lane && e.lane.s === 'booked') bits.push('lane booked');
@@ -310,15 +433,15 @@
 
   /* ---------------- pins ---------------- */
   var selectedJn = null;
-  function pinHtml(x) {
-    var st = MODE === 'stage', k = stageIndex(x.stage);
-    var vars = st ? stageVars(k) : '--c:' + COL[clientGroup(x)];
-    return '<div class="jpin' + (x.unscheduled ? ' is-uns' : '') + (x.pending ? ' is-pend' : '') +
-      (x.jobNumber === selectedJn ? ' is-selected' : '') + '" style="' + vars + '">' + (st ? (k + 1) : '') + (fieldDone(x) ? PIN_DONE : '') + '</div>';
+  function pinHtml(x) {                                       // R-3.1: Stage mode, residential = amber pin with a house
+    var st = MODE === 'stage', res = st && isRes(x), k = stageIndex(x.stage);
+    var vars = res ? RES_VARS : st ? stageVars(k) : '--c:' + clientCol(clientGroup(x));
+    return '<div class="jpin' + (res ? ' is-res' : '') + (x.unscheduled ? ' is-uns' : '') + (x.pending ? ' is-pend' : '') +
+      (x.jobNumber === selectedJn ? ' is-selected' : '') + '" style="' + vars + '">' + (res ? PIN_HOUSE : st ? (k + 1) : '') + (fieldDone(x) ? PIN_DONE : '') + '</div>';
   }
   var PIN_DONE = '<span class="done-badge" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5l4.3 4.3L19 7"/></svg></span>';   // constant markup
-  function pinSig(x) { return MODE + '|' + (MODE === 'stage' ? x.stage : clientGroup(x)) + '|' + !!x.unscheduled + !!x.pending + '|' + fieldDone(x); }   // selection is a class toggle, not a rebuild
-  function pinLabel(x) { return '#' + x.jobNumber + ' ' + (x.street || x.title || '') + ', ' + stageOf(x).label + (x.closed ? ', closed in Jobber' : '') + (fieldDone(x) ? ', field work done' : ''); }
+  function pinSig(x) { return MODE + '|' + (MODE === 'stage' ? (isRes(x) ? RES_STAGE : x.stage) : clientGroup(x)) + '|' + !!x.unscheduled + !!x.pending + '|' + fieldDone(x); }   // selection is a class toggle, not a rebuild
+  function pinLabel(x) { return '#' + x.jobNumber + ' ' + (x.street || x.title || '') + ', ' + stageText(x) + (x.closed ? ', closed in Jobber' : '') + (fieldDone(x) ? ', field work done' : ''); }
   function iconFor(x) { return L.divIcon({ html: pinHtml(x), className: '', iconSize: [22, 22], iconAnchor: [11, 11] }); }
   function labelMarker(m, x) { var el = m.getElement && m.getElement(); if (el) el.setAttribute('aria-label', pinLabel(x)); }
   function markSelected(m) {                                  // toggle on the live element so the scale spring animates
@@ -380,11 +503,15 @@
   /* ---------------- chips, count, route button ---------------- */
   var chipsEl = $('chips'), countEl = $('count'), routeBtn = $('routeSel'), routeMore = $('routeMore'), rmenu = $('route-menu'), modeEl = $('mode');
   function groupsForMode() {                                  // list groups (and their order) for the current mode
-    if (MODE === 'client') {
-      return CLIENT_KEYS.filter(function (k) { return JOBS.some(function (x) { return clientGroup(x) === k; }) || SEL.client.indexOf(k) >= 0; })
-        .map(function (k) { return { k: k, label: LABEL[k], short: LABEL[k], vars: '--c:' + COL[k], digit: '' }; });
+    if (MODE === 'client') {                                  // R-3.1: chips per CHIPS (Riley's rule), then All other, then Residential
+      var ks = CHIPS.own.slice();
+      if (CHIPS.lumped.length) ks.push(OTHER_KEY);
+      if (JOBS.some(isRes)) ks.push(RES_KEY);
+      SEL.client.forEach(function (k) { if (ks.indexOf(k) < 0 && has(CLIENT, k)) ks.push(k); });   // selected, now without jobs: still un-selectable
+      return ks.map(function (k) { var c = CLIENT[k]; return { k: k, label: c.label, short: c.short, vars: '--c:' + c.color, digit: '' }; });
     }
     var g = STAGES.map(function (s, i) { return { k: s.key, label: s.label, short: s.short, vars: stageVars(i), digit: String(i + 1) }; });
+    g.push({ k: RES_STAGE, label: 'Residential', short: 'Residential', res: true });   // R-3.1: stageless, after the stages
     LISTS.forEach(function (l) { if (SEL.stage.indexOf(l.key) >= 0) g.push({ k: l.key, label: l.label, short: l.label, list: true }); });
     return g;
   }
@@ -404,6 +531,10 @@
    * components.css ("Stage-mode chips"). A list chip appearing/disappearing re-renders the chips row only. */
   var listChipSig = '';
   function listChipKeys() { return LIST_KEYS.filter(function (k) { return SEL.stage.indexOf(k) >= 0 || groupCount(k) > 0; }); }
+  /* R-3.1: the Residential chip opens the second set (after the hairline, before the lists): shown when there are
+   * residential jobs (or it is selected). Its count is visible, like the list chips. */
+  function resChipShown() { return SEL.stage.indexOf(RES_STAGE) >= 0 || groupCount(RES_STAGE) > 0; }
+  function secondSig() { return (resChipShown() ? RES_STAGE + '|' : '') + listChipKeys().join(); }
   function renderChips() {
     chipsEl.textContent = '';
     var s = sel(), q = $('q').value.trim(), stage = MODE === 'stage';
@@ -415,7 +546,7 @@
       chipsEl.appendChild(h('button', { type: 'button', class: 'chip pressable', 'data-k': '', 'aria-pressed': s.length ? 'false' : 'true' },
         ['All ', h('span', { class: 'n', text: String(JOBS.length) })]));
       groupsForMode().forEach(function (g) {
-        chipsEl.appendChild(h('button', { type: 'button', class: 'chip pressable', 'data-k': g.k, 'aria-pressed': s.indexOf(g.k) >= 0 ? 'true' : 'false', title: g.label },
+        chipsEl.appendChild(h('button', { type: 'button', class: 'chip pressable', 'data-k': g.k, 'aria-pressed': s.indexOf(g.k) >= 0 ? 'true' : 'false', title: g.label, 'aria-label': g.label + ', ' + plural(groupCount(g.k), 'job') },
           [h('span', { class: 'dot', style: g.vars, 'aria-hidden': 'true' }), g.short + ' ', h('span', { class: 'n', text: String(groupCount(g.k)) })]));
       });
       listChipSig = '';
@@ -434,11 +565,16 @@
         [h('span', { class: 'dot', style: stageVars(i), 'aria-hidden': 'true', text: String(i + 1) }), h('span', { class: 'lbl', text: st.short })]));
     });
     chipsEl.appendChild(setS);
-    var lk = listChipKeys(); listChipSig = lk.join();
-    if (!lk.length) return;
+    var lk = listChipKeys(), rs = resChipShown(); listChipSig = secondSig();
+    if (!lk.length && !rs) return;
     chipsEl.classList.add('has-lists');                       // iPhone sheet: the lists continue beside the stage grid
     chipsEl.appendChild(h('span', { class: 'chip-div', 'aria-hidden': 'true' }));
     var setL = h('span', { class: 'chip-set chip-set--lists' });
+    if (rs) {
+      var rsm = groupSum(RES_STAGE);
+      setL.appendChild(h('button', { type: 'button', class: 'chip chip--res pressable', 'data-k': RES_STAGE, 'aria-pressed': s.indexOf(RES_STAGE) >= 0 ? 'true' : 'false', title: listChipTitle(RES_STAGE, rsm) },
+        [resDot(), h('span', { class: 'lbl', text: 'Residential' }), ' ', h('span', { class: 'n', text: String(groupCount(RES_STAGE)) }), h('span', { class: 'v', text: sumText(rsm), hidden: !rsm.n })]));
+    }
     lk.forEach(function (k) {
       var sm = groupSum(k);
       setL.appendChild(h('button', { type: 'button', class: 'chip chip--list pressable', 'data-k': k, 'aria-pressed': s.indexOf(k) >= 0 ? 'true' : 'false', title: listChipTitle(k, sm) },
@@ -447,7 +583,7 @@
     chipsEl.appendChild(setL);
   }
   function chipLabel(label, n, sm) { return label + ', ' + plural(n, 'job') + (sm && sm.n ? ', Jobber total ' + fmtP(sm.v) : ''); }
-  function listChipTitle(k, sm) { return LIST[k].label + ' list' + (sm && sm.n ? ' · Jobber total ' + fmtP(sm.v) : ''); }
+  function listChipTitle(k, sm) { return (k === RES_STAGE ? 'Residential (no stages)' : LIST[k].label + ' list') + (sm && sm.n ? ' · Jobber total ' + fmtP(sm.v) : ''); }
   function revealSelectedChip() {                             // only when the row is (re)placed: first data, accessory <-> sheet
     var c = chipsEl.querySelector('.chip[aria-pressed="true"]:not([data-k=""])');
     if (!c || DESK.matches || chipsEl.scrollWidth <= chipsEl.clientWidth) return;
@@ -458,7 +594,7 @@
     chipsEl.scrollLeft = 0; revealSelectedChip();
   };
   function updateChipCounts() {
-    if (MODE === 'stage' && listChipKeys().join() !== listChipSig) {   // a list chip appears / disappears
+    if (MODE === 'stage' && secondSig() !== listChipSig) {   // a list chip (or Residential) appears / disappears
       var sl = chipsEl.scrollLeft; renderChips(); chipsEl.scrollLeft = sl; return;
     }
     chipsEl.querySelectorAll('.chip').forEach(function (c) {
@@ -475,7 +611,7 @@
     return c;
   }
   function selTitle() {
-    return sel().map(function (k) { return MODE === 'stage' ? keyLabel(k) : (LABEL[k] || k); }).join(' + ');
+    return sel().map(function (k) { return MODE === 'stage' ? keyLabel(k) : (CLIENT[k] ? CLIENT[k].label : k); }).join(' + ');
   }
   /* R-3 (r3-plan C): "N jobs · $total" next to the count = every shown job (All, one chip or several, plus search), not
    * one group: the per-chip / per-group totals only ever covered one stage, list or client. Prices shown only. */
@@ -509,15 +645,13 @@
   /* ---------------- list ---------------- */
   var listEl = $('jlist'), rows = {};
   function rowLead(x) {                                       // stage/client dot; R-2: a small green check when field work is done
-    var k = stageIndex(x.stage);
-    var d = MODE === 'stage' ? h('span', { class: 'dot', style: stageVars(k), 'aria-hidden': 'true', text: String(k + 1) })
-      : h('span', { class: 'dot', style: '--c:' + COL[clientGroup(x)], 'aria-hidden': 'true' });
+    var d = jobDot(x);
     var done = fieldDone(x);
     return h('span', { class: 'lead', title: done ? 'Field work done' : null }, [d, done ? h('span', { class: 'done-badge', 'aria-hidden': 'true' }, [svgIcon(ICON_CHECK)]) : null]);
   }
   function rowAria(x) {
     var p = priceOf(x);
-    return '#' + x.jobNumber + ' ' + (x.street || x.title || '') + ', ' + stageOf(x).label + (x.ok ? '' : ', not mapped') +
+    return '#' + x.jobNumber + ' ' + (x.street || x.title || '') + ', ' + stageText(x) + (x.ok ? '' : ', not mapped') +
       (x.closed ? ', closed in Jobber' : '') + (fieldDone(x) ? ', field work done' : '') + (p ? ', Jobber total ' + fmtP(p.t) : '');
   }
   function rowTrail(x) {                                      // pill, and under it (prices shown) the job's Jobber total, short
@@ -525,7 +659,12 @@
     return h('span', { class: 'trail' }, [rowPill(x), p ? h('span', { class: 'price', title: 'Jobber total ' + fmtP(p.t), text: fmtPS(p.t) }) : null]);
   }
   function rowPill(x) {
-    if (MODE === 'stage') { var g = clientGroup(x); return h('span', { class: 'pill pill--client', style: '--c:' + COL[g], title: g === 'Other' ? (x.client || LABEL.Other) : LABEL[g], text: g === 'Other' ? (x.client || SHORT.Other) : (SHORT[g] || LABEL[g] || g) }); }
+    var res = isRes(x);
+    if (MODE === 'stage') {                                   // the client; a residential job shows its client's name
+      var c = CLIENT[ckOf(x)] || CLIENT[RES_KEY];
+      return h('span', { class: 'pill pill--client', style: '--c:' + clientCol(clientGroup(x)), title: res ? 'Residential · ' + (x.client || '') : c.label, text: res ? (x.client || c.short) : c.short });
+    }
+    if (res) return null;                                     // R-3.1: Client mode, residential: no stage to show
     var k = stageIndex(x.stage);
     return h('span', { class: 'pill', style: stageVars(k), title: STAGES[k].label },
       [h('span', { class: 'dot dot--xs', style: stageVars(k), text: String(k + 1) }), STAGES[k].short]);
@@ -537,7 +676,7 @@
     if (!x.ok) bits.push(h('span', { class: 'tag unm', text: 'not mapped' }));
     if (x.closed) bits.push(h('span', { class: 'tag closed', text: 'Closed in Jobber' }));
     var e = effOf(x);
-    if (e.lane && e.lane.s === 'booked' && e.stage !== 'poured') {                   // booked lane: its dates (red once late)
+    if (!isRes(x) && e.lane && e.lane.s === 'booked' && e.stage !== 'poured') {      // booked lane: its dates (red once late)
       var lr = laneRange(e.lane);
       bits.push(h('span', { class: 'tag lane' + (laneLate(e) ? ' is-late' : ''), text: 'Lane ' + (lr || 'booked') }));
     }
@@ -571,7 +710,7 @@
       var list = shown.filter(function (x) { return groupOf(x) === g.k; }); if (!list.length) return;
       var n = grpCounts[g.k] = h('span', { class: 'grp-n', text: '(' + list.length + ')' });
       var sv = grpSums[g.k] = h('span', { class: 'grp-sum' }); paintGrpSum(sv, sumPrices(list));
-      frag.appendChild(h('div', { class: 'grp', role: 'presentation' }, [g.list ? listDot() : h('span', { class: 'dot', style: g.vars, 'aria-hidden': 'true', text: g.digit }),
+      frag.appendChild(h('div', { class: 'grp', role: 'presentation' }, [g.list ? listDot() : g.res ? resDot() : h('span', { class: 'dot', style: g.vars, 'aria-hidden': 'true', text: g.digit }),
         h('span', { text: g.label }), n, sv,
         h('button', { type: 'button', class: 'grp-route pressable', 'data-route': g.k, title: 'Route every ' + g.label + ' job from the shop', 'aria-label': 'Route ' + g.label + ' jobs from the shop', text: 'Route' })]));
       list.forEach(function (x) { frag.appendChild(makeRow(x)); });
@@ -624,7 +763,7 @@
     var shown = currentJobs();
     shownSet = {}; shown.forEach(function (x) { shownSet[x.jobNumber] = true; });
     syncMarkers(); renderList(shown); updateCount();
-    if (MODE === 'stage' && listChipKeys().join() !== listChipSig) renderAll();   // an empty list chip was switched off: it goes
+    if (MODE === 'stage' && secondSig() !== listChipSig) renderAll();   // an empty list chip was switched off: it goes
     else paintChipStates();
   }
   var qT = 0;
@@ -733,7 +872,7 @@
   function lockSliders() {
     var ro = !writable();
     detailSlider.lock(ro); cardSlider.lock(ro);
-    $('dLock').hidden = !ro; $('mcLock').hidden = !ro;
+    $('dLock').hidden = !ro; $('mcLock').hidden = !ro || !!(cardJob && isRes(cardJob));   // R-3.1: no slider on a residential card
     $('dEditBtn').hidden = ro || !HAS_STAGES;                  // R-3: rename / move the pin needs the edit key
     if (ro) closeEditor();
     if (detailJn != null && byNum[detailJn]) paintItems(byNum[detailJn]);
@@ -774,7 +913,9 @@
     if (x.closed) tags.appendChild(h('span', { class: 'tag closed', text: 'Closed in Jobber' }));
     if (fieldDone(x)) tags.appendChild(h('span', { class: 'tag done' }, [svgIcon(ICON_CHECK), 'Field work done']));
     tags.hidden = !tags.firstChild;
-    detailSlider.set(x);
+    var res = isRes(x);                                       // R-3.1: a residential job has no stage slider and no items
+    $('dStageCard').hidden = res;
+    if (!res) detailSlider.set(x);
     paintItems(x);
     $('dRemoveBox').hidden = !x.closed;
     renderStageInfo(x);
@@ -793,6 +934,8 @@
   function renderStageInfo(x) {                               // "Updated <time> by <device>" from the stored entry
     var el = $('dStageInfo'); if (!el || detailJn !== x.jobNumber) return;
     var entry = STAGEMAP[x.jobNumber], d = entry && entry.at ? new Date(entry.at) : null;
+    // R-3.1: a residential sheet shows no stage or items, so only an edit it does show (name, pin, keep) earns the line
+    if (d && isRes(x) && !(entry.name || entry.loc || entry.keep)) d = null;
     el.textContent = d && !isNaN(d) ? 'Updated ' + fmtTime(d) + (entry.by ? ' by ' + String(entry.by).slice(0, 40) : '') : '';
     el.hidden = !el.textContent;
   }
@@ -826,6 +969,7 @@
   }
   function paintItems(x) {
     if (!itemsEl || detailJn !== x.jobNumber) return;
+    if (isRes(x)) { $('dItems').hidden = true; return; }      // R-3.1: stageless, no job items
     if (itemsJn !== x.jobNumber) buildItems(x);
     var e = effOf(x), entry = STAGEMAP[x.jobNumber] || null, ro = !writable(), any = false;
     ITEMS.forEach(function (it) {
@@ -1108,6 +1252,7 @@
   /* R-2: at most ONE short line of open items under the title (closed / field work done first). */
   function paintCardItems(x) {
     var el = $('mcItems'), e = effOf(x), bits = [];
+    if (isRes(x)) e = { lane: { s: 'na' } };                  // R-3.1: residential: no items (only the closed tag)
     if (fieldDone(x)) bits.push(h('span', { class: 'ok', text: '✓ Field work done' }));
     if (e.lane.s === 'req') bits.push(h('span', { class: 'req', text: 'Lane closure required' }));
     else if (e.lane.s === 'booked' && e.stage !== 'poured') bits.push(h('span', { class: laneLate(e) ? 'req' : '', text: 'Lane booked' + (laneRange(e.lane) ? ' ' + laneRange(e.lane) : '') }));
@@ -1128,7 +1273,8 @@
     $('mcTitle').textContent = x.street || x.title || '(no address)';
     $('mcSub').textContent = clientLabel(x) + ' · #' + x.jobNumber + (x.permit ? ' · ' + x.permit : '');
     paintCardItems(x); paintCardPrice(x);
-    cardSlider.set(x); lockSliders();
+    $('mcStage').hidden = isRes(x); if (!isRes(x)) cardSlider.set(x);   // R-3.1: no stage on a residential job
+    lockSliders();
     cardH = card.offsetHeight || 150;                         // measured once per open, not on every map move
     placeCard(); card.classList.add('is-open');
   }
@@ -1139,7 +1285,7 @@
   function refreshCard(x) {
     if (cardJob !== x) return;
     $('mcTitle').textContent = jobName(x);                    // R-3: a rename shows at once
-    paintCardItems(x); cardSlider.set(x); cardH = card.offsetHeight || cardH; placeCard();
+    paintCardItems(x); $('mcStage').hidden = isRes(x); if (!isRes(x)) cardSlider.set(x); cardH = card.offsetHeight || cardH; placeCard();
   }
   function closeCard(force) {
     clearTimeout(showT);
@@ -1199,6 +1345,7 @@
   }
   function openStageSettings() { UI.openSettings('stages'); }
   function moveStage(x, key) {                                // slider commit (gates already checked by the slider)
+    if (isRes(x)) return;                                     // R-3.1: residential jobs have no stage (no slider is shown)
     key = STAGES[stageIndex(key)].key;
     if (key === x.stage) return;
     if (!writable()) { readOnlyToast(); if (detailJn === x.jobNumber) detailSlider.set(x); if (cardJob === x) cardSlider.set(x); return; }
@@ -1355,13 +1502,17 @@
     if (!dataLoaded) countEl.textContent = 'Loading…';
     armPop(); var loadAt = popArm.since;                     // R-3: the "Closed in Jobber" check of this load
     var metaP = getJSON(BASE + 'data/meta.json' + bust()).catch(function () { return null; });
-    var jobsP = Promise.all([getJSON(BASE + 'data/jobs.json' + bust()), metaP, loadClosed()])
+    // R-3.1: the commercial client list (labels, chips, colours); a failed or invalid read keeps the last good / built-in list
+    var clientsP = getJSON(BASE + 'data/commercial_clients.json' + bust()).then(validClients, function () { return null; });
+    var jobsP = Promise.all([getJSON(BASE + 'data/jobs.json' + bust()), metaP, loadClosed(), clientsP])
       .then(function (res) {
         var j = res[0];
         if (!Array.isArray(j)) throw new Error('bad jobs.json');
         if (res[2]) lastClosed = res[2];
+        if (res[3]) setClients(res[3]);
+        SEL.client = SEL.client.filter(function (k) { return has(CLIENT, k); });   // view only (see loadClientSel)
         ALL = mergeClosed(j.filter(function (x) { return x && x.jobNumber != null; }), lastClosed);
-        byNum = {}; ALL.forEach(function (x) { byNum[x.jobNumber] = x; refreshEff(x); });
+        byNum = {}; ALL.forEach(function (x) { byNum[x.jobNumber] = x; x._ck = classifyClient(x); refreshEff(x); });
         dataLoaded = true; updFailed = false; lastMeta = res[1];
         rebuildVisible();                                      // R-2: closed-in-Jobber + removed jobs are hidden everywhere (+ header)
         renderAll({ reveal: !firstFit });
@@ -1629,11 +1780,11 @@
       s.skip ? null : b('up', 'Move up', idx <= 0), s.skip ? null : b('down', 'Move down', idx >= n - 1),
       stopJob(s) ? b('details', 'Details') : null, b('remove', 'Remove', false, ' btn--danger')]);
   }
-  var REASON = { unassessed: 'Unassessed', booklane: 'Book lane', streetcuts: 'Street cut', cleanup: 'Cleanup', asphalt: 'Asphalt', pavers: 'Pavers' };
+  var REASON = { unassessed: 'Unassessed', booklane: 'Book lane', streetcuts: 'Street cut', cleanup: 'Cleanup', asphalt: 'Asphalt', pavers: 'Pavers', residential: 'Residential' };
   function stopReason(s) {                                    // combined route: which of its stages / lists put this job on it
     var x = ED.keys && stopJob(s); if (!x) return '';
     var ks = ED.keys.filter(isListKey).concat(ED.keys.filter(function (k) { return !isListKey(k); }));   // lists first, like groupOf
-    for (var i = 0; i < ks.length; i++) if (matchesKey(x, ks[i])) return isListKey(ks[i]) ? (REASON[ks[i]] || LIST[ks[i]].label) : STAGES[stageIndex(ks[i])].short;
+    for (var i = 0; i < ks.length; i++) if (matchesKey(x, ks[i])) return ks[i] === RES_STAGE ? REASON.residential : isListKey(ks[i]) ? (REASON[ks[i]] || LIST[ks[i]].label) : STAGES[stageIndex(ks[i])].short;
     return '';
   }
   function stopRow(s, label, leg, idx, n, last, isStart) {    // isStart (R-3): the first stop IS the start (no shop / Me)
@@ -2155,11 +2306,10 @@
       h('span', { class: 'ed-opt-ico', 'aria-hidden': 'true' }, [svgIcon(ICON_PIN)]),
       h('span', { class: 'tx' }, [h('span', { class: 't', text: 'Find “' + it.addr + '”' }), h('span', { class: 's', text: 'Address or intersection' })])]);
     var x = it.job, ex = findStopFor(x), state = ex ? (ex.skip ? 'Skipped' : 'In route') : '';
-    var vars = MODE === 'stage' ? stageVars(stageIndex(x.stage)) : '--c:' + COL[clientGroup(x)];
     return h('button', { type: 'button', class: 'ed-opt', role: 'option', id: id, 'data-i': String(i) }, [
-      h('span', { class: 'dot dot--xs', style: vars, 'aria-hidden': 'true', text: MODE === 'stage' ? String(stageIndex(x.stage) + 1) : '' }),
+      jobDot(x, ' dot--xs'),
       h('span', { class: 'tx' }, [h('span', { class: 't', text: '#' + x.jobNumber + ' ' + (x.street || x.title || '') }),
-        h('span', { class: 's', text: [clientLabel(x), stageOf(x).label, isWpg(x) ? '' : x.city].filter(Boolean).join(' · ') })]),
+        h('span', { class: 's', text: [clientLabel(x), isRes(x) ? '' : stageOf(x).label, isWpg(x) ? '' : x.city].filter(Boolean).join(' · ') })]),
       state ? h('span', { class: 'tag', text: state }) : null]);
   }
   function renderSugg() {
@@ -2540,7 +2690,11 @@
     STAGES.forEach(function (s, i) {
       rmenu.appendChild(rmItem(s.key, s.label, h('span', { class: 'dot', style: stageVars(i), 'aria-hidden': 'true', text: String(i + 1) })));
     });
-    var lists = LISTS.filter(function (l) { return JOBS.some(function (x) { return l.predicate(effOf(x)); }); });
+    if (JOBS.some(isRes)) {                                   // R-3.1: stageless, so set apart from the stages (like the chip hairline)
+      rmenu.appendChild(h('div', { class: 'rm-sep', role: 'separator' }));
+      rmenu.appendChild(rmItem(RES_STAGE, 'Residential', resDot()));
+    }
+    var lists = LISTS.filter(function (l) { return JOBS.some(function (x) { return matchesKey(x, l.key); }); });
     if (!lists.length) return;
     rmenu.appendChild(h('div', { class: 'rm-sep', role: 'separator' }));
     rmenu.appendChild(h('div', { class: 'rm-hd', 'aria-hidden': 'true', text: 'Route a list' }));
@@ -2623,7 +2777,7 @@
   var popSeen = {};           // job number -> 1: put off in this session
   var popOrder = [];          // job numbers of the open dialog, in order (an Undo puts a row back where it was)
   var popResume = false, popWait = null, popCloseT = null;
-  function popSub(x) { var p = priceOf(x); return [clientLabel(x), '#' + x.jobNumber, stageOf(x).label, p ? fmtPS(p.t) : ''].filter(Boolean).join(' · '); }
+  function popSub(x) { var p = priceOf(x); return [isRes(x) ? (x.client || 'Residential') : clientLabel(x), '#' + x.jobNumber, isRes(x) ? 'Residential' : stageOf(x).label, p ? fmtPS(p.t) : ''].filter(Boolean).join(' · '); }
   function popRow(x) {
     var nm = jobName(x);
     return h('div', { class: 'pop-row', role: 'listitem', 'data-jn': String(x.jobNumber) }, [
@@ -2761,7 +2915,9 @@
   /* ================= R-3 Settings -> Data -> "Recently removed (60 days)" (r3-plan A) =================
    * data/closed_archive.json (the sync's 60-day archive: {version, days, jobs: [record + droppedAt, droppedWhy]}) plus jobs
    * removed here that are still in data/closed_jobs.json (until the next sync). Restore = patch {removed: null}: a job
-   * still in closed_jobs.json is back at once; an archived one "Comes back at the next sync". */
+   * still in closed_jobs.json is back at once; an archived one "Comes back at the next sync".
+   * R-3.1 (r3-plan G): the sync also archives a residential job as soon as Jobber closes it ("residential, closed in
+   * Jobber"); its Restore patches {keep: true, removed: null}, so the job stays (and waits for Completed) next time. */
   var ARCHIVE = [], rrOpen = false;
   function loadArchive() {
     return getJSON(BASE + 'data/closed_archive.json' + bust()).then(function (a) {
@@ -2775,14 +2931,17 @@
     ALL.forEach(function (x) {
       if (!x._hidden) return;
       var e = STAGEMAP[x.jobNumber]; seen[x.jobNumber] = 1;
-      out.push({ jn: x.jobNumber, name: jobName(x), day: e && e.at ? localDay(e.at) : '', live: true });
+      out.push({ jn: x.jobNumber, name: jobName(x), day: e && e.at ? localDay(e.at) : '', live: true, res: isRes(x) });
     });
     ARCHIVE.forEach(function (r) {
       var jn = r.jobNumber, cur = byNum[jn];
       if (seen[jn] || (cur && !cur._hidden)) return;          // listed already, or back in the app
       seen[jn] = 1;
-      var e = STAGEMAP[jn], nm = effName(e) || String(r.street || r.title || '#' + jn).slice(0, 80);
-      out.push({ jn: jn, name: nm, day: /^\d{4}-\d{2}-\d{2}$/.test(String(r.droppedAt || '')) ? r.droppedAt : '', removed: !!(e && e.removed === true) });
+      var e = STAGEMAP[jn], nm = effName(e) || String(r.street || r.title || '#' + jn).slice(0, 80), res = classifyClient(r) === RES_KEY;
+      // Restore is offered while the sync would keep it out: removed (any job), or a residential job without keep
+      var can = !!(e && e.removed === true) || (res && !(e && e.keep === true));
+      out.push({ jn: jn, name: nm, day: /^\d{4}-\d{2}-\d{2}$/.test(String(r.droppedAt || '')) ? r.droppedAt : '', removed: can, res: res,
+        jc: res && r.droppedWhy === 'residential, closed in Jobber' && !(e && e.removed === true) });   // the sync took it out, nobody removed it
     });
     return out.sort(function (a, b) { return a.day < b.day ? 1 : a.day > b.day ? -1 : 0; }).slice(0, 100);
   }
@@ -2800,22 +2959,25 @@
         ? h('button', { type: 'button', class: 'btn btn--sm btn--tinted pressable', 'data-jn': String(it.jn), 'aria-label': 'Restore ' + it.name, text: 'Restore', disabled: ro })
         : h('span', { class: 'rr-state', text: 'Comes back at the next sync' });
       list.appendChild(h('div', { class: 'rr-row' }, [
-        h('div', { class: 'rr-tx' }, [h('div', { class: 't', text: it.name }), h('div', { class: 's', text: '#' + it.jn + (it.day ? ' · removed ' + fmtDay(it.day) : '') })]), act]));
+        h('div', { class: 'rr-tx' }, [h('div', { class: 't', text: it.name }), h('div', { class: 's', text: '#' + it.jn + (it.day ? (it.jc ? ' · closed in Jobber ' : ' · removed ') + fmtDay(it.day) : '') })]), act]));
     });
-    $('rrNote').textContent = ro ? 'Restoring needs the edit key (Settings → Stages).' : 'Completed jobs stay here for 60 days. Restore puts a job back in the app on every device.';
+    $('rrNote').textContent = ro ? 'Restoring needs the edit key (Settings → Stages).' : 'Kept 60 days. Restore brings a job back on every device; a residential job then stays until Completed.';
   }
   $('rrTgl').addEventListener('click', function () { rrOpen = !rrOpen; renderRemoved(); });
   $('rrList').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-jn]'); if (!b || b.disabled) return;
     if (!writable()) { readOnlyToast(); return; }
     var jn = b.getAttribute('data-jn'), x = byNum[jn];
-    if (x && x._hidden) { changeJob(x, { removed: null }, { msg: 'Back in the app' }); return; }   // still in closed_jobs.json: back now
-    var before = STAGEMAP[jn] || null, it = removedItems().filter(function (r) { return String(r.jn) === String(jn); })[0];
+    var it = removedItems().filter(function (r) { return String(r.jn) === String(jn); })[0], res = !!(it && it.res);
+    var patch = res ? { keep: true, removed: null } : { removed: null };   // R-3.1: a residential job then stays until Completed
+    if (x && x._hidden) { changeJob(x, patch, { msg: 'Back in the app' }); return; }   // still in closed_jobs.json: back now
+    var before = STAGEMAP[jn] || null;
     var next = entryWith(before, 'removed', undefined);       // optimistic: the row says "Comes back at the next sync"
+    if (res) next = entryWith(next, 'keep', true);
     if (next) { next.at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'); next.by = store.deviceLabel ? store.deviceLabel() : ''; STAGEMAP[jn] = next; }
     else delete STAGEMAP[jn];
     renderRemoved();
-    var p; try { p = store.set(isFinite(+jn) ? +jn : jn, { removed: null }, { label: it ? it.name : '' }); } catch (err) { p = Promise.reject(err); }
+    var p; try { p = store.set(isFinite(+jn) ? +jn : jn, patch, { label: it ? it.name : '' }); } catch (err) { p = Promise.reject(err); }
     Promise.resolve(p).then(function () { toast('Restored — comes back at the next sync'); }, function () {
       if (before) STAGEMAP[jn] = before; else delete STAGEMAP[jn];
       renderRemoved(); toast('Couldn’t restore — try again', null, { error: true });

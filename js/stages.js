@@ -12,8 +12,11 @@
  *   "invalid"  the key was rejected (401/403): behaves read-only until a new key is saved.
  *
  * Stored entry (only non-default fields; asphalt/pavers whenever someone set them, including "na"):
- *   {stage?, assess?, lane?:{s, from?, to?}, cut?, asphalt?, pavers?, cleanup?, removed?, name?, loc?:{lat, lon}, sat?,
- *    at, by}
+ *   {stage?, assess?, lane?:{s, from?, to?}, cut?, asphalt?, pavers?, cleanup?, removed?, keep?, name?, loc?:{lat, lon},
+ *    sat?, at, by}
+ * R-3.1 (docs/r3-plan.md G): keep = true on a RESIDENTIAL job (stageless) means "keep it until someone taps Completed"
+ * when Jobber closes it (Settings -> Recently removed -> Restore stores it); without it the sync drops a closed
+ * residential job automatically. set(jn, {keep: true | null}); only true is stored. sync_jobs.py reads it.
  * R-3 (docs/r3-plan.md E): name = the job's display name / street set in the app (one line, <= 80 chars, cleaned like
  * labels); loc = its map position {lat, lon} (finite, inside the Manitoba box MB_BOX). set(jn, {name: "..." | null,
  * loc: {lat, lon} | null}); null clears (back to Jobber's). effective() gives name / loc (null by default). Commit
@@ -122,7 +125,7 @@ var Stages = (function () {
   function inValues(key, v) { return typeof v === 'string' && ITEM[key].values.indexOf(v) >= 0; }
 
   /** Every field a patch may carry, in file order (sat, at, by follow). */
-  var FIELDS = ['stage', 'assess', 'lane', 'cut', 'asphalt', 'pavers', 'cleanup', 'removed', 'name', 'loc'];
+  var FIELDS = ['stage', 'assess', 'lane', 'cut', 'asphalt', 'pavers', 'cleanup', 'removed', 'keep', 'name', 'loc'];
   /** Stored/queued fields: FIELDS + "sat" (stage-set time; set by the store itself, never by a patch). */
   var QFIELDS = FIELDS.concat(['sat']);
   /** R-3 per-job overrides, stored in the file's top-level OVR_KEY object (serializeDoc). */
@@ -421,6 +424,7 @@ var Stages = (function () {
     if (has(v, 'pavers') && inValues('pavers', v.pavers)) o.pavers = v.pavers;
     if (has(v, 'cleanup') && v.cleanup === 'done') o.cleanup = 'done';
     if (has(v, 'removed') && v.removed === true) o.removed = true;
+    if (has(v, 'keep') && v.keep === true) o.keep = true;     // R-3.1: residential "keep until Completed"
     if (has(v, 'name')) { var nm = cleanName(v.name); if (nm) o.name = nm; }
     if (has(v, 'loc')) { var lc = cleanLoc(v.loc); if (lc) o.loc = lc; }
     return o;
@@ -472,7 +476,7 @@ var Stages = (function () {
       case 'asphalt': case 'pavers':
         if (v === null) return null;
         return inValues(f, v) ? v : INVALID;
-      case 'removed':
+      case 'removed': case 'keep':
         if (v === null) return false;
         return typeof v === 'boolean' ? v : INVALID;
       case 'sat': // internal (the store sets it, cleanPatch never accepts it); null drops it
@@ -506,7 +510,7 @@ var Stages = (function () {
       case 'stage': return v === 'ready';
       case 'lane': return !v || v.s === 'na';
       case 'asphalt': case 'pavers': case 'sat': case 'name': case 'loc': return v === null;
-      case 'removed': return v !== true;
+      case 'removed': case 'keep': return v !== true;
       default: return v === ITEM[f].def;
     }
   }
@@ -563,6 +567,7 @@ var Stages = (function () {
       pavers: has(e, 'pavers') ? e.pavers : (h.pavers === true ? 'req' : 'na'),
       cleanup: has(e, 'cleanup') ? e.cleanup : 'todo',
       removed: has(e, 'removed') && e.removed === true,
+      keep: has(e, 'keep') && e.keep === true,          // R-3.1: residential job kept until Completed
       name: has(e, 'name') ? e.name : null,             // R-3: display name set in the app (null = the Jobber name)
       loc: has(e, 'loc') ? copyVal('loc', e.loc) : null // R-3: map position set in the app (null = the Jobber pin)
     };
@@ -585,7 +590,7 @@ var Stages = (function () {
       if (value !== null && !knownKey(value)) return blocked('invalid', MSG.invalid);
       return canMove(entry, value === null ? 'ready' : value, hints);
     }
-    if (item !== 'removed' && item !== 'name' && item !== 'loc' && !itemDef(item)) return blocked('invalid', MSG.invalid);
+    if (item !== 'removed' && item !== 'keep' && item !== 'name' && item !== 'loc' && !itemDef(item)) return blocked('invalid', MSG.invalid);
     if (item === 'lane' && isPlainObj(value) && value.s === 'booked' && cleanDate(value.from) && cleanDate(value.to) &&
         value.from > value.to) return blocked('dates', MSG.dates);
     if (cleanFieldValue(item, value) === INVALID) return blocked('invalid', MSG.invalid);
@@ -810,7 +815,7 @@ var Stages = (function () {
         if (!v) return 'na';
         return v.s + (v.from || v.to ? ' ' + (v.from || '') + '..' + (v.to || '') : '');
       case 'asphalt': case 'pavers': return v || 'auto';
-      case 'removed': return v === true ? 'true' : 'false';
+      case 'removed': case 'keep': return v === true ? 'true' : 'false';
       case 'name': return v ? '"' + v + '"' : 'cleared';
       case 'loc': return v ? 'moved' : 'cleared';
       default: return v || ITEM[f].def;

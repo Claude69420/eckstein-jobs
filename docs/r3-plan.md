@@ -73,3 +73,23 @@ Rule 14 applies: bump every `?v=` in `index.html` and the `sw.js` cache name (`e
 Workflow: parallel builders (sync | data: stages.js + new routes store + tools/add_route.py | UI part 1: A, C, D, E),
 then UI part 2 (B, F), then browser acceptance + review lenses + fix loop. Main session: docs, squash to `main`,
 Rule 14 bump, live check, first sync check.
+
+## G. R-3.1 soft update (2026-10-04): residential jobs are stageless; commercial clients from a list
+Riley: "Residential jobs should not be in the stages but rather exist as stageless jobs on the stage view that can be
+toggled off just like the other stages. They dont progress through the pipeline and are often done by one crew in one
+day so they dont need to be tracked the same." Commercial = exactly Riley's list ("Crown, harris, mytec, NLU, aecon,
+tricore, ACV, swift underground. These are all we have for commercial for now"); everyone else is residential.
+- **`data/commercial_clients.json`** (hand-maintained, public; the ONE place to add a client):
+  `{"version":1,"clients":[{"key","label","short","match":["lowercase substring", ...],"color"}]}`. A Jobber client name
+  (companyName or name) matches when it contains a `match` string (case-insensitive, word-bounded; first match wins).
+  No match = residential (`clientKey` "Residential", `residential: true` in jobs.json). Built-in fallback = the same list.
+- **Chips (Riley):** "All commercial clients get their own chips unless there are 9 or more. In which case, the 8 with
+  the most jobs get their own chips and the rest are lumped under all other" (+ a Residential chip). Only clients with
+  jobs get chips.
+- **Stage view:** residential jobs never sit in a stage or a list; a **Residential** chip sits with the stage chips and
+  toggles like them (routable, totals, search "residential"). Residential pins: residential colour + house glyph.
+- **Residential job sheet:** no stage slider, no job items (address, client, price, Directions / Add to route / Copy,
+  rename pencil stay).
+- **Closed residential jobs:** removed automatically (archive, droppedWhy "residential, closed in Jobber"); Settings →
+  Recently removed → Restore stores `keep: true` (new optional stage-entry field) so the job stays until Completed.
+- Rule 14: `?v=r3.1`, cache `ej-v5`. Ships straight to `main` (soft update, no new version name).

@@ -927,9 +927,9 @@ test('remote at/by are one line, bounded and free of bidi overrides', async () =
 function docText2(stages, extra) { return JSON.stringify(Object.assign({ version: 2, stages: stages || {} }, extra || {}), null, 2) + '\n'; }
 const eff = (entry, hints) => Stages.effective(entry, hints);
 const DEFAULT_EFF = { stage: 'ready', assess: 'no', lane: { s: 'na' }, cut: 'na', asphalt: 'na', pavers: 'na', cleanup: 'todo', removed: false,
-  name: null, loc: null };
+  keep: false, name: null, loc: null };
 // The shared vectors (sync_jobs.py twin) predate R-3's name / loc, which the sync ignores: the app adds them as null.
-const withR3 = (e) => Object.assign({}, e, { name: null, loc: null });
+const withR3 = (e) => Object.assign({}, e, { keep: false, name: null, loc: null });   // R-3 name / loc, R-3.1 keep
 
 test('v2: ITEMS and LISTS definitions (keys, labels, values, value labels) and they are frozen', async () => {
   const I = Stages.ITEMS;
@@ -983,7 +983,7 @@ test('v2: effective() applies defaults, hints, and a stored value (even "na") al
   const full = { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' }, cut: 'req',
     asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, at: 'a', by: 'b' };
   assert.deepStrictEqual(eff(full), { stage: 'setup', assess: 'virtual', lane: { s: 'booked', from: '2026-10-06', to: '2026-10-08' },
-    cut: 'req', asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, name: null, loc: null });
+    cut: 'req', asphalt: 'req', pavers: 'na', cleanup: 'done', removed: true, keep: false, name: null, loc: null });
   const e = eff(full);
   e.lane.s = 'na';
   assert.strictEqual(full.lane.s, 'booked', 'effective() returns copies');
@@ -2765,6 +2765,49 @@ test('R-3: an R-2 page still open after the update keeps every name / loc when i
   const legacy = Stages._util.parseDocText(JSON.stringify({ version: 2, stages: { 700: { stage: 'base', name: 'Inline', loc: LOC2, at: '2026-09-26T10:00:00Z', by: 'a' } },
     overrides: { 700: { name: 'Override', at: '2026-09-26T11:00:00Z', by: 'b' }, 703: 'junk', 704: { loc: { lat: 60, lon: 0 } } } })).map;
   assert.deepStrictEqual(legacy, { '700': { stage: 'base', name: 'Override', loc: LOC2, at: '2026-09-26T11:00:00Z', by: 'b' } });
+});
+
+/* ---------- R-3.1 (docs/r3-plan.md G): "keep" on a residential job (keep until Completed) ---------- */
+test('R-3.1: keep is sanitized from the file (only true is stored) and is content; effective() gives keep (false by default)', async () => {
+  const clean = (v) => Stages._util.cleanEntry(v);
+  assert.deepStrictEqual(clean({ keep: true, at: 'a', by: 'b' }), { keep: true, at: 'a', by: 'b' }, 'a keep-only entry is kept');
+  for (const bad of [{ keep: false }, { keep: 'true' }, { keep: 1 }, { keep: null }, { keep: {} }]) {
+    assert.strictEqual(clean(Object.assign({ at: 'a', by: 'b' }, bad)), null, JSON.stringify(bad));
+  }
+  assert.deepStrictEqual(Object.keys(clean({ name: 'x', keep: true, removed: true, stage: 'base' })), ['stage', 'removed', 'keep', 'name', 'at', 'by'], 'file key order');
+  assert.strictEqual(Stages.effective({ keep: true }).keep, true);
+  assert.strictEqual(Stages.effective(null).keep, false);
+  assert.strictEqual(Stages.effective({ keep: 'yes' }).keep, false);
+  const kept = Stages.effective({ keep: true });
+  assert.strictEqual(Stages.keepWhenClosed(kept), false, 'keep is not field work (the app and the sync apply it to residential jobs only)');
+  assert.strictEqual(Stages.fieldWorkDone(kept), false);
+  assert.deepStrictEqual(Stages.canSetItem(null, 'keep', true), { ok: true });
+  assert.deepStrictEqual(Stages.canSetItem(null, 'keep', null), { ok: true });
+  assert.strictEqual(Stages.canSetItem(null, 'keep', 'yes').reason, 'invalid');
+  assert.deepStrictEqual(Stages._util.cleanPatch({ keep: true, removed: null }), { keep: true, removed: false });
+  assert.deepStrictEqual(Stages._util.cleanPatch({ keep: null }), { keep: false });
+  for (const p of [{ keep: 'true' }, { keep: 1 }, { keep: {} }]) assert.strictEqual(Stages._util.cleanPatch(p), null, JSON.stringify(p));
+  assert.deepStrictEqual(Stages._util.applyFields({ removed: true, at: 'a', by: 'b' }, { keep: true, removed: false }), { keep: true, at: 'a', by: 'b' });
+  assert.deepStrictEqual(Stages._util.applyFields({ keep: true, stage: 'base' }, { keep: false }), { stage: 'base' });
+});
+
+test('R-3.1: Restore of a residential job: set {keep: true, removed: null} -> commit "removed -> false, keep -> true"; null clears keep', async () => {
+  const { store, srv, clock } = setup({ key: true, stages: { '705': { removed: true, at: '2026-09-25T15:00:00Z', by: 'PC' } } });
+  await store.load();
+  const a = track(store.set(705, { keep: true, removed: null }, { label: '12 Elm St' }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(a.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[0].message, 'job #705 12 Elm St: removed -> false, keep -> true');
+  assert.deepStrictEqual(srv.stages()['705'], { keep: true, at: '2026-09-26T15:00:00Z', by: 'PC' }, 'keep sits in the stage entry');
+  assert.strictEqual(Stages.effective(store.peek()['705']).keep, true);
+  assert.deepStrictEqual(await store.set(705, { keep: true }), { status: 'saved' }, 'the same value again');
+  assert.strictEqual(srv.commits.length, 1, 'no-op makes no commit');
+  const b = track(store.set(705, { keep: null }));
+  await clock.advance(3000);
+  assert.deepStrictEqual(b.value, { status: 'saved' });
+  assert.strictEqual(srv.commits[1].message, 'job #705: keep -> false');
+  assert.ok(!('705' in srv.stages()), 'an entry left with only defaults goes');
+  await assert.rejects(store.set(705, { keep: 'yes' }), (e) => e.code === 'http', 'an invalid keep never reaches GitHub');
 });
 
 /* ---------- run ---------- */

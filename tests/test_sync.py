@@ -85,6 +85,7 @@ class SyncTestCase(unittest.TestCase):
         self.out = self.tmp / "out"; self.inp = self.tmp / "in"
         self.out.mkdir(); self.inp.mkdir()
         (self.inp / S.OVERRIDES_NAME).write_text("{}", encoding="utf-8")
+        shutil.copy(HERE.parent / "data" / S.CLIENTS_NAME, self.inp / S.CLIENTS_NAME)   # the real (public) list
         (self.inp / S.PENDING_NAME).write_text(json.dumps([
             {"jobNumber": 9001, "client": "Crown Pipeline Ltd.", "street": "1 Pending Ave", "city": "Winnipeg",
              "title": "PENDING - test"}]), encoding="utf-8")
@@ -660,16 +661,19 @@ class ReviewFixesUnit(unittest.TestCase):
     def test_carried_records_are_normalized(self):
         prev = [{"jobNumber": "150", "hints": {"asphalt": 1}, "lat": float("nan"), "lon": -97.2, "ok": True,
                  "clientKey": ["x"], "_why": "old", "droppedAt": "2026-01-01"}]
-        kept, _ = S.carry_forward(prev, set(), set(), {"150": {"stage": "base"}})
+        # no client -> "Unknown" -> residential (R-3.1), so keep: true is needed to keep it
+        kept, _ = S.carry_forward(prev, set(), set(), {"150": {"stage": "base", "keep": True}})
         rec = kept[0]
         self.assertEqual((rec["jobNumber"], rec["clientKey"], rec["client"], rec["street"], rec["city"]),
-                         (150, "Other", "Unknown", "", "Winnipeg"))
+                         (150, "Residential", "Unknown", "", "Winnipeg"))
+        self.assertIs(rec["residential"], True)
         self.assertEqual((rec["lat"], rec["lon"], rec["ok"], rec["id"], rec["closed"]), (None, None, False, None, True))
         self.assertEqual(rec["hints"], {"asphalt": True, "pavers": False})
         self.assertNotIn("droppedAt", rec)
 
     def test_archive_restores_only_on_a_readable_store(self):
-        arch = [{"jobNumber": 150, "id": "TEST-ID-150", "hints": {}, "droppedAt": "2026-09-20", "droppedWhy": "x"}]
+        arch = [{"jobNumber": 150, "id": "TEST-ID-150", "client": "Crown Pipeline Ltd.", "hints": {},
+                 "droppedAt": "2026-09-20", "droppedWhy": "x"}]
         kept, dropped = S.carry_forward([], set(), set(), None, arch)
         self.assertEqual((kept, dropped), ([], []), "unreadable store: archived jobs stay archived")
         kept, dropped = S.carry_forward([], set(), set(), {"150": {"stage": "base"}}, arch)
@@ -827,7 +831,7 @@ class ReviewFixesEndToEnd(SyncTestCase):
         (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
         self.assertEqual(self.run_main(self.default_jobber(), STAGES_TEXT), 0)
         rec = self.closed_out()[150]
-        self.assertEqual((rec["clientKey"], rec["street"], rec["ok"]), ("Other", "", False))
+        self.assertEqual((rec["clientKey"], rec["street"], rec["ok"]), ("Crown", "", False))   # re-derived from client
         self.assertNotIn("#150 (blank)", self.meta()["failed"], "meta failed/mapped/total describe jobs.json only")
 
     def test_null_job_node_writes_nothing(self):
@@ -911,7 +915,7 @@ class OverlayUnit(unittest.TestCase):
         self.assertTrue(S.overlay_unclear(None, 5))
 
     def test_carry_forward_with_overlay(self):
-        prev = [{"jobNumber": n, "hints": {}} for n in (1, 2, 3, 4, 5)]
+        prev = [{"jobNumber": n, "client": "Crown Pipeline Ltd.", "hints": {}} for n in (1, 2, 3, 4, 5)]
         state = {"1": {"stage": "poured", "cleanup": "done", "sat": "2026-09-21T00:00:00Z"},   # beta newer: done
                  "2": {"stage": "poured", "cleanup": "done", "sat": "2026-09-19T00:00:00Z"},   # v1 newer: base
                  "3": {"removed": True},
@@ -1485,6 +1489,299 @@ class R3RangeStreetsEndToEnd(SyncTestCase):
         self.assertEqual(jobs[201]["hints"], {"asphalt": True, "pavers": False})
         prices = S.decrypt_prices(json.loads((self.out / S.PRICES_NAME).read_text(encoding="utf-8")), TEST_ONLY_KEY)
         self.assertEqual(sorted(prices), ["150", "201", "202"], "a job without totals has no price entry")
+
+
+# ----------------------------------------------------------------------------- R-3.1 (r3-plan G)
+def residential_rec(jn, client=None, **extra):
+    """A previous jobs.json record of a residential job (old R-3 shape: clientKey "Other")."""
+    rec = {"jobNumber": jn, "id": f"TEST-ID-{jn}", "client": client or f"Test Person {jn}", "clientKey": "Other",
+           "street": f"{jn} Test Ave", "streetRaw": f"{jn} Test Ave", "city": "Winnipeg", "title": "Driveway",
+           "permit": "", "status": "active", "unscheduled": False, "pending": False,
+           "hints": {"asphalt": False, "pavers": False}, "lat": 49.8, "lon": -97.2, "ok": True}
+    rec.update(extra)
+    return rec
+
+
+class R31CommercialClientsUnit(unittest.TestCase):
+    """Contract 1: data/commercial_clients.json decides commercial; everyone else is residential."""
+
+    def test_file_matches_the_contract_and_the_builtin_fallback(self):
+        doc = json.loads((HERE.parent / "data" / S.CLIENTS_NAME).read_text(encoding="utf-8"))
+        self.assertEqual(doc["version"], 1)
+        self.assertEqual(doc["clients"], S.BUILTIN_COMMERCIAL_CLIENTS, "built-in fallback must equal the file")
+        want = [("Crown", "Crown Pipeline", "Crown", ["crown pipeline"], "#2563eb"),
+                ("Harris", "Harris Holdings", "Harris", ["harris holdings"], "#dc2626"),
+                ("ACV", "ACV Sewer & Water", "ACV", ["acv sewer"], "#16a34a"),
+                ("MyTec", "MyTec", "MyTec", ["mytec"], "#7c3aed"),
+                ("NoLimits", "No Limits Underground", "No Limits", ["no limits underground"], "#0d9488"),
+                ("AECON", "AECON", "AECON", ["aecon"], "#db2777"),
+                ("Tricore", "Tricore", "Tricore", ["tricore"], "#475569")]
+        got = [(c["key"], c["label"], c["short"], c["match"], c["color"]) for c in doc["clients"]]
+        self.assertEqual(got[:7], want)
+        swift = doc["clients"][7]
+        self.assertEqual((len(got), swift["key"], swift["label"], swift["short"], swift["match"]),
+                         (8, "Swift", "Swift Underground", "Swift", ["swift underground"]))
+        colors = [c["color"].lower() for c in doc["clients"]]
+        self.assertEqual(len(set(colors)), 8, "every client has its own colour")
+        self.assertNotIn("#f59e0b", colors, "amber is the Residential colour")
+        loaded, problem = S.load_commercial_clients(HERE.parent / "data" / S.CLIENTS_NAME)
+        self.assertIsNone(problem)
+        self.assertEqual(loaded, S.builtin_clients())
+
+    def test_matching(self):
+        K = lambda *names: S.commercial_key(*names)
+        cases = [
+            ("Crown Pipeline Ltd.", "Crown"), ("CROWN PIPELINE LTD", "Crown"), ("crown   pipeline", "Crown"),
+            ("Crown Pipeline\tLtd.", "Crown"), ("  Crown Pipeline  ", "Crown"),
+            ("Harris Holdings Ltd.", "Harris"), ("HARRIS  HOLDINGS", "Harris"),
+            ("Gary Harris Builders", None),                         # "harris" alone is not Harris Holdings
+            ("ACV Sewer & Water", "ACV"), ("ACV Sewer &amp; Water", "ACV"), ("acv sewer and water ltd", "ACV"),
+            ("MyTec Industry Ltd", "MyTec"), ("MYTEC", "MyTec"), ("MyTech Solutions", None), ("SmyTec", None),
+            ("No Limits Underground Ltd.", "NoLimits"), ("no limits  underground", "NoLimits"),
+            ("AECON UTILITIES INC.", "AECON"), ("Aecon Group", "AECON"), ("Aeconomy Ltd", None),
+            ("Tricore Contracting", "Tricore"), ("TRICORE", "Tricore"),
+            ("Swift Underground Inc.", "Swift"), ("Swift Plumbing", None), ("Taylor Swift", None),
+            ("Workers Compensation Board of Manitoba", None), ("Test Person 3", None), ("", None), (None, None),
+        ]
+        for name, key in cases:
+            with self.subTest(name=name): self.assertEqual(K(name), key)
+        # first match wins: list order (Crown before AECON), and companyName before name
+        self.assertEqual(K("AECON / Crown Pipeline joint venture"), "Crown")
+        self.assertEqual(K("Tricore", "Swift Underground"), "Tricore")
+        self.assertEqual(K(None, "Swift Underground"), "Swift", "name is checked when companyName is empty")
+        self.assertEqual(K("Gary Harris Builders", "Test Person"), None)
+        custom = S.validate_commercial_clients({"version": 1, "clients": [
+            {"key": "A", "label": "A", "short": "A", "match": ["pipe"], "color": "#000000"},
+            {"key": "B", "label": "B", "short": "B", "match": ["crown pipe"], "color": "#111111"}]})
+        self.assertEqual(S.commercial_key("Crown Pipe Co", clients=custom), "A", "first client in the file wins")
+
+    def test_classify_record(self):
+        rec = S.classify_record({"client": "Test Person", "clientKey": "Other"}, None)
+        self.assertEqual((rec["clientKey"], rec["residential"]), ("Residential", True))
+        rec = S.classify_record({"client": "AECON UTILITIES INC.", "clientKey": "Residential", "residential": True}, None)
+        self.assertEqual(rec["clientKey"], "AECON")
+        self.assertNotIn("residential", rec, "commercial records carry no residential key")
+
+    def test_stored_records_keep_a_listed_commercial_clientkey(self):
+        """A job matched on Jobber's `name` while active (client = companyName that matches nothing) stays commercial
+        once it closes: carried / archived records trust a listed clientKey (like the app's classifyClient)."""
+        rec = S.classify_stored({"client": "CPL", "clientKey": "Crown"}, None)
+        self.assertEqual(rec["clientKey"], "Crown"); self.assertNotIn("residential", rec)
+        for stored in ({"client": "CPL", "clientKey": "Other"}, {"client": "CPL", "clientKey": "Nope"},
+                       {"client": "CPL", "clientKey": "Crown", "residential": True}, {"client": 5, "clientKey": 5}):
+            with self.subTest(stored=stored):
+                self.assertEqual(S.stored_client_key(stored, None), None)
+        self.assertEqual(S.stored_client_key({"client": "Crown Pipeline Ltd.", "clientKey": "Crown", "residential": True},
+                                             None), "Crown", "a stale residential flag still re-matches on client")
+        prev = [residential_rec(170, client="CPL", clientKey="Crown")]
+        prev[0].pop("residential", None)
+        kept, dropped = S.carry_forward(prev, set(), set(), {})
+        self.assertEqual(([r["jobNumber"] for r in kept], dropped), ([170], []), "waits for Completed, not auto-archived")
+        self.assertEqual(kept[0]["clientKey"], "Crown"); self.assertNotIn("residential", kept[0])
+
+    def test_fallback_when_missing_or_invalid(self):
+        tmp = Path(tempfile.mkdtemp(prefix="ej_clients_")); self.addCleanup(shutil.rmtree, tmp, True)
+        p = tmp / S.CLIENTS_NAME
+        clients, problem = S.load_commercial_clients(p)
+        self.assertEqual(clients, S.builtin_clients()); self.assertIn("not found", problem)
+        good = {"key": "X", "label": "X Co", "short": "X", "match": ["x co"], "color": "#123456"}
+        bad_docs = [
+            "{oops", "[]", '"text"', json.dumps({"version": 2, "clients": [good]}),
+            json.dumps({"version": True, "clients": [good]}), json.dumps({"version": 1, "clients": []}),
+            json.dumps({"version": 1, "clients": {"X": good}}), json.dumps({"version": 1, "clients": [good, 5]}),
+            json.dumps({"version": 1, "clients": [dict(good, key="bad key")]}),
+            json.dumps({"version": 1, "clients": [dict(good, key="Residential")]}),
+            json.dumps({"version": 1, "clients": [dict(good, key="other")]}),
+            json.dumps({"version": 1, "clients": [dict(good, key="AllOther")]}),    # the app's "All other" chip key
+            json.dumps({"version": 1, "clients": [good, dict(good, key="x")]}),       # key used twice
+            json.dumps({"version": 1, "clients": [dict(good, label="")]}),
+            json.dumps({"version": 1, "clients": [dict(good, short=None)]}),
+            json.dumps({"version": 1, "clients": [dict(good, match=[])]}),
+            json.dumps({"version": 1, "clients": [dict(good, match="x co")]}),
+            json.dumps({"version": 1, "clients": [dict(good, match=["x co", "  "])]}),
+            json.dumps({"version": 1, "clients": [dict(good, match=["x co", 5])]}),
+            json.dumps({"version": 1, "clients": [dict(good, color="red")]}),
+            json.dumps({"version": 1, "clients": [dict(good, color="#12345")]}),
+        ]
+        for text in bad_docs:
+            with self.subTest(text=text):
+                p.write_text(text, encoding="utf-8")
+                clients, problem = S.load_commercial_clients(p)
+                self.assertEqual(clients, S.builtin_clients())
+                self.assertIn("invalid", problem)
+        p.write_bytes(b"\xff\xfe\x00bad")
+        self.assertEqual(S.load_commercial_clients(p)[0], S.builtin_clients())
+        # a valid custom file is used as it is (match strings normalized), BOM tolerated
+        p.write_text("﻿" + json.dumps({"version": 1, "clients": [dict(good, match=["  X   CO "])]}), encoding="utf-8")
+        clients, problem = S.load_commercial_clients(p)
+        self.assertIsNone(problem)
+        self.assertEqual(clients, [dict(good, match=["x co"])])
+        self.assertIsNone(S.commercial_key("Crown Pipeline Ltd.", clients=clients), "only the file's clients")
+
+    def test_keep_flag(self):
+        for entry, want in [(None, False), ("base", False), ({}, False), ({"keep": None}, False),
+                            ({"keep": False}, False), ({"stage": "base"}, False), ({"keep": True}, True),
+                            ({"keep": "yes"}, None), ({"keep": 1}, None), (5, None), ([1], None)]:
+            with self.subTest(entry=entry): self.assertIs(S.keep_flag(entry), want)
+        self.assertTrue(S.entry_unclear({"keep": "yes"}))
+        self.assertFalse(S.entry_unclear({"keep": True})); self.assertFalse(S.entry_unclear({"keep": None}))
+
+    def test_carry_forward_residential_rule(self):
+        prev = [residential_rec(n) for n in (160, 161, 162, 163, 164, 165)] + [
+            residential_rec(166, client="AECON UTILITIES INC.")]
+        entries = {"161": {"keep": True}, "162": {"stage": "base", "asphalt": "req"},   # work started: still residential
+                   "163": {"keep": True, "removed": True}, "164": {"keep": "yes"}, "165": "base"}
+        kept, dropped = S.carry_forward(prev, set(), set(), entries)
+        why = {r["jobNumber"]: r["_why"] for r in kept}
+        self.assertEqual(sorted(why), [161, 164, 166])
+        self.assertEqual(dropped, [(160, S.RESIDENTIAL_WHY), (162, S.RESIDENTIAL_WHY), (163, "removed in app"),
+                                   (165, S.RESIDENTIAL_WHY)])
+        self.assertEqual(S.RESIDENTIAL_WHY, "residential, closed in Jobber")
+        self.assertEqual(why[161], "residential, kept in the app: waiting for Completed in the app (nothing outstanding)")
+        self.assertEqual(why[164], "residential, keep value not understood (kept to be safe)")
+        self.assertEqual(why[166], "waiting for Completed in the app (nothing outstanding)", "AECON is commercial")
+        recs = {r["jobNumber"]: r for r in kept}
+        self.assertEqual((recs[161]["clientKey"], recs[161]["residential"]), ("Residential", True))
+        self.assertEqual(recs[166]["clientKey"], "AECON"); self.assertNotIn("residential", recs[166])
+        # unreadable stage file: every candidate kept (residential too); archived residential jobs stay archived
+        kept, dropped = S.carry_forward(prev, set(), set(), None, [residential_rec(170, droppedAt="2026-10-01")])
+        self.assertEqual(sorted(r["jobNumber"] for r in kept), [160, 161, 162, 163, 164, 165, 166])
+        self.assertEqual(dropped, [])
+        # archived residential job: restored once keep is set, stays archived without it
+        arch = [residential_rec(170, droppedAt="2026-10-01", droppedWhy=S.RESIDENTIAL_WHY)]
+        self.assertEqual(S.carry_forward([], set(), set(), {"170": {"stage": "ready"}}, arch), ([], []))
+        kept, _ = S.carry_forward([], set(), set(), {"170": {"keep": True}}, arch)
+        self.assertEqual([r["jobNumber"] for r in kept], [170])
+        self.assertTrue(kept[0]["_why"].startswith("restored from closed_archive.json: residential, kept in the app"))
+
+    def test_dual_mode_reads_keep_from_the_state_entry(self):
+        prev = [residential_rec(160), residential_rec(161)]
+        state = {"160": {"keep": True, "sat": "2026-09-19T00:00:00Z"}}
+        overlay = {"160": {"stage": "base", "at": "2026-09-20T00:00:00Z"},
+                   "161": {"stage": "base", "at": "2026-09-20T00:00:00Z"}}
+        kept, dropped = S.carry_forward(prev, set(), set(), state, overlay=overlay)
+        self.assertEqual([r["jobNumber"] for r in kept], [160])
+        self.assertEqual(dropped, [(161, S.RESIDENTIAL_WHY)])
+
+
+class R31ResidentialEndToEnd(SyncTestCase):
+    """Contracts 1 and 4 through main(): clientKey + residential flag on every record; closed residential jobs leave
+    automatically unless their stage entry has keep: true."""
+    def archive(self):
+        return {r["jobNumber"]: r for r in json.loads((self.out / S.ARCHIVE_NAME).read_text(encoding="utf-8"))["jobs"]}
+
+    def setUp(self):
+        super().setUp()
+        prev = fixture("sync_prev_jobs.json") + [
+            residential_rec(160),                                   # was active last run, closed now, no keep
+            residential_rec(161, closed=True),                      # kept by R-3 last run, keep set now
+            residential_rec(162, client="Workers Compensation Board of Manitoba"),
+            residential_rec(163, client="AECON UTILITIES INC."),    # an old "Other" record of a commercial client
+            residential_rec(164, client="Crown Pipeline Ltd.", clientKey="Crown", residential=True)]   # stale flag
+        (self.out / S.JOBS_NAME).write_text(json.dumps(prev), encoding="utf-8")
+
+    def jobber(self, extra_node=None, **clients):
+        """default_jobber with job clients replaced (_203={"name": .., "companyName": ..}) and optionally one more
+        active job node."""
+        doc = fixture("sync_jobber_pages.json")
+        nodes = doc["pages"][-1]["data"]["jobs"]["nodes"]
+        if extra_node:
+            node = json.loads(json.dumps(nodes[-1])); node.update(extra_node); nodes.append(node)
+        for page in doc["pages"]:
+            for n in page["data"]["jobs"]["nodes"]:
+                if f"_{n['jobNumber']}" in clients: n["client"] = dict(n["client"], **clients[f"_{n['jobNumber']}"])
+        fake = self.default_jobber(); fake.pages = doc["pages"]
+        return fake
+
+    def test_active_and_pending_records_carry_clientkey_and_residential_flag(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        jobs = self.jobs_out()
+        self.assertEqual((jobs[201]["clientKey"], jobs[202]["clientKey"], jobs[9001]["clientKey"]), ("Crown", "Harris", "Crown"))
+        for jn in (201, 202, 9001): self.assertNotIn("residential", jobs[jn])
+        self.assertEqual((jobs[203]["client"], jobs[203]["clientKey"], jobs[203]["residential"]),
+                         ("Test Person 3", "Residential", True))
+        self.assertEqual(self.meta()["by_client"], {"Crown": 2, "Harris": 1, "Residential": 1})
+        self.assertIn("clients: 8 commercial clients from commercial_clients.json", self.log)
+        self.assertNotIn("::warning::clients", self.log)
+
+    def test_jobber_company_and_name_matching(self):
+        self.run_main(self.jobber(_203={"companyName": "AECON UTILITIES INC."},
+                                  _202={"companyName": "Gary Harris Builders", "name": "Test Person 2"}), STAGES_TEXT)
+        jobs = self.jobs_out()
+        self.assertEqual(jobs[203]["clientKey"], "AECON"); self.assertNotIn("residential", jobs[203])
+        self.assertEqual((jobs[202]["client"], jobs[202]["clientKey"], jobs[202]["residential"]),
+                         ("Gary Harris Builders", "Residential", True))
+        self.run_main(self.jobber(_203={"companyName": None, "name": "Swift Underground"}), STAGES_TEXT)
+        self.assertEqual(self.jobs_out()[203]["clientKey"], "Swift")
+
+    def test_missing_client_file_uses_the_builtin_list_with_a_warning(self):
+        (self.inp / S.CLIENTS_NAME).unlink()
+        self.run_main(self.jobber(_203={"companyName": "Tricore"}), STAGES_TEXT)
+        self.assertIn("::warning::clients: commercial_clients.json not found; using the built-in commercial client list "
+                      "(8 clients)", self.log)
+        self.assertEqual(self.jobs_out()[203]["clientKey"], "Tricore")
+        (self.inp / S.CLIENTS_NAME).write_text('{"version": 1, "clients": []}', encoding="utf-8")
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertIn("::warning::clients: commercial_clients.json invalid: no clients list", self.log)
+        self.assertEqual(self.jobs_out()[201]["clientKey"], "Crown")
+
+    def test_closed_residential_jobs_are_dropped_to_the_archive(self):
+        self.run_main(self.default_jobber(), stages_with(_161={"keep": True}))
+        closed, arch = self.closed_out(), self.archive()
+        self.assertEqual(sorted(closed), sorted(KEPT + [161, 163, 164]))
+        self.assertEqual(sorted(arch), [153, 160, 162])
+        for jn in (160, 162):
+            self.assertEqual(arch[jn]["droppedWhy"], "residential, closed in Jobber")
+            self.assertEqual((arch[jn]["clientKey"], arch[jn]["residential"]), ("Residential", True))
+            self.assertIn(f"carry-forward: dropped #{jn} (residential, closed in Jobber)", self.log)
+        self.assertEqual(arch[153]["droppedWhy"], "removed in app")
+        self.assertEqual((closed[161]["clientKey"], closed[161]["residential"], closed[161]["closed"]),
+                         ("Residential", True, True))
+        self.assertIn("kept #161 closed in Jobber (residential, kept in the app: waiting for Completed", self.log)
+        # carried records are re-classified: an old "Other" AECON record, a stale residential flag
+        self.assertEqual(closed[163]["clientKey"], "AECON"); self.assertNotIn("residential", closed[163])
+        self.assertEqual(closed[164]["clientKey"], "Crown"); self.assertNotIn("residential", closed[164])
+        for jn in KEPT: self.assertNotIn("residential", closed[jn])
+        self.assertNotIn("::warning::carry-forward", self.log, "an automatic residential drop is not a warning")
+        # next run: 161 stays (keep), the dropped ones stay archived
+        self.run_main(self.default_jobber(), stages_with(_161={"keep": True}))
+        self.assertIn(161, self.closed_out()); self.assertEqual(sorted(self.archive()), [153, 160, 162])
+
+    def test_keep_is_kept_until_removed(self):
+        self.run_main(self.default_jobber(), stages_with(_161={"keep": True, "stage": "poured", "cleanup": "done"}))
+        self.assertIn(161, self.closed_out())
+        self.run_main(self.default_jobber(), stages_with(_161={"keep": True, "stage": "poured", "cleanup": "done"}))
+        self.assertIn(161, self.closed_out(), "still there on the next run")
+        self.run_main(self.default_jobber(), stages_with(_161={"keep": True, "removed": True}))
+        self.assertNotIn(161, self.all_out())
+        self.assertEqual(self.archive()[161]["droppedWhy"], "removed in app")
+
+    def test_archived_residential_job_is_restored_when_keep_is_set(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)
+        self.assertEqual(self.archive()[160]["droppedWhy"], "residential, closed in Jobber")
+        self.assertNotIn(160, self.all_out())
+        self.run_main(self.default_jobber(), stages_with(_160={"keep": True}))   # Settings -> Recently removed -> Restore
+        closed = self.closed_out()
+        self.assertIn(160, closed)
+        self.assertEqual((closed[160]["clientKey"], closed[160]["residential"], closed[160]["closed"]),
+                         ("Residential", True, True))
+        self.assertNotIn("droppedWhy", closed[160]); self.assertNotIn(160, self.archive())
+        self.assertIn("kept #160 closed in Jobber (restored from closed_archive.json: residential, kept in the app", self.log)
+
+    def test_unreadable_stage_file_keeps_closed_residential_jobs(self):
+        self.run_main(self.default_jobber(), stages_exc=urllib.error.URLError("offline"))
+        self.assertTrue({160, 161, 162}.issubset(self.closed_out()))
+        self.assertIs(self.closed_out()[160]["residential"], True)
+        self.assertNotIn(160, self.archive())
+
+    def test_residential_job_active_again_leaves_the_archive(self):
+        self.run_main(self.default_jobber(), STAGES_TEXT)                       # 160 archived
+        self.assertIn(160, self.archive())
+        self.run_main(self.jobber(extra_node={"id": "TEST-ID-160", "jobNumber": 160,
+                                              "client": {"id": "C9", "name": "Test Person 160", "companyName": None}}),
+                      STAGES_TEXT)
+        self.assertEqual((self.jobs_out()[160]["clientKey"], self.jobs_out()[160]["residential"]), ("Residential", True))
+        self.assertNotIn(160, self.closed_out()); self.assertNotIn(160, self.archive())
 
 
 class JsTrimParity(unittest.TestCase):

@@ -81,12 +81,12 @@ test('two tabs: Jobs · Route (the Plan view renamed, the Routes view gone)', fu
   assert(/grid-template-columns:repeat\(2, 1fr\)/.test(CSS) && /width:calc\(\(100% - 8px\) \/ 2\)/.test(CSS), 'tab bar: 2 columns, blob half width');
   assert(/\.sheet\[data-view="route"\] \.sheet-sub/.test(CSS) && !/data-view="plan"/.test(CSS), 'route view CSS');
 });
-test('js/routes.js: loaded after prices.js and before ui.js / app.js, in the SW shell; Rule 14 bump (r3.0, ej-v4)', function () {
+test('js/routes.js: loaded after prices.js and before ui.js / app.js, in the SW shell; Rule 14 bump (r3.1, ej-v5)', function () {
   const order = [...HTML.matchAll(/<script src="(js\/[a-z]+\.js)\?v=([^"]+)"/g)].map((m) => m[1]);
   eq(order, ['js/tsp.js', 'js/stages.js', 'js/prices.js', 'js/routes.js', 'js/ui.js', 'js/app.js']);
   const ids = new Set([...HTML.matchAll(/(?:href|src)="(?:css|js)\/[^"?]+\?v=([^"]+)"/g)].map((m) => m[1]));
-  eq([...ids], ['r3.0']);
-  assert(/const C = 'ej-v4';/.test(SW) && /const PREFIX = 'ej-';/.test(SW), 'cache ej-v4, prefix ej-');
+  eq([...ids], ['r3.1']);
+  assert(/const C = 'ej-v5';/.test(SW) && /const PREFIX = 'ej-';/.test(SW), 'cache ej-v5, prefix ej-');
   assert(/'js\/routes\.js',/.test(SW), 'routes.js in SHELL');
   assert(/k\.indexOf\(PREFIX\) === 0 && k !== C/.test(SW), 'prefix-scoped cleanup unchanged');
 });

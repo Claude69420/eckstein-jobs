@@ -227,7 +227,7 @@ class RetiredBeta(unittest.TestCase):
 
     def test_root_worker_never_deletes_beta_caches(self):
         sw = read(os.path.join(REPO, "sw.js"))
-        self.assertIn("const C = 'ej-v4';", sw)   # R-3 (Rule 14)
+        self.assertIn("const C = 'ej-v5';", sw)   # R-3.1 (Rule 14)
         self.assertIn("const PREFIX = 'ej-';", sw)
         self.assertIn("k.indexOf(PREFIX) === 0 && k !== C", sw)
         self.assertFalse("ejb-v1".startswith("ej-"), "the root prefix cannot match the beta caches")
