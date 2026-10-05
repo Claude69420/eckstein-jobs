@@ -150,7 +150,7 @@
   "jobNumber": 700,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgzMTAxNzk=",
   "client": "AECON UTILITIES INC.",
-  "clientKey": "Other",
+  "clientKey": "AECON",
   "street": "Brandon Ave and Osborne St",
   "streetRaw": "Brandon Ave and Osborne St (back lane)",
   "city": "Winnipeg",
@@ -214,7 +214,7 @@
   "jobNumber": 696,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzM1MTI=",
   "client": "Workers Compensation Board of Manitoba",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "333 Broadway",
   "streetRaw": "333 Broadway",
   "city": "Winnipeg",
@@ -229,13 +229,14 @@
   },
   "lat": 49.8875672,
   "lon": -97.1423939,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 695,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzI0NjA=",
   "client": "James Friesen",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "68 Roslyn Crescent",
   "streetRaw": "68 Roslyn Crescent",
   "city": "Winnipeg",
@@ -250,7 +251,8 @@
   },
   "lat": 49.880494,
   "lon": -97.153376,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 694,
@@ -363,7 +365,7 @@
   "jobNumber": 689,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc3OTA3NzQ=",
   "client": "Gary Harris Builders",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "115 Lamont Boulevard",
   "streetRaw": "115 Lamont Boulevard",
   "city": "Winnipeg",
@@ -378,7 +380,8 @@
   },
   "lat": 49.871879,
   "lon": -97.217771,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 688,
@@ -826,7 +829,7 @@
   "jobNumber": 609,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYxNDE=",
   "client": "Rosemary Schallmann",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "30 Manring Cove",
   "streetRaw": "30 Manring Cove",
   "city": "Winnipeg",
@@ -841,28 +844,8 @@
   },
   "lat": 49.843054,
   "lon": -97.060679,
-  "ok": true
- },
- {
-  "jobNumber": 608,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYwNjI=",
-  "client": "Ashley Landridge",
-  "clientKey": "Other",
-  "street": "815 Lemay Avenue",
-  "streetRaw": "815 Lemay Avenue",
-  "city": "Winnipeg",
-  "title": "",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.768919,
-  "lon": -97.143536,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 596,
@@ -952,7 +935,7 @@
   "jobNumber": 509,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDQyODY3ODY=",
   "client": "Leanne Docking",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "1421 Wellington Crescent",
   "streetRaw": "1421 Wellington Crescent",
   "city": "Winnipeg",
@@ -967,7 +950,8 @@
   },
   "lat": 49.877383,
   "lon": -97.196044,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 448,
@@ -1099,7 +1083,7 @@
   "jobNumber": 365,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMjQ3ODY3ODY=",
   "client": "Cheryl  Levene",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "98 Colchester Bay",
   "streetRaw": "98 Colchester Bay",
   "city": "Winnipeg",
@@ -1114,13 +1098,14 @@
   },
   "lat": 49.851588,
   "lon": -97.224916,
-  "ok": true
+  "ok": true,
+  "residential": true
  },
  {
   "jobNumber": 222,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xMTU4MzQ1NjE=",
   "client": "JIM PATTISON TOYOTA ON REGENT",
-  "clientKey": "Other",
+  "clientKey": "Residential",
   "street": "1486 Regent Ave W",
   "streetRaw": "1486 Regent Ave W",
   "city": "Winnipeg",
@@ -1135,6 +1120,7 @@
   },
   "lat": 49.895042,
   "lon": -97.04865,
-  "ok": true
+  "ok": true,
+  "residential": true
  }
 ]

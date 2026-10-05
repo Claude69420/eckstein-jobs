@@ -1,13 +1,14 @@
 {
- "updated_utc": "2026-10-04T21:01:44+00:00",
- "total": 54,
- "mapped": 54,
+ "updated_utc": "2026-10-05T03:15:16+00:00",
+ "total": 53,
+ "mapped": 53,
  "failed": [],
  "by_client": {
   "Crown": 21,
   "NoLimits": 2,
   "Harris": 14,
-  "Other": 9,
+  "AECON": 1,
+  "Residential": 7,
   "MyTec": 2,
   "ACV": 6
  },
@@ -17,6 +18,6 @@
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
  "stage_entries": {
-  "stages.json": 39
+  "stages.json": 41
  }
 }

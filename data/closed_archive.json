@@ -27,6 +27,30 @@
    "droppedWhy": "removed in app"
   },
   {
+   "jobNumber": 608,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYwNjI=",
+   "client": "Ashley Landridge",
+   "clientKey": "Residential",
+   "street": "815 Lemay Avenue",
+   "streetRaw": "815 Lemay Avenue",
+   "city": "Winnipeg",
+   "title": "",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": true
+   },
+   "lat": 49.768919,
+   "lon": -97.143536,
+   "ok": true,
+   "droppedAt": "2026-10-05",
+   "droppedWhy": "residential, closed in Jobber",
+   "residential": true
+  },
+  {
    "jobNumber": 571,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDkwODU5Nzg=",
    "client": "Harris Holdings Ltd.",
