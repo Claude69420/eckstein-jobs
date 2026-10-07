@@ -448,28 +448,6 @@
   "range": "Portage Av to Webb Pl"
  },
  {
-  "jobNumber": 689,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc3OTA3NzQ=",
-  "client": "Gary Harris Builders",
-  "clientKey": "Residential",
-  "street": "115 Lamont Boulevard",
-  "streetRaw": "115 Lamont Boulevard",
-  "city": "Winnipeg",
-  "title": "Complete Patio Repair",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.871879,
-  "lon": -97.217771,
-  "ok": true,
-  "residential": true
- },
- {
   "jobNumber": 688,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc0NTE2ODk=",
   "client": "Harris Holdings Ltd.",

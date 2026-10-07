@@ -66,28 +66,6 @@
   "id": null
  },
  {
-  "jobNumber": 651,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQyODc0Mzk=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "133 Niakwa Rd",
-  "streetRaw": "133 Niakwa Rd",
-  "city": "Winnipeg",
-  "title": "133 Niakwa Rd - 355294",
-  "permit": "355294",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8560713,
-  "lon": -97.0983628,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 648,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQwMTgwOTk=",
   "client": "Harris Holdings Ltd.",
@@ -150,28 +128,6 @@
   },
   "lat": 49.827569,
   "lon": -97.043755,
-  "ok": true,
-  "closed": true
- },
- {
-  "jobNumber": 444,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkwNzI=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "1924 St Mary's Rd",
-  "streetRaw": "1924 St Mary's Rd",
-  "city": "Winnipeg",
-  "title": "1924 St Mary's Rd - 351218",
-  "permit": "351218",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.814203,
-  "lon": -97.112556,
   "ok": true,
   "closed": true
  }

@@ -3,6 +3,30 @@
  "days": 60,
  "jobs": [
   {
+   "jobNumber": 689,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc3OTA3NzQ=",
+   "client": "Gary Harris Builders",
+   "clientKey": "Residential",
+   "street": "115 Lamont Boulevard",
+   "streetRaw": "115 Lamont Boulevard",
+   "city": "Winnipeg",
+   "title": "Complete Patio Repair",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": true
+   },
+   "lat": 49.871879,
+   "lon": -97.217771,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-10-07",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
    "jobNumber": 660,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ3OTI3MTg=",
    "client": "Crown Pipeline Ltd.",
@@ -24,6 +48,30 @@
    "ok": true,
    "closed": true,
    "droppedAt": "2026-10-04",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 651,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQyODc0Mzk=",
+   "client": "Crown Pipeline Ltd.",
+   "clientKey": "Crown",
+   "street": "133 Niakwa Rd",
+   "streetRaw": "133 Niakwa Rd",
+   "city": "Winnipeg",
+   "title": "133 Niakwa Rd - 355294",
+   "permit": "355294",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.8560713,
+   "lon": -97.0983628,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-07",
    "droppedWhy": "removed in app"
   },
   {
@@ -72,6 +120,30 @@
    "ok": true,
    "closed": true,
    "droppedAt": "2026-10-04",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 444,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkwNzI=",
+   "client": "Crown Pipeline Ltd.",
+   "clientKey": "Crown",
+   "street": "1924 St Mary's Rd",
+   "streetRaw": "1924 St Mary's Rd",
+   "city": "Winnipeg",
+   "title": "1924 St Mary's Rd - 351218",
+   "permit": "351218",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.814203,
+   "lon": -97.112556,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-07",
    "droppedWhy": "removed in app"
   }
  ]
