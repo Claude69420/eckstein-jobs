@@ -9,7 +9,7 @@
   "city": "Winnipeg",
   "title": "Paving Stone Repair",
   "permit": "",
-  "status": "today",
+  "status": "late",
   "unscheduled": false,
   "pending": false,
   "hints": {
@@ -740,27 +740,6 @@
   },
   "lat": 49.8844264,
   "lon": -97.0321091,
-  "ok": true
- },
- {
-  "jobNumber": 657,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNzU=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "225 Allard Ave",
-  "streetRaw": "225 Allard Ave",
-  "city": "Winnipeg",
-  "title": "225 Allard Ave - 357779",
-  "permit": "357779",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.879,
-  "lon": -97.3093,
   "ok": true
  },
  {
