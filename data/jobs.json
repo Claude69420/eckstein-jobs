@@ -596,27 +596,6 @@
   "ok": true
  },
  {
-  "jobNumber": 679,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4NDM=",
-  "client": "ACV Sewer & Water",
-  "clientKey": "ACV",
-  "street": "185 Provencher Boulevard",
-  "streetRaw": "185 Provencher Boulevard",
-  "city": "Winnipeg",
-  "title": "185 Provencher - Restorations",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.892487,
-  "lon": -97.122171,
-  "ok": true
- },
- {
   "jobNumber": 678,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4MTI=",
   "client": "ACV Sewer & Water",
@@ -719,69 +698,6 @@
   },
   "lat": 49.885679,
   "lon": -97.170449,
-  "ok": true
- },
- {
-  "jobNumber": 661,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ3OTI3MzQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Shady Shores Dr E",
-  "streetRaw": "Shady Shores Dr E and Shady Shores Dr W",
-  "city": "Winnipeg",
-  "title": "Shady Shores Dr E and W - 357513 - M021769",
-  "permit": "357513 / M021769",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8844264,
-  "lon": -97.0321091,
-  "ok": true
- },
- {
-  "jobNumber": 656,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNjU=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "374 Highcliff Bay",
-  "streetRaw": "374 Highcliff Bay",
-  "city": "Winnipeg",
-  "title": "374 Highcliff Bay - 357778",
-  "permit": "357778",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8894,
-  "lon": -97.3052,
-  "ok": true
- },
- {
-  "jobNumber": 655,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNTg=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "123 Princess St",
-  "streetRaw": "123 Princess St",
-  "city": "Winnipeg",
-  "title": "123 Princess St - 357777",
-  "permit": "357777",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.898966,
-  "lon": -97.14141,
   "ok": true
  },
  {
