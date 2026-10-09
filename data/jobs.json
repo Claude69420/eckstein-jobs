@@ -381,28 +381,6 @@
   "range": "Adamar Rd to Plaza Dr"
  },
  {
-  "jobNumber": 696,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzM1MTI=",
-  "client": "Workers Compensation Board of Manitoba",
-  "clientKey": "Residential",
-  "street": "333 Broadway",
-  "streetRaw": "333 Broadway",
-  "city": "Winnipeg",
-  "title": "Granite Slab Reset and Caulking",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8875672,
-  "lon": -97.1423939,
-  "ok": true,
-  "residential": true
- },
- {
   "jobNumber": 695,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzI0NjA=",
   "client": "James Friesen",
