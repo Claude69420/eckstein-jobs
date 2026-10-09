@@ -22,14 +22,14 @@
   "closed": true
  },
  {
-  "jobNumber": 679,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4NDM=",
+  "jobNumber": 682,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwMzg=",
   "client": "ACV Sewer & Water",
   "clientKey": "ACV",
-  "street": "185 Provencher Boulevard",
-  "streetRaw": "185 Provencher Boulevard",
+  "street": "350 River Avenue",
+  "streetRaw": "350 River Avenue",
   "city": "Winnipeg",
-  "title": "185 Provencher - Restorations",
+  "title": "350 River Ave - Restorations",
   "permit": "",
   "status": "archived",
   "unscheduled": false,
@@ -38,30 +38,30 @@
    "asphalt": true,
    "pavers": false
   },
-  "lat": 49.892487,
-  "lon": -97.122171,
+  "lat": 49.8804605,
+  "lon": -97.1418485,
   "ok": true,
   "closed": true
  },
  {
-  "jobNumber": 661,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ3OTI3MzQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Shady Shores Dr E",
-  "streetRaw": "Shady Shores Dr E and Shady Shores Dr W",
+  "jobNumber": 680,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDQ4NzQ=",
+  "client": "ACV Sewer & Water",
+  "clientKey": "ACV",
+  "street": "174 Hargrave Street",
+  "streetRaw": "174 Hargrave Street",
   "city": "Winnipeg",
-  "title": "Shady Shores Dr E and W - 357513 - M021769",
-  "permit": "357513 / M021769",
+  "title": "174 Hargrave - Restorations",
+  "permit": "",
   "status": "archived",
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
-   "pavers": false
+   "asphalt": true,
+   "pavers": true
   },
-  "lat": 49.8844264,
-  "lon": -97.0321091,
+  "lat": 49.889565,
+  "lon": -97.143084,
   "ok": true,
   "closed": true
  },
@@ -110,28 +110,6 @@
   "closed": true
  },
  {
-  "jobNumber": 655,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNTg=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "123 Princess St",
-  "streetRaw": "123 Princess St",
-  "city": "Winnipeg",
-  "title": "123 Princess St - 357777",
-  "permit": "357777",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.898966,
-  "lon": -97.14141,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 642,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTM2NjU2NjQ=",
   "client": "Crown Pipeline Ltd.",
@@ -150,28 +128,6 @@
   },
   "lat": 49.8426633,
   "lon": -97.2201234,
-  "ok": true,
-  "closed": true
- },
- {
-  "jobNumber": 448,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkxNjE=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Des Hivernants",
-  "streetRaw": "Des Hivernants",
-  "city": "Winnipeg",
-  "title": "Des Hivernants - 356521",
-  "permit": "356521",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.827569,
-  "lon": -97.043755,
   "ok": true,
   "closed": true
  }
