@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-10-11T17:15:06+00:00",
+ "updated_utc": "2026-10-12T12:24:02+00:00",
  "total": 54,
  "mapped": 54,
  "failed": [],
@@ -13,7 +13,7 @@
   "ACV": 3
  },
  "cache_entries": 342,
- "geocode_api_calls": 4,
+ "geocode_api_calls": 0,
  "closed": 3,
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
