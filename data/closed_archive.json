@@ -363,6 +363,30 @@
    "droppedWhy": "removed in app"
   },
   {
+   "jobNumber": 554,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDY3NTMxMzI=",
+   "client": "ACV Sewer & Water",
+   "clientKey": "ACV",
+   "street": "475 Broadway",
+   "streetRaw": "475 Broadway",
+   "city": "Winnipeg",
+   "title": "475 Broadway - 356629",
+   "permit": "356629",
+   "status": "action_required",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.885806,
+   "lon": -97.1495237,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-13",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 448,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDEzMTkxNjE=",
    "client": "Crown Pipeline Ltd.",
