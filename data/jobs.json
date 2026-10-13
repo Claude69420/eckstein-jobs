@@ -1,5 +1,26 @@
 [
  {
+  "jobNumber": 722,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk4MjMwODQ=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Main St and York Ave",
+  "streetRaw": "Main St and York Ave (hydro pit)",
+  "city": "Winnipeg",
+  "title": "Main and York - Hydro Pit Panel",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.8904368,
+  "lon": -97.1356128,
+  "ok": true
+ },
+ {
   "jobNumber": 721,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk3MjIwNjM=",
   "client": "No Limits Underground Ltd.",
@@ -516,7 +537,7 @@
   "city": "Winnipeg",
   "title": "Concrete Step, Retaining Wall, and Paving Stone Repairs",
   "permit": "",
-  "status": "upcoming",
+  "status": "today",
   "unscheduled": false,
   "pending": false,
   "hints": {
@@ -929,27 +950,6 @@
   },
   "lat": 49.908258,
   "lon": -97.083602,
-  "ok": true
- },
- {
-  "jobNumber": 554,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDY3NTMxMzI=",
-  "client": "ACV Sewer & Water",
-  "clientKey": "ACV",
-  "street": "475 Broadway",
-  "streetRaw": "475 Broadway",
-  "city": "Winnipeg",
-  "title": "475 Broadway - 356629",
-  "permit": "356629",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.885806,
-  "lon": -97.1495237,
   "ok": true
  },
  {
