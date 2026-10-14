@@ -537,7 +537,7 @@
   "city": "Winnipeg",
   "title": "Concrete Step, Retaining Wall, and Paving Stone Repairs",
   "permit": "",
-  "status": "today",
+  "status": "late",
   "unscheduled": false,
   "pending": false,
   "hints": {
@@ -548,27 +548,6 @@
   "lon": -97.153376,
   "ok": true,
   "residential": true
- },
- {
-  "jobNumber": 694,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNDk5NDU=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Middle Gate and Cornish Ave",
-  "streetRaw": "Middle Gate and Cornish Ave",
-  "city": "Winnipeg",
-  "title": "Middle Gate and Cornish - 354399",
-  "permit": "354399",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.878979,
-  "lon": -97.158302,
-  "ok": true
  },
  {
   "jobNumber": 693,
@@ -589,27 +568,6 @@
   },
   "lat": 49.803353,
   "lon": -97.14788,
-  "ok": true
- },
- {
-  "jobNumber": 692,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjMyMzI=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Donnelly St and Waller Ave",
-  "streetRaw": "Donnelly St and Waller Ave (back lane)",
-  "city": "Winnipeg",
-  "title": "Donnelly and Waller Back Lane - 358302",
-  "permit": "358302",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.836939,
-  "lon": -97.160302,
   "ok": true
  },
  {
@@ -677,69 +635,6 @@
   "lon": -97.1726174,
   "ok": true,
   "range": "Lipton St to Lenore St"
- },
- {
-  "jobNumber": 687,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcxODMxOTg=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Pembina Hwy & Waller Ave",
-  "streetRaw": "Pembina Hwy & Waller Ave",
-  "city": "Winnipeg",
-  "title": "Pembina and Waller - 357524",
-  "permit": "357524",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8397616,
-  "lon": -97.152046,
-  "ok": true
- },
- {
-  "jobNumber": 686,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcxODMxODI=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Pembina Hwy & Clarence Ave",
-  "streetRaw": "Pembina Hwy & Clarence Ave",
-  "city": "Winnipeg",
-  "title": "Pembina and Clarence - 357518",
-  "permit": "357518",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8365568,
-  "lon": -97.1506482,
-  "ok": true
- },
- {
-  "jobNumber": 684,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNTY3NzQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "SW Corner Ellice Ave and Kennedy St",
-  "streetRaw": "SW Corner Ellice Ave and Kennedy St (172 Ellice Ave)",
-  "city": "Winnipeg",
-  "title": "Ellice and Kennedy - 358296",
-  "permit": "358296",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8936833,
-  "lon": -97.1501786,
-  "ok": true
  },
  {
   "jobNumber": 681,
@@ -865,27 +760,6 @@
   },
   "lat": 49.885679,
   "lon": -97.170449,
-  "ok": true
- },
- {
-  "jobNumber": 653,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyMzQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "2050 Warde Ave",
-  "streetRaw": "2050 Warde Ave",
-  "city": "Winnipeg",
-  "title": "2050 Warde Ave - 354402 - M021468",
-  "permit": "354402 / M021468",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8272472,
-  "lon": -97.04022,
   "ok": true
  },
  {
