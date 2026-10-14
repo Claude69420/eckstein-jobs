@@ -267,6 +267,30 @@
    "droppedWhy": "removed in app"
   },
   {
+   "jobNumber": 653,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyMzQ=",
+   "client": "Crown Pipeline Ltd.",
+   "clientKey": "Crown",
+   "street": "2050 Warde Ave",
+   "streetRaw": "2050 Warde Ave",
+   "city": "Winnipeg",
+   "title": "2050 Warde Ave - 354402 - M021468",
+   "permit": "354402 / M021468",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.8272472,
+   "lon": -97.04022,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-14",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 651,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQyODc0Mzk=",
    "client": "Crown Pipeline Ltd.",

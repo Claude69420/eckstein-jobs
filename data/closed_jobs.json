@@ -1,5 +1,27 @@
 [
  {
+  "jobNumber": 699,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4ODQ=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Bailley Ave and Glen Meadow St",
+  "streetRaw": "Bailley Ave and Glen Meadow St",
+  "city": "Winnipeg",
+  "title": "Bailley Ave and Glen Meadow St - 358357",
+  "permit": "358357",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.827334,
+  "lon": -97.117732,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 694,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNDk5NDU=",
   "client": "Crown Pipeline Ltd.",
@@ -41,6 +63,29 @@
   "lat": 49.836939,
   "lon": -97.160302,
   "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 688,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTc0NTE2ODk=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Portage Ave & Lipton St",
+  "streetRaw": "Portage Ave (Lipton St to Lenore St)",
+  "city": "Winnipeg",
+  "title": "Portage Ave - Lipton to Lenore",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.8849214,
+  "lon": -97.1726174,
+  "ok": true,
+  "range": "Lipton St to Lenore St",
   "closed": true
  },
  {
@@ -132,6 +177,28 @@
   "closed": true
  },
  {
+  "jobNumber": 665,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTU1NDA2MDE=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "905 Portage Ave",
+  "streetRaw": "905 Portage Ave (Arlington St to Burnell St)",
+  "city": "Winnipeg",
+  "title": "905 Portage Ave - 358184",
+  "permit": "358184",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.885679,
+  "lon": -97.170449,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 656,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNjU=",
   "client": "Harris Holdings Ltd.",
@@ -154,28 +221,6 @@
   "closed": true
  },
  {
-  "jobNumber": 653,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyMzQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "2050 Warde Ave",
-  "streetRaw": "2050 Warde Ave",
-  "city": "Winnipeg",
-  "title": "2050 Warde Ave - 354402 - M021468",
-  "permit": "354402 / M021468",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8272472,
-  "lon": -97.04022,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 642,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTM2NjU2NjQ=",
   "client": "Crown Pipeline Ltd.",
@@ -194,6 +239,28 @@
   },
   "lat": 49.8426633,
   "lon": -97.2201234,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 596,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA1MTYwMjQ=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "821 Nottingham Ave",
+  "streetRaw": "821 Nottingham Ave",
+  "city": "Winnipeg",
+  "title": "821 Nottingham Ave - 357531",
+  "permit": "357531",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.908258,
+  "lon": -97.083602,
   "ok": true,
   "closed": true
  }
