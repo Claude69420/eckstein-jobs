@@ -265,7 +265,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.868607,
