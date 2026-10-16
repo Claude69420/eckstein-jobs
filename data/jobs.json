@@ -1,5 +1,27 @@
 [
  {
+  "jobNumber": 726,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAyOTY2NjE=",
+  "client": "Group Electrical Contractors",
+  "clientKey": "Residential",
+  "street": "15 John Hiebert Drive",
+  "streetRaw": "15 John Hiebert Drive",
+  "city": "Sunnyside",
+  "title": "75 Poseidon Bay",
+  "permit": "",
+  "status": "today",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 49.941921,
+  "lon": -97.039737,
+  "ok": true,
+  "residential": true
+ },
+ {
   "jobNumber": 725,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAxNTg1MDM=",
   "client": "ACV Sewer & Water",
@@ -655,27 +677,6 @@
   "lon": -97.151307,
   "ok": true,
   "range": "Portage Av to Webb Pl"
- },
- {
-  "jobNumber": 681,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwMTk=",
-  "client": "ACV Sewer & Water",
-  "clientKey": "ACV",
-  "street": "508 Regent Avenue West",
-  "streetRaw": "508 Regent Avenue West",
-  "city": "Winnipeg",
-  "title": "508 Regent Ave W - Restorations",
-  "permit": "",
-  "status": "unscheduled",
-  "unscheduled": true,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.8951262,
-  "lon": -97.0192951,
-  "ok": true
  },
  {
   "jobNumber": 678,
