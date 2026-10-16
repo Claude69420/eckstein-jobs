@@ -154,28 +154,6 @@
   "closed": true
  },
  {
-  "jobNumber": 681,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNDUwMTk=",
-  "client": "ACV Sewer & Water",
-  "clientKey": "ACV",
-  "street": "508 Regent Avenue West",
-  "streetRaw": "508 Regent Avenue West",
-  "city": "Winnipeg",
-  "title": "508 Regent Ave W - Restorations",
-  "permit": "",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.8951262,
-  "lon": -97.0192951,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 656,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNjU=",
   "client": "Harris Holdings Ltd.",
