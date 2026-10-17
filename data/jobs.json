@@ -51,7 +51,7 @@
   "city": "Winnipeg",
   "title": "75 Poseidon Bay",
   "permit": "",
-  "status": "today",
+  "status": "late",
   "unscheduled": false,
   "pending": false,
   "hints": {
@@ -632,28 +632,6 @@
   "lon": -97.152666,
   "ok": true,
   "range": "Adamar Rd to Plaza Dr"
- },
- {
-  "jobNumber": 695,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwNzI0NjA=",
-  "client": "James Friesen",
-  "clientKey": "Residential",
-  "street": "68 Roslyn Crescent",
-  "streetRaw": "68 Roslyn Crescent",
-  "city": "Winnipeg",
-  "title": "Concrete Step, Retaining Wall, and Paving Stone Repairs",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.880494,
-  "lon": -97.153376,
-  "ok": true,
-  "residential": true
  },
  {
   "jobNumber": 693,
