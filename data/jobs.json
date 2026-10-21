@@ -9,7 +9,7 @@
   "city": "Winnipeg",
   "title": "Bottom stair restoration",
   "permit": "",
-  "status": "today",
+  "status": "late",
   "unscheduled": false,
   "pending": false,
   "hints": {
@@ -453,7 +453,7 @@
   "city": "Winnipeg",
   "title": "Concrete Repair",
   "permit": "",
-  "status": "today",
+  "status": "late",
   "unscheduled": false,
   "pending": false,
   "hints": {
