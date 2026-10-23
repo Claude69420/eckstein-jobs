@@ -1,20 +1,22 @@
 {
- "updated_utc": "2026-10-22T20:27:23+00:00",
- "total": 46,
- "mapped": 46,
- "failed": [],
+ "updated_utc": "2026-10-23T16:37:46+00:00",
+ "total": 48,
+ "mapped": 47,
+ "failed": [
+  "#734 Saint Joseph Avenue"
+ ],
  "by_client": {
-  "AECON": 1,
+  "NoLimits": 9,
   "Residential": 7,
+  "AECON": 1,
   "Harris": 11,
-  "NoLimits": 7,
   "ACV": 2,
   "Crown": 16,
   "MyTec": 2
  },
- "cache_entries": 353,
- "geocode_api_calls": 1,
- "closed": 6,
+ "cache_entries": 355,
+ "geocode_api_calls": 3,
+ "closed": 4,
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
  "stage_entries": {

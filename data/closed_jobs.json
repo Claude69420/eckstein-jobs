@@ -22,50 +22,6 @@
   "closed": true
  },
  {
-  "jobNumber": 710,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTkyODM1NTA=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "1250 Beaumont St",
-  "streetRaw": "1250 Beaumont St",
-  "city": "Winnipeg",
-  "title": "1250 Beaumont St - Beaumont Sod Restorations",
-  "permit": "",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8437768,
-  "lon": -97.1597896,
-  "ok": true,
-  "closed": true
- },
- {
-  "jobNumber": 700,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgzMTAxNzk=",
-  "client": "AECON UTILITIES INC.",
-  "clientKey": "AECON",
-  "street": "Brandon Ave and Osborne St",
-  "streetRaw": "Brandon Ave and Osborne St (back lane)",
-  "city": "Winnipeg",
-  "title": "Brandon Ave and Osborne St - 358359",
-  "permit": "358359",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.867847,
-  "lon": -97.136606,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 699,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4ODQ=",
   "client": "Harris Holdings Ltd.",
