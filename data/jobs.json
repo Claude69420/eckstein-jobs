@@ -98,7 +98,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.900134,
@@ -519,7 +519,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.844213,
@@ -540,7 +540,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.8414532,
@@ -732,7 +732,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.9725533,
@@ -774,7 +774,7 @@
   "unscheduled": false,
   "pending": false,
   "hints": {
-   "asphalt": false,
+   "asphalt": true,
    "pavers": false
   },
   "lat": 49.9547988,
