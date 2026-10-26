@@ -123,6 +123,30 @@
    "droppedWhy": "residential, closed in Jobber"
   },
   {
+   "jobNumber": 705,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg3NDMxMTU=",
+   "client": "No Limits Underground Ltd.",
+   "clientKey": "NoLimits",
+   "street": "Lemay Ave and Lord Ave",
+   "streetRaw": "Lemay Ave and Lord Ave",
+   "city": "Winnipeg",
+   "title": "Lemay Ave and Lord Ave - PO 26-048",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": true
+   },
+   "lat": 49.769373,
+   "lon": -97.141626,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-26",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 700,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgzMTAxNzk=",
    "client": "AECON UTILITIES INC.",
@@ -144,6 +168,30 @@
    "ok": true,
    "closed": true,
    "droppedAt": "2026-10-23",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 699,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4ODQ=",
+   "client": "Harris Holdings Ltd.",
+   "clientKey": "Harris",
+   "street": "Bailley Ave and Glen Meadow St",
+   "streetRaw": "Bailley Ave and Glen Meadow St",
+   "city": "Winnipeg",
+   "title": "Bailley Ave and Glen Meadow St - 358357",
+   "permit": "358357",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.827334,
+   "lon": -97.117732,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-10-26",
    "droppedWhy": "removed in app"
   },
   {
