@@ -3,6 +3,30 @@
  "days": 60,
  "jobs": [
   {
+   "jobNumber": 732,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjA5ODgyMDA=",
+   "client": "Maplewood Manor",
+   "clientKey": "Residential",
+   "street": "284 Loewen Boulevard",
+   "streetRaw": "284 Loewen Boulevard",
+   "city": "Steinbach",
+   "title": "Maplewood Manor - Asphalt Parking Lot Repairs",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": false
+   },
+   "lat": 49.5313843,
+   "lon": -96.682625,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-10-28",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
    "jobNumber": 730,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjA4Mzg2OTk=",
    "client": "Marshall Blais",
