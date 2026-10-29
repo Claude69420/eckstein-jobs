@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-10-29T18:09:04+00:00",
+ "updated_utc": "2026-10-29T21:41:24+00:00",
  "total": 54,
  "mapped": 53,
  "failed": [
@@ -15,7 +15,7 @@
   "MyTec": 2
  },
  "cache_entries": 365,
- "geocode_api_calls": 5,
+ "geocode_api_calls": 1,
  "closed": 3,
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
