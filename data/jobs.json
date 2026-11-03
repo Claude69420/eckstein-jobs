@@ -63,28 +63,6 @@
   "ok": true
  },
  {
-  "jobNumber": 748,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4MzM0OTc=",
-  "client": "Helga Smyrl",
-  "clientKey": "Residential",
-  "street": "15 Quincy Bay",
-  "streetRaw": "15 Quincy Bay",
-  "city": "Winnipeg",
-  "title": "Paving Stone Repair + Patio Block Sidewalk Repair",
-  "permit": "",
-  "status": "today",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.805871,
-  "lon": -97.169949,
-  "ok": true,
-  "residential": true
- },
- {
   "jobNumber": 747,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE3NTcwNzk=",
   "client": "Crown Pipeline Ltd.",
@@ -424,27 +402,6 @@
   "ok": true
  },
  {
-  "jobNumber": 728,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAzNjExMzE=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "Oak Point Hwy",
-  "streetRaw": "Oak Point Hwy",
-  "city": "Winnipeg",
-  "title": "Oak Point Hwy - Eagle Dr and Egesz St - 358470",
-  "permit": "358470",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.9345141,
-  "lon": -97.2188367,
-  "ok": true
- },
- {
   "jobNumber": 726,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAyOTY2NjE=",
   "client": "Group Electrical Contractors",
@@ -527,27 +484,6 @@
   },
   "lat": 49.4388954,
   "lon": -96.9861434,
-  "ok": true
- },
- {
-  "jobNumber": 722,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk4MjMwODQ=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "Main St and York Ave",
-  "streetRaw": "Main St and York Ave (hydro pit)",
-  "city": "Winnipeg",
-  "title": "Main and York - Hydro Pit Panel",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8904368,
-  "lon": -97.1356128,
   "ok": true
  },
  {
@@ -716,27 +652,6 @@
   },
   "lat": 49.911188,
   "lon": -97.103119,
-  "ok": true
- },
- {
-  "jobNumber": 713,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk1ODk4OTA=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "Graham Ave and Kennedy St",
-  "streetRaw": "Graham Ave and Kennedy St (NE corner)",
-  "city": "Winnipeg",
-  "title": "Graham Ave and Kennedy St - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.8909391,
-  "lon": -97.1478941,
   "ok": true
  },
  {
