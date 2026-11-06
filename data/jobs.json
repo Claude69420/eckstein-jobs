@@ -1,5 +1,47 @@
 [
  {
+  "jobNumber": 757,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxNTc=",
+  "client": "AECON UTILITIES INC.",
+  "clientKey": "AECON",
+  "street": "Wellington Ave and Simcoe St",
+  "streetRaw": "Wellington Ave and Simcoe St",
+  "city": "Winnipeg",
+  "title": "Wellington Ave and Simcoe St - 358585",
+  "permit": "358585",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.900173,
+  "lon": -97.165947,
+  "ok": true
+ },
+ {
+  "jobNumber": 756,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxMjU=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "1914 Pacific Ave",
+  "streetRaw": "1914 Pacific Ave",
+  "city": "Winnipeg",
+  "title": "1914 Pacific Ave - Permit Pending",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.921442,
+  "lon": -97.201395,
+  "ok": true
+ },
+ {
   "jobNumber": 755,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIyNjkxMDk=",
   "client": "n/a",
@@ -86,27 +128,6 @@
   "ok": true
  },
  {
-  "jobNumber": 749,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4NTA3NTM=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "Point Rd and Oakenwald Ave",
-  "streetRaw": "Point Rd and Oakenwald Ave (760 Point Rd area)",
-  "city": "Winnipeg",
-  "title": "Point Rd and Oakenwald Ave - 358571",
-  "permit": "358571",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.845953,
-  "lon": -97.1393528,
-  "ok": true
- },
- {
   "jobNumber": 747,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE3NTcwNzk=",
   "client": "Crown Pipeline Ltd.",
@@ -127,48 +148,6 @@
   "lon": -97.048981,
   "ok": true,
   "range": "El Tassi Dr to Ivybridge Gate"
- },
- {
-  "jobNumber": 746,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE3NTcwNjQ=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "474 Sargent Ave",
-  "streetRaw": "474 Sargent Ave (Sargent and Balmoral SW corner)",
-  "city": "Winnipeg",
-  "title": "Sargent and Balmoral - 358546",
-  "permit": "358546",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.896043,
-  "lon": -97.152571,
-  "ok": true
- },
- {
-  "jobNumber": 745,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE3NTcwNTA=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "1401 Portage Ave",
-  "streetRaw": "1401 Portage Ave",
-  "city": "Winnipeg",
-  "title": "1401 Portage Ave - 358547",
-  "permit": "358547",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8822976,
-  "lon": -97.1919752,
-  "ok": true
  },
  {
   "jobNumber": 744,
@@ -305,8 +284,8 @@
   "street": "Frontier Trl and Lee Blvd",
   "streetRaw": "Frontier Trl and Lee Blvd",
   "city": "Winnipeg",
-  "title": "Frontier Trl and Lee Blvd - Permit Pending",
-  "permit": "",
+  "title": "Frontier Trl and Lee Blvd - 358582",
+  "permit": "358582",
   "status": "action_required",
   "unscheduled": false,
   "pending": false,
@@ -465,27 +444,6 @@
   },
   "lat": 49.8765982,
   "lon": -97.161143,
-  "ok": true
- },
- {
-  "jobNumber": 724,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAwNDE3ODc=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "525 Bronx Ave",
-  "streetRaw": "525 Bronx Ave (Watt St and Bronx Ave)",
-  "city": "Winnipeg",
-  "title": "Watt and Bronx - 358285",
-  "permit": "358285",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.922482,
-  "lon": -97.090704,
   "ok": true
  },
  {
@@ -738,69 +696,6 @@
   },
   "lat": 49.9229895,
   "lon": -97.0915315,
-  "ok": true
- },
- {
-  "jobNumber": 704,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE4MDQ=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "959 Southwood Ave",
-  "streetRaw": "959 Southwood Ave",
-  "city": "Winnipeg",
-  "title": "Southwood Ave and Pembina Hwy - 358380",
-  "permit": "358380",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.844213,
-  "lon": -97.151561,
-  "ok": true
- },
- {
-  "jobNumber": 703,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE3ODg=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "Pembina Hwy and Oakenwald Ave",
-  "streetRaw": "Pembina Hwy and Oakenwald Ave",
-  "city": "Winnipeg",
-  "title": "Pembina Hwy and Oakenwald Ave - 358381",
-  "permit": "358381",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.8414532,
-  "lon": -97.1532831,
-  "ok": true
- },
- {
-  "jobNumber": 702,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE3NjI=",
-  "client": "Harris Holdings Ltd.",
-  "clientKey": "Harris",
-  "street": "1551 Pembina Hwy",
-  "streetRaw": "1551 Pembina Hwy",
-  "city": "Winnipeg",
-  "title": "1551 Pembina Hwy - 358386",
-  "permit": "358386",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8328637,
-  "lon": -97.1517066,
   "ok": true
  },
  {

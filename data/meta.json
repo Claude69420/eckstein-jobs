@@ -1,20 +1,20 @@
 {
- "updated_utc": "2026-11-05T22:37:26+00:00",
- "total": 58,
- "mapped": 58,
+ "updated_utc": "2026-11-06T18:59:39+00:00",
+ "total": 53,
+ "mapped": 53,
  "failed": [],
  "by_client": {
+  "AECON": 3,
+  "Harris": 5,
   "Residential": 8,
   "Crown": 22,
-  "Harris": 11,
   "NoLimits": 11,
-  "AECON": 2,
   "ACV": 2,
   "MyTec": 2
  },
- "cache_entries": 375,
- "geocode_api_calls": 0,
- "closed": 8,
+ "cache_entries": 377,
+ "geocode_api_calls": 2,
+ "closed": 14,
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
  "stage_entries": {
