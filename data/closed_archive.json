@@ -219,6 +219,78 @@
    "droppedWhy": "removed in app"
   },
   {
+   "jobNumber": 704,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE4MDQ=",
+   "client": "Harris Holdings Ltd.",
+   "clientKey": "Harris",
+   "street": "959 Southwood Ave",
+   "streetRaw": "959 Southwood Ave",
+   "city": "Winnipeg",
+   "title": "Southwood Ave and Pembina Hwy - 358380",
+   "permit": "358380",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": false
+   },
+   "lat": 49.844213,
+   "lon": -97.151561,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-06",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 703,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE3ODg=",
+   "client": "Harris Holdings Ltd.",
+   "clientKey": "Harris",
+   "street": "Pembina Hwy and Oakenwald Ave",
+   "streetRaw": "Pembina Hwy and Oakenwald Ave",
+   "city": "Winnipeg",
+   "title": "Pembina Hwy and Oakenwald Ave - 358381",
+   "permit": "358381",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": false
+   },
+   "lat": 49.8414532,
+   "lon": -97.1532831,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-06",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 702,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg2ODE3NjI=",
+   "client": "Harris Holdings Ltd.",
+   "clientKey": "Harris",
+   "street": "1551 Pembina Hwy",
+   "streetRaw": "1551 Pembina Hwy",
+   "city": "Winnipeg",
+   "title": "1551 Pembina Hwy - 358386",
+   "permit": "358386",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.8328637,
+   "lon": -97.1517066,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-06",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 700,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgzMTAxNzk=",
    "client": "AECON UTILITIES INC.",
