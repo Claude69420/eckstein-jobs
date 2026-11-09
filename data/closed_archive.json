@@ -123,6 +123,30 @@
    "droppedWhy": "residential, closed in Jobber"
   },
   {
+   "jobNumber": 725,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAxNTg1MDM=",
+   "client": "ACV Sewer & Water",
+   "clientKey": "ACV",
+   "street": "529 Wellington Cres",
+   "streetRaw": "529 Wellington Cres",
+   "city": "Winnipeg",
+   "title": "529 Wellington Cres - Restorations",
+   "permit": "",
+   "status": "action_required",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.8765982,
+   "lon": -97.161143,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-09",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 711,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTkzNDYxNjQ=",
    "client": "Jason Greschuk",
