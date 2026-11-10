@@ -147,6 +147,30 @@
    "droppedWhy": "removed in app"
   },
   {
+   "jobNumber": 716,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk2ODQzNTg=",
+   "client": "No Limits Underground Ltd.",
+   "clientKey": "NoLimits",
+   "street": "128 Hamelin St",
+   "streetRaw": "128 Hamelin St",
+   "city": "Winnipeg",
+   "title": "128 Hamelin St - Parking Lot Asphalt Patch",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": false
+   },
+   "lat": 49.8313795,
+   "lon": -97.1693155,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-10",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 711,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTkzNDYxNjQ=",
    "client": "Jason Greschuk",
