@@ -22,6 +22,28 @@
   "closed": true
  },
  {
+  "jobNumber": 758,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2NjU=",
+  "client": "No Limits Underground Ltd.",
+  "clientKey": "NoLimits",
+  "street": "McPhillips St and Inkster Blvd",
+  "streetRaw": "McPhillips St and Inkster Blvd",
+  "city": "Winnipeg",
+  "title": "McPhillips and Inkster - Signals Median",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.939117,
+  "lon": -97.160037,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 749,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4NTA3NTM=",
   "client": "Harris Holdings Ltd.",
