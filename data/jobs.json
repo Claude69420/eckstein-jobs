@@ -147,48 +147,6 @@
   "ok": true
  },
  {
-  "jobNumber": 762,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2ODA=",
-  "client": "AECON UTILITIES INC.",
-  "clientKey": "AECON",
-  "street": "Various Core Hole Locations",
-  "streetRaw": "Various Core Hole Locations",
-  "city": "Winnipeg",
-  "title": "Various Core Holes",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.902412,
-  "lon": -97.097466,
-  "ok": true
- },
- {
-  "jobNumber": 761,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2NzU=",
-  "client": "AECON UTILITIES INC.",
-  "clientKey": "AECON",
-  "street": "747 Murray Ave",
-  "streetRaw": "747 Murray Ave",
-  "city": "Winnipeg",
-  "title": "747 Murray Ave - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.960536,
-  "lon": -97.112158,
-  "ok": true
- },
- {
   "jobNumber": 760,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2NzE=",
   "client": "No Limits Underground Ltd.",
@@ -228,27 +186,6 @@
   },
   "lat": 49.9534515,
   "lon": -97.1474432,
-  "ok": true
- },
- {
-  "jobNumber": 757,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxNTc=",
-  "client": "AECON UTILITIES INC.",
-  "clientKey": "AECON",
-  "street": "Wellington Ave and Simcoe St",
-  "streetRaw": "Wellington Ave and Simcoe St",
-  "city": "Winnipeg",
-  "title": "Wellington Ave and Simcoe St - 358585",
-  "permit": "358585",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.900173,
-  "lon": -97.165947,
   "ok": true
  },
  {
@@ -548,27 +485,6 @@
   },
   "lat": 49.440273,
   "lon": -96.992534,
-  "ok": true
- },
- {
-  "jobNumber": 731,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjA5MDU4NDg=",
-  "client": "AECON UTILITIES INC.",
-  "clientKey": "AECON",
-  "street": "Wellington Ave and Beverley St",
-  "streetRaw": "Wellington Ave and Beverley St",
-  "city": "Winnipeg",
-  "title": "Wellington Ave and Beverley St - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.900134,
-  "lon": -97.164806,
   "ok": true
  },
  {
