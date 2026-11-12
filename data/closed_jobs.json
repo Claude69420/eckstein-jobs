@@ -484,6 +484,50 @@
   "closed": true
  },
  {
+  "jobNumber": 709,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTkyODM0NDM=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Jessie Ave and Warsaw Ave",
+  "streetRaw": "Jessie Ave and Warsaw Ave",
+  "city": "Winnipeg",
+  "title": "Jessie and Warsaw (Jessie and Osborne) Back Lane - 357584",
+  "permit": "357584",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 49.867227,
+  "lon": -97.158017,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 706,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg5MjY2MDc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Watt St and Bronx Ave",
+  "streetRaw": "Watt St and Bronx Ave",
+  "city": "Winnipeg",
+  "title": "Watt St and Bronx Ave - 358398",
+  "permit": "358398",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9229895,
+  "lon": -97.0915315,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 684,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNTY3NzQ=",
   "client": "Crown Pipeline Ltd.",
@@ -506,6 +550,28 @@
   "closed": true
  },
  {
+  "jobNumber": 672,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY2MTc4NjM=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "505 Munroe Ave",
+  "streetRaw": "505 Munroe Ave",
+  "city": "Winnipeg",
+  "title": "505 Munroe Ave - 357762",
+  "permit": "357762",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9178123,
+  "lon": -97.0971877,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 656,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTQ1NTkyNjU=",
   "client": "Harris Holdings Ltd.",
@@ -524,6 +590,28 @@
   },
   "lat": 49.8894,
   "lon": -97.3052,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 528,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNDYxNTQzNTI=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "2049 Dugald Rd",
+  "streetRaw": "2049 Dugald Rd",
+  "city": "Winnipeg",
+  "title": "2049 Dugald Rd - 357169",
+  "permit": "357169",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.886745,
+  "lon": -97.028731,
   "ok": true,
   "closed": true
  }

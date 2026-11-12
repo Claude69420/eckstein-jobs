@@ -3,6 +3,54 @@
  "days": 60,
  "jobs": [
   {
+   "jobNumber": 755,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIyNjkxMDk=",
+   "client": "n/a",
+   "clientKey": "Residential",
+   "street": "21 River Heights Drive",
+   "streetRaw": "21 River Heights Drive",
+   "city": "La Salle",
+   "title": "Complete Front Entrance Repair",
+   "permit": "",
+   "status": "unscheduled",
+   "unscheduled": true,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": true
+   },
+   "lat": 49.69577,
+   "lon": -97.259762,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-11-12",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
+   "jobNumber": 752,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIxMjY5NDA=",
+   "client": "n/a",
+   "clientKey": "Residential",
+   "street": "21 River Heights Drive",
+   "streetRaw": "21 River Heights Drive",
+   "city": "La Salle",
+   "title": "Complete Front Entrance Repair",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": true
+   },
+   "lat": 49.69577,
+   "lon": -97.259762,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-11-12",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
    "jobNumber": 748,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4MzM0OTc=",
    "client": "Helga Smyrl",
@@ -120,6 +168,30 @@
    "ok": true,
    "residential": true,
    "droppedAt": "2026-10-22",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
+   "jobNumber": 726,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAyOTY2NjE=",
+   "client": "Group Electrical Contractors",
+   "clientKey": "Residential",
+   "street": "75 Poseidon Bay",
+   "streetRaw": "75 Poseidon Bay",
+   "city": "Winnipeg",
+   "title": "75 Poseidon Bay",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": true,
+    "pavers": false
+   },
+   "lat": 49.8534976,
+   "lon": -97.1727757,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-11-12",
    "droppedWhy": "residential, closed in Jobber"
   },
   {
