@@ -440,6 +440,28 @@
   "closed": true
  },
  {
+  "jobNumber": 715,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk1ODk4OTU=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Park Ave near Third St",
+  "streetRaw": "Park Ave near Third St",
+  "city": "Lac du Bonnet",
+  "title": "Park Ave Lac du Bonnet - Asphalt Repair",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 50.2564264,
+  "lon": -96.0587333,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 713,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk1ODk4OTA=",
   "client": "Harris Holdings Ltd.",
@@ -528,6 +550,29 @@
   "closed": true
  },
  {
+  "jobNumber": 691,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjI1NzU=",
+  "client": "MyTec Industry Ltd",
+  "clientKey": "MyTec",
+  "street": "Main St & 1st St NW",
+  "streetRaw": "Main St [1st St NW to Railway St S]",
+  "city": "Altona",
+  "title": "Main St Altona - Paving Stones",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": true
+  },
+  "lat": 49.100705,
+  "lon": -97.5594815,
+  "ok": true,
+  "range": "1st St NW to Railway St S",
+  "closed": true
+ },
+ {
   "jobNumber": 684,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTcwNTY3NzQ=",
   "client": "Crown Pipeline Ltd.",
@@ -546,6 +591,28 @@
   },
   "lat": 49.8936833,
   "lon": -97.1501786,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 675,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY3MzcyNjc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "165 Saskatchewan Ave E",
+  "streetRaw": "165 Saskatchewan Ave E",
+  "city": "Portage la Prairie",
+  "title": "165 Saskatchewan Ave E Portage la Prairie - M024029",
+  "permit": "M024029",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 49.9725533,
+  "lon": -98.2878493,
   "ok": true,
   "closed": true
  },

@@ -507,27 +507,6 @@
   "ok": true
  },
  {
-  "jobNumber": 715,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk1ODk4OTU=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Park Ave near Third St",
-  "streetRaw": "Park Ave near Third St",
-  "city": "Lac du Bonnet",
-  "title": "Park Ave Lac du Bonnet - Asphalt Repair",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 50.2564264,
-  "lon": -96.0587333,
-  "ok": true
- },
- {
   "jobNumber": 714,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk1ODk4OTI=",
   "client": "Crown Pipeline Ltd.",
@@ -634,28 +613,6 @@
   "ok": true
  },
  {
-  "jobNumber": 691,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjI1NzU=",
-  "client": "MyTec Industry Ltd",
-  "clientKey": "MyTec",
-  "street": "Main St & 1st St NW",
-  "streetRaw": "Main St [1st St NW to Railway St S]",
-  "city": "Altona",
-  "title": "Main St Altona - Paving Stones",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.100705,
-  "lon": -97.5594815,
-  "ok": true,
-  "range": "1st St NW to Railway St S"
- },
- {
   "jobNumber": 690,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjIwODA=",
   "client": "MyTec Industry Ltd",
@@ -717,27 +674,6 @@
   },
   "lat": 49.916888,
   "lon": -97.188321,
-  "ok": true
- },
- {
-  "jobNumber": 675,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY3MzcyNjc=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "165 Saskatchewan Ave E",
-  "streetRaw": "165 Saskatchewan Ave E",
-  "city": "Portage la Prairie",
-  "title": "165 Saskatchewan Ave E Portage la Prairie - M024029",
-  "permit": "M024029",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.9725533,
-  "lon": -98.2878493,
   "ok": true
  },
  {
