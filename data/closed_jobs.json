@@ -506,28 +506,6 @@
   "closed": true
  },
  {
-  "jobNumber": 709,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTkyODM0NDM=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Jessie Ave and Warsaw Ave",
-  "streetRaw": "Jessie Ave and Warsaw Ave",
-  "city": "Winnipeg",
-  "title": "Jessie and Warsaw (Jessie and Osborne) Back Lane - 357584",
-  "permit": "357584",
-  "status": "archived",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": true,
-   "pavers": false
-  },
-  "lat": 49.867227,
-  "lon": -97.158017,
-  "ok": true,
-  "closed": true
- },
- {
   "jobNumber": 706,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg5MjY2MDc=",
   "client": "Crown Pipeline Ltd.",
@@ -550,26 +528,48 @@
   "closed": true
  },
  {
-  "jobNumber": 691,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjI1NzU=",
-  "client": "MyTec Industry Ltd",
-  "clientKey": "MyTec",
-  "street": "Main St & 1st St NW",
-  "streetRaw": "Main St [1st St NW to Railway St S]",
-  "city": "Altona",
-  "title": "Main St Altona - Paving Stones",
-  "permit": "",
+  "jobNumber": 698,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4NTA=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Pembina Hwy & Adamar Rd",
+  "streetRaw": "Pembina Hwy (Adamar Rd to Plaza Dr)",
+  "city": "Winnipeg",
+  "title": "Pembina Hwy Adamar to Plaza - 357526",
+  "permit": "357526",
   "status": "archived",
   "unscheduled": false,
   "pending": false,
   "hints": {
    "asphalt": false,
-   "pavers": true
+   "pavers": false
   },
-  "lat": 49.100705,
-  "lon": -97.5594815,
+  "lat": 49.823712,
+  "lon": -97.152666,
   "ok": true,
-  "range": "1st St NW to Railway St S",
+  "range": "Adamar Rd to Plaza Dr",
+  "closed": true
+ },
+ {
+  "jobNumber": 693,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjMyNDA=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "137 Innovation Dr",
+  "streetRaw": "137 Innovation Dr",
+  "city": "Winnipeg",
+  "title": "137 Innovation Dr - 357764",
+  "permit": "357764",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.803353,
+  "lon": -97.14788,
+  "ok": true,
   "closed": true
  },
  {
@@ -591,6 +591,28 @@
   },
   "lat": 49.8936833,
   "lon": -97.1501786,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 676,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTY5MTE5MDc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "1493 Ross Ave W",
+  "streetRaw": "1493 Ross Ave W",
+  "city": "Winnipeg",
+  "title": "1493 Ross Ave W - 357350",
+  "permit": "357350",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.916888,
+  "lon": -97.188321,
   "ok": true,
   "closed": true
  },
