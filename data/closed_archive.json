@@ -3,6 +3,78 @@
  "days": 60,
  "jobs": [
   {
+   "jobNumber": 762,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2ODA=",
+   "client": "AECON UTILITIES INC.",
+   "clientKey": "AECON",
+   "street": "Various Core Hole Locations",
+   "streetRaw": "Various Core Hole Locations",
+   "city": "Winnipeg",
+   "title": "Various Core Holes",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.902412,
+   "lon": -97.097466,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-15",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 761,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2NzU=",
+   "client": "AECON UTILITIES INC.",
+   "clientKey": "AECON",
+   "street": "747 Murray Ave",
+   "streetRaw": "747 Murray Ave",
+   "city": "Winnipeg",
+   "title": "747 Murray Ave - Permit Pending",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.960536,
+   "lon": -97.112158,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-15",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 757,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxNTc=",
+   "client": "AECON UTILITIES INC.",
+   "clientKey": "AECON",
+   "street": "Wellington Ave and Simcoe St",
+   "streetRaw": "Wellington Ave and Simcoe St",
+   "city": "Winnipeg",
+   "title": "Wellington Ave and Simcoe St - 358585",
+   "permit": "358585",
+   "status": "action_required",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.900173,
+   "lon": -97.165947,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-15",
+   "droppedWhy": "removed in app"
+  },
+  {
    "jobNumber": 755,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIyNjkxMDk=",
    "client": "n/a",
@@ -216,6 +288,54 @@
    "ok": true,
    "closed": true,
    "droppedAt": "2026-11-09",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 720,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk3MjIwNjA=",
+   "client": "No Limits Underground Ltd.",
+   "clientKey": "NoLimits",
+   "street": "Ness Ave and Sturgeon Rd",
+   "streetRaw": "Ness Ave and Sturgeon Rd",
+   "city": "Winnipeg",
+   "title": "Ness and Sturgeon - Signals Hard Surface Restoration",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.887972,
+   "lon": -97.2782338,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-15",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 718,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk3MjIwNTQ=",
+   "client": "No Limits Underground Ltd.",
+   "clientKey": "NoLimits",
+   "street": "Empress St and Sargent Ave",
+   "streetRaw": "Empress St and Sargent Ave",
+   "city": "Winnipeg",
+   "title": "Empress and Sargent - Signals Hard Surface Restoration",
+   "permit": "",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.897666,
+   "lon": -97.195417,
+   "ok": true,
+   "closed": true,
+   "droppedAt": "2026-11-15",
    "droppedWhy": "removed in app"
   },
   {
@@ -480,6 +600,31 @@
    "ok": true,
    "closed": true,
    "droppedAt": "2026-10-26",
+   "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 698,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgxODI4NTA=",
+   "client": "Crown Pipeline Ltd.",
+   "clientKey": "Crown",
+   "street": "Pembina Hwy & Adamar Rd",
+   "streetRaw": "Pembina Hwy (Adamar Rd to Plaza Dr)",
+   "city": "Winnipeg",
+   "title": "Pembina Hwy Adamar to Plaza - 357526",
+   "permit": "357526",
+   "status": "archived",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.823712,
+   "lon": -97.152666,
+   "ok": true,
+   "range": "Adamar Rd to Plaza Dr",
+   "closed": true,
+   "droppedAt": "2026-11-15",
    "droppedWhy": "removed in app"
   },
   {
