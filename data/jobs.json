@@ -189,27 +189,6 @@
   "ok": true
  },
  {
-  "jobNumber": 759,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2Njc=",
-  "client": "MyTec Industry Ltd",
-  "clientKey": "MyTec",
-  "street": "Leila Ave and McPhillips St",
-  "streetRaw": "Leila Ave and McPhillips St",
-  "city": "Winnipeg",
-  "title": "Leila Ave and McPhillips St - 358620",
-  "permit": "358620",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.9534515,
-  "lon": -97.1474432,
-  "ok": true
- },
- {
   "jobNumber": 756,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxMjU=",
   "client": "Harris Holdings Ltd.",
@@ -295,28 +274,6 @@
   "range": "El Tassi Dr to Ivybridge Gate"
  },
  {
-  "jobNumber": 744,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE2NjM3MzU=",
-  "client": "Vytal Digital Infrastructure",
-  "clientKey": "Residential",
-  "street": "1020 Lorimer Boulevard",
-  "streetRaw": "1020 Lorimer Boulevard",
-  "city": "Winnipeg",
-  "title": "Disraeli Fwy - Main to Martha (310797)",
-  "permit": "310797",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8430865,
-  "lon": -97.2001581,
-  "ok": true,
-  "residential": true
- },
- {
   "jobNumber": 741,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE1NjIxNDM=",
   "client": "No Limits Underground Ltd.",
@@ -356,27 +313,6 @@
   },
   "lat": 49.8819354,
   "lon": -97.0987223,
-  "ok": true
- },
- {
-  "jobNumber": 739,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE0MTc5ODc=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Watt St and Thames Ave",
-  "streetRaw": "Watt St and Thames Ave",
-  "city": "Winnipeg",
-  "title": "Watt St and Thames Ave - Sod Repair",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.908943,
-  "lon": -97.103401,
   "ok": true
  },
  {
@@ -444,27 +380,6 @@
   "range": "Machray Ave to Polson Ave"
  },
  {
-  "jobNumber": 733,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjA5OTU5NTY=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "Jolys Avenue West",
-  "streetRaw": "Jolys Avenue West",
-  "city": "Saint Pierre-Jolys",
-  "title": "Jolys Ave W St Pierre Jolys - PO 26-072",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.440273,
-  "lon": -96.992534,
-  "ok": true
- },
- {
   "jobNumber": 723,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAwMjM0ODU=",
   "client": "Crown Pipeline Ltd.",
@@ -528,28 +443,6 @@
   "ok": true
  },
  {
-  "jobNumber": 690,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTgwMjIwODA=",
-  "client": "MyTec Industry Ltd",
-  "clientKey": "MyTec",
-  "street": "Colony St & Portage Av",
-  "streetRaw": "Colony St [Portage Av to Webb Pl]",
-  "city": "Winnipeg",
-  "title": "Colony St Portage to Webb - 347784",
-  "permit": "347784",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8918985,
-  "lon": -97.151307,
-  "ok": true,
-  "range": "Portage Av to Webb Pl"
- },
- {
   "jobNumber": 627,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTE3NTU1NDA=",
   "client": "Crown Pipeline Ltd.",
@@ -569,28 +462,6 @@
   "lat": 49.9547988,
   "lon": -97.0741852,
   "ok": true
- },
- {
-  "jobNumber": 609,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYxNDE=",
-  "client": "Rosemary Schallmann",
-  "clientKey": "Residential",
-  "street": "30 Manring Cove",
-  "streetRaw": "30 Manring Cove",
-  "city": "Winnipeg",
-  "title": "",
-  "permit": "",
-  "status": "late",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": true
-  },
-  "lat": 49.843054,
-  "lon": -97.060679,
-  "ok": true,
-  "residential": true
  },
  {
   "jobNumber": 517,

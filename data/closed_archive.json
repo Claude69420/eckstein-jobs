@@ -147,6 +147,30 @@
    "droppedWhy": "residential, closed in Jobber"
   },
   {
+   "jobNumber": 744,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE2NjM3MzU=",
+   "client": "Vytal Digital Infrastructure",
+   "clientKey": "Residential",
+   "street": "1020 Lorimer Boulevard",
+   "streetRaw": "1020 Lorimer Boulevard",
+   "city": "Winnipeg",
+   "title": "Disraeli Fwy - Main to Martha (310797)",
+   "permit": "310797",
+   "status": "action_required",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": false
+   },
+   "lat": 49.8430865,
+   "lon": -97.2001581,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-11-17",
+   "droppedWhy": "residential, closed in Jobber"
+  },
+  {
    "jobNumber": 734,
    "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjA5OTU5NzM=",
    "client": "No Limits Underground Ltd.",
@@ -1228,6 +1252,30 @@
    "closed": true,
    "droppedAt": "2026-10-17",
    "droppedWhy": "removed in app"
+  },
+  {
+   "jobNumber": 609,
+   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTA4NDYxNDE=",
+   "client": "Rosemary Schallmann",
+   "clientKey": "Residential",
+   "street": "30 Manring Cove",
+   "streetRaw": "30 Manring Cove",
+   "city": "Winnipeg",
+   "title": "",
+   "permit": "",
+   "status": "late",
+   "unscheduled": false,
+   "pending": false,
+   "hints": {
+    "asphalt": false,
+    "pavers": true
+   },
+   "lat": 49.843054,
+   "lon": -97.060679,
+   "ok": true,
+   "residential": true,
+   "droppedAt": "2026-11-17",
+   "droppedWhy": "residential, closed in Jobber"
   },
   {
    "jobNumber": 608,
