@@ -1,5 +1,131 @@
 [
  {
+  "jobNumber": 779,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxNjc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Archibald St and Mission St",
+  "streetRaw": "Archibald St and Mission St",
+  "city": "Winnipeg",
+  "title": "DUPLICATE - DELETE - merged into #778 (Archibald and Mission)",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.8988761,
+  "lon": -97.1070213,
+  "ok": true
+ },
+ {
+  "jobNumber": 778,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxNDk=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "60 Archibald St",
+  "streetRaw": "60 Archibald St",
+  "city": "Winnipeg",
+  "title": "60 Archibald St and Archibald St and Mission St - Permit Pending",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9003298,
+  "lon": -97.1058356,
+  "ok": true
+ },
+ {
+  "jobNumber": 777,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxMjQ=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "670 McMillan Ave",
+  "streetRaw": "670 McMillan Ave",
+  "city": "Winnipeg",
+  "title": "670 McMillan Ave - 357761",
+  "permit": "357761",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.8724,
+  "lon": -97.150742,
+  "ok": true
+ },
+ {
+  "jobNumber": 776,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxMDE=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "245 Ravenhurst St",
+  "streetRaw": "245 Ravenhurst St",
+  "city": "Winnipeg",
+  "title": "245 Ravenhurst St - Permit Pending",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.887504,
+  "lon": -96.9682033,
+  "ok": true
+ },
+ {
+  "jobNumber": 775,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkwODc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Edmonton St and York Ave",
+  "streetRaw": "Edmonton St and York Ave",
+  "city": "Winnipeg",
+  "title": "Edmonton St and York Ave - 357651",
+  "permit": "357651",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.888293,
+  "lon": -97.144991,
+  "ok": true
+ },
+ {
+  "jobNumber": 774,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkwNjY=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "Henderson Hwy and Kimberly Ave",
+  "streetRaw": "Henderson Hwy and Kimberly Ave",
+  "city": "Winnipeg",
+  "title": "Henderson Hwy and Kimberly Ave - Permit Pending",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9275922,
+  "lon": -97.1039119,
+  "ok": true
+ },
+ {
   "jobNumber": 771,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI4Njg2MjU=",
   "client": "Crown Pipeline Ltd.",
