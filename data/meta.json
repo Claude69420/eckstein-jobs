@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-18T20:05:58+00:00",
+ "updated_utc": "2026-11-18T23:19:07+00:00",
  "total": 36,
  "mapped": 36,
  "failed": [],
@@ -11,7 +11,7 @@
   "Residential": 3
  },
  "cache_entries": 396,
- "geocode_api_calls": 6,
+ "geocode_api_calls": 0,
  "closed": 33,
  "stages_read": "ok",
  "stages_beta_read": "not read (single-file mode)",
