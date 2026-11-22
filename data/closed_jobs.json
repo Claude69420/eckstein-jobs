@@ -1,5 +1,49 @@
 [
  {
+  "jobNumber": 779,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxNjc=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Archibald St and Mission St",
+  "streetRaw": "Archibald St and Mission St",
+  "city": "Winnipeg",
+  "title": "DUPLICATE - DELETE - merged into #778 (Archibald and Mission)",
+  "permit": "",
+  "status": "action_required",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.8988761,
+  "lon": -97.1070213,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 778,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxNDk=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "60 Archibald St",
+  "streetRaw": "60 Archibald St",
+  "city": "Winnipeg",
+  "title": "60 Archibald St and Archibald St and Mission St - Permit Pending",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9003298,
+  "lon": -97.1058356,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 763,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2ODU=",
   "client": "No Limits Underground Ltd.",
@@ -85,6 +129,29 @@
   "lat": 49.845953,
   "lon": -97.1393528,
   "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 747,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE3NTcwNzk=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Peguis St & El Tassi Dr",
+  "streetRaw": "Peguis St (El Tassi Dr to Ivybridge Gate)",
+  "city": "Winnipeg",
+  "title": "Peguis St - Permit Pending - M017057",
+  "permit": "M017057",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9025865,
+  "lon": -97.048981,
+  "ok": true,
+  "range": "El Tassi Dr to Ivybridge Gate",
   "closed": true
  },
  {
@@ -195,6 +262,29 @@
   "lat": 49.908943,
   "lon": -97.103401,
   "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 736,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE0MTc5NjA=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "Andrews St & Machray Ave",
+  "streetRaw": "Andrews St (Machray Ave to Polson Ave)",
+  "city": "Winnipeg",
+  "title": "Andrews St - 358429 - M022771",
+  "permit": "358429 / M022771",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9283539,
+  "lon": -97.1370335,
+  "ok": true,
+  "range": "Machray Ave to Polson Ave",
   "closed": true
  },
  {
