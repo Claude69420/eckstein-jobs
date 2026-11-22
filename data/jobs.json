@@ -1,68 +1,5 @@
 [
  {
-  "jobNumber": 777,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxMjQ=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "670 McMillan Ave",
-  "streetRaw": "670 McMillan Ave",
-  "city": "Winnipeg",
-  "title": "670 McMillan Ave - 357761",
-  "permit": "357761",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8724,
-  "lon": -97.150742,
-  "ok": true
- },
- {
-  "jobNumber": 776,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkxMDE=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "245 Ravenhurst St",
-  "streetRaw": "245 Ravenhurst St",
-  "city": "Winnipeg",
-  "title": "245 Ravenhurst St - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.887504,
-  "lon": -96.9682033,
-  "ok": true
- },
- {
-  "jobNumber": 775,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkwODc=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Edmonton St and York Ave",
-  "streetRaw": "Edmonton St and York Ave",
-  "city": "Winnipeg",
-  "title": "Edmonton St and York Ave - 357651",
-  "permit": "357651",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.888293,
-  "lon": -97.144991,
-  "ok": true
- },
- {
   "jobNumber": 774,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkwNjY=",
   "client": "Harris Holdings Ltd.",
@@ -81,27 +18,6 @@
   },
   "lat": 49.9275922,
   "lon": -97.1039119,
-  "ok": true
- },
- {
-  "jobNumber": 771,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI4Njg2MjU=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "Moray St",
-  "streetRaw": "Moray St",
-  "city": "Winnipeg",
-  "title": "Moray St - 349497 and 349498",
-  "permit": "349497 / 349498",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.884108,
-  "lon": -97.2620544,
   "ok": true
  },
  {
@@ -210,27 +126,6 @@
   "ok": true
  },
  {
-  "jobNumber": 765,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2OTg=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "1040 Waverley St",
-  "streetRaw": "1040 Waverley St",
-  "city": "Winnipeg",
-  "title": "1040 Waverley St - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8393136,
-  "lon": -97.1781278,
-  "ok": true
- },
- {
   "jobNumber": 764,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2ODg=",
   "client": "No Limits Underground Ltd.",
@@ -291,48 +186,6 @@
   },
   "lat": 49.921442,
   "lon": -97.201395,
-  "ok": true
- },
- {
-  "jobNumber": 751,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4NTUyODM=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "McPhillips St and North Point",
-  "streetRaw": "McPhillips St and North Point",
-  "city": "Winnipeg",
-  "title": "McPhillips and North Point - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.9663507,
-  "lon": -97.1359428,
-  "ok": true
- },
- {
-  "jobNumber": 750,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE4NTUyODA=",
-  "client": "Crown Pipeline Ltd.",
-  "clientKey": "Crown",
-  "street": "John Brebeuf and Centennial",
-  "streetRaw": "John Brebeuf and Centennial",
-  "city": "Winnipeg",
-  "title": "John Brebeuf and Centennial - Permit Pending",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.860561,
-  "lon": -97.201573,
   "ok": true
  },
  {
