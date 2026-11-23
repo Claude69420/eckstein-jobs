@@ -132,6 +132,50 @@
   "closed": true
  },
  {
+  "jobNumber": 770,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI2OTI0NDc=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "128 Newman St",
+  "streetRaw": "128 Newman St",
+  "city": "Winnipeg",
+  "title": "128 Newman Ave E",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.881425,
+  "lon": -97.183667,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 769,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTQxNzU=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "3316 Raleigh St",
+  "streetRaw": "3316 Raleigh St",
+  "city": "Winnipeg",
+  "title": "3316 Raleigh St - Gas",
+  "permit": "(gas)",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.9125083,
+  "lon": -97.0927171,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 765,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM2OTg=",
   "client": "Crown Pipeline Ltd.",
@@ -216,6 +260,28 @@
   },
   "lat": 49.939117,
   "lon": -97.160037,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 756,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjIzNTUxMjU=",
+  "client": "Harris Holdings Ltd.",
+  "clientKey": "Harris",
+  "street": "1914 Pacific Ave",
+  "streetRaw": "1914 Pacific Ave",
+  "city": "Winnipeg",
+  "title": "1914 Pacific Ave - Permit Pending",
+  "permit": "",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.921442,
+  "lon": -97.201395,
   "ok": true,
   "closed": true
  },
@@ -574,6 +640,28 @@
   "closed": true
  },
  {
+  "jobNumber": 723,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjAwMjM0ODU=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "478 St Joseph Ave",
+  "streetRaw": "478 St Joseph Ave",
+  "city": "St Pierre Jolys",
+  "title": "478 St Joseph Ave St Pierre Jolys - 469 Gas",
+  "permit": "(gas)",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.4388954,
+  "lon": -96.9861434,
+  "ok": true,
+  "closed": true
+ },
+ {
   "jobNumber": 722,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk4MjMwODQ=",
   "client": "Harris Holdings Ltd.",
@@ -636,6 +724,28 @@
   },
   "lat": 49.89277,
   "lon": -97.119199,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 717,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTk2OTIxMDI=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "155 Acres Dr",
+  "streetRaw": "155 Acres Dr",
+  "city": "Steinbach",
+  "title": "155 Acres Dr Steinbach - Parking Lot Asphalt Repair Gas",
+  "permit": "(gas)",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 49.5395735,
+  "lon": -96.7032611,
   "ok": true,
   "closed": true
  },
@@ -724,6 +834,28 @@
   },
   "lat": 49.868607,
   "lon": -97.255254,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 707,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTg5MjY2MjQ=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "422 Hospital St",
+  "streetRaw": "422 Hospital St",
+  "city": "Steinbach",
+  "title": "422 Hospital St Steinbach - 480 Gas",
+  "permit": "(gas)",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": false,
+   "pavers": false
+  },
+  "lat": 49.5310573,
+  "lon": -96.6817393,
   "ok": true,
   "closed": true
  },
@@ -945,6 +1077,28 @@
   },
   "lat": 49.8894,
   "lon": -97.3052,
+  "ok": true,
+  "closed": true
+ },
+ {
+  "jobNumber": 627,
+  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNTE3NTU1NDA=",
+  "client": "Crown Pipeline Ltd.",
+  "clientKey": "Crown",
+  "street": "1877 Henderson Hwy",
+  "streetRaw": "1877 Henderson Hwy",
+  "city": "Winnipeg",
+  "title": "1877 Henderson Hwy - 378 Gas",
+  "permit": "(gas)",
+  "status": "archived",
+  "unscheduled": false,
+  "pending": false,
+  "hints": {
+   "asphalt": true,
+   "pavers": false
+  },
+  "lat": 49.9547988,
+  "lon": -97.0741852,
   "ok": true,
   "closed": true
  },
