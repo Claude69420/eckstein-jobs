@@ -1,26 +1,5 @@
 [
  {
-  "jobNumber": 781,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjQwMDY5Mzc=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "Portage Ave and Westwood Dr",
-  "streetRaw": "Portage Ave and Westwood Dr",
-  "city": "Winnipeg",
-  "title": "Portage Ave and Westwood Dr",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8818014,
-  "lon": -97.2930743,
-  "ok": true
- },
- {
   "jobNumber": 774,
   "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjM1MjkwNjY=",
   "client": "Harris Holdings Ltd.",
@@ -39,69 +18,6 @@
   },
   "lat": 49.9275922,
   "lon": -97.1039119,
-  "ok": true
- },
- {
-  "jobNumber": 768,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjI0OTM3MDY=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "King Edward St and Notre Dame Ave",
-  "streetRaw": "King Edward St and Notre Dame Ave",
-  "city": "Winnipeg",
-  "title": "King Edward and Notre Dame - Signals Hard Surface Restoration",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.916506,
-  "lon": -97.2066568,
-  "ok": true
- },
- {
-  "jobNumber": 741,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE1NjIxNDM=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "Marion St and Tache Ave",
-  "streetRaw": "Marion St and Tache Ave",
-  "city": "Winnipeg",
-  "title": "Marion and Tache - Signals Sidewalk",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.881403,
-  "lon": -97.123403,
-  "ok": true
- },
- {
-  "jobNumber": 740,
-  "id": "Z2lkOi8vSm9iYmVyL0pvYi8xNjE1NjIxMzA=",
-  "client": "No Limits Underground Ltd.",
-  "clientKey": "NoLimits",
-  "street": "Marion St and Archibald St",
-  "streetRaw": "Marion St and Archibald St",
-  "city": "Winnipeg",
-  "title": "Marion and Archibald - Signals Median",
-  "permit": "",
-  "status": "action_required",
-  "unscheduled": false,
-  "pending": false,
-  "hints": {
-   "asphalt": false,
-   "pavers": false
-  },
-  "lat": 49.8819354,
-  "lon": -97.0987223,
   "ok": true
  },
  {
